@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from dataclasses import dataclass
-from python_dotenv import load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env file
 

@@ -33,29 +33,32 @@ RUN conda create --name env "python>=3.11.10,<3.12"
 RUN conda init bash
 RUN echo "conda activate env" >> ~/.bashrc
 
+WORKDIR /app
+
 # -----------------
 # uv and deps
 # -----------------
 
 # Uv is a much faster package manager and installer, we'll use it over conda where possible to cut time.
 RUN pip install uv
-COPY pyproject.toml uv.lock ./
+
+COPY pyproject.toml /app/pyproject.toml
+
+# Export from pyproject and install into the current interpreter (Conda)
+# --system is required when mutating a non-venv interpreter
+RUN source activate env && uv export --format requirements-txt \
+    | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
 
 # Install Python deps via uv (this replaces `pip install ...`)
-RUN source activate env 
-RUN uv sync --no-dev && uv pip install \
+RUN source activate env && uv pip install \
     freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy
+    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy 
 
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch
 
 # # Install necessary dependencies for CrocoDash, also not found on pypi.
 # RUN conda install --yes -c conda-forge -n env "esmpy>=8.6.1,<8.7.0"
-
-# The installs and configuration are done, we can enter the /app directory.
-# Also note that Crocodash needs it to be set.
-WORKDIR /app
 
 # -----------------
 # Crocodash setup

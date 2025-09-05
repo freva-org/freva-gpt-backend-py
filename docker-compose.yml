@@ -1,0 +1,65 @@
+services:
+  freva-gpt-backend:
+    image: freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
+    build:
+      context: .
+      dockerfile: dockerfiles/backend/Dockerfile
+    hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
+    ports:
+      - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
+    volumes:
+      - /work:/work:ro
+      - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/logs:/app/logs
+      - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/threads:/app/threads
+      - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/target:/app/target
+      - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/python_pickles:/app/python_pickles
+      - /scratch/b/b380001/freva-gpt/rw_dir/:/app/rw_dir # All instances share the rw_dir for accessing the data the LLM generated.
+    networks:
+      - freva-gpt
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:${TARGET_PORT:-8502}/api/chatbot/help",
+        ]
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    hostname: litellm-instance-${INSTANCE_NAME}
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
+    command:
+      - "--config=/app/config.yaml"
+    env_file:
+      - .env # Load local .env file
+    networks:
+      - freva-gpt
+    healthcheck:
+      test: "curl http://localhost:4000/health/readiness"
+  ollama: # Ollama is only for the backend and not accessible from the outside. Port 11434 is not exposed.
+    image: ollama
+    build:
+      context: .
+      dockerfile: dockerfiles/ollama/Dockerfile
+    hostname: ollama-instance-${INSTANCE_NAME}
+    volumes:
+      - /container/da/freva-gpt-ollama-LLMs/.ollama:/root/.ollama
+    networks:
+      - freva-gpt
+    healthcheck:
+      test: "bash -c 'cat < /dev/null > /dev/tcp/localhost/11434'"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+networks:
+  freva-gpt:
+    driver: bridge
+# The subnet is not set to avoid conflicts with other potentially running networks on the same machine.
+# Note: Named networks by default aren't shared between different docker-compose projects, even if they have the same name, as long as they are in separate directories.
+

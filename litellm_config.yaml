@@ -1,0 +1,23 @@
+model_list:
+  - model_name: gpt-4o ### RECEIVED MODEL NAME ###
+    litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
+      model: openai/gpt-4o ### MODEL NAME sent to `litellm.completion()` ###
+      api_key: "os.environ/OPENAI_API_KEY" 
+      # temperature: 0.2
+  - model_name: gpt-4o-mini ### RECEIVED MODEL NAME ###
+    litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
+      model: openai/gpt-4o-mini ### MODEL NAME sent to `litellm.completion()` ###
+      api_key: "os.environ/OPENAI_API_KEY" 
+  - model_name: "qwen2.5:3b"
+    litellm_params:
+      model: "openai/qwen2.5:3b"
+      api_base: "http://ollama:11434/v1" # For development only!
+    model_info:
+      supports_function_calling: true
+  - model_name: "mxbai-embed-large:latest"
+    litellm_params:
+      model: "ollama/mxbai-embed-large:latest"
+      api_base: "ollama://ollama:11434/v1" # Ollama API base URL
+
+litellm_settings:
+  drop_params: true # If true, drop all parameters not in the model_list from the request

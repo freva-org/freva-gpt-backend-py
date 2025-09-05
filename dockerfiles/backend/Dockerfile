@@ -39,9 +39,11 @@ RUN echo "conda activate env" >> ~/.bashrc
 
 # Uv is a much faster package manager and installer, we'll use it over conda where possible to cut time.
 RUN pip install uv
+COPY pyproject.toml uv.lock ./
 
 # Install Python deps via uv (this replaces `pip install ...`)
-RUN source activate env && uv pip install \
+RUN source activate env 
+RUN uv sync --no-dev && uv pip install \
     freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
     geopy aiohttp requests scikit-learn geopandas healpy easygems astropy
 

@@ -1,8 +1,26 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from typing import List
+
+from src.core.available_chatbots import available_chatbots
+from src.auth import authorize_or_fail, AuthRequired
 
 router = APIRouter()
 
-@router.get("/availablechatbots")
-async def availablechatbots():
-    # Phase 1: surface only
-    return {"ok": True, "data": [], "note": "stub - Phase 2 will fill"}
+@router.get("/availablechatbots", response_model=List[str], dependencies=[AuthRequired])
+async def available_chatbots_endpoint(request: Request) -> List[str]:
+    """
+    Available Chatbots
+
+    Statically returns the list of available chatbots as JSON.
+    Requires a valid auth (same semantics as Rust's `authorize_or_fail!`).
+
+    The returned strings can be used by the frontend to select a model elsewhere.
+    If no model is specified there, the first item of this list is the default.
+    """
+    # Auth (parity with Rust macro call)
+    # Expectation: `authorize_or_fail` raises an HTTPException on failure, or
+    # returns a username/subject string on success (ignored here).
+    _user = await authorize_or_fail(request)
+
+    # Return ordered list of model names from litellm_config.yaml
+    return available_chatbots()

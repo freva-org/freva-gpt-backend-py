@@ -1,5 +1,6 @@
 services:
   freva-gpt-backend:
+    platform: linux/amd64 # We need this, otherwise it defaults to arm64 base image and has mismatch for miniforge installer when built on mac
     image: freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
@@ -22,8 +23,8 @@ services:
           "CMD",
           "curl",
           "-f",
-          "http://localhost:${TARGET_PORT:-8502}/api/chatbot/help",
-        ]
+          "http://localhost:${BACKEND_PORT:-8502}/api/chatbot/help",
+        ] # healthchecks should hit the container port (e.g., ${BACKEND_PORT:-8502}), not the host-mapped port
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${INSTANCE_NAME}
@@ -33,6 +34,8 @@ services:
       - "--config=/app/config.yaml"
     env_file:
       - .env # Load local .env file
+    ports:
+      - "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
     networks:
       - freva-gpt
     healthcheck:

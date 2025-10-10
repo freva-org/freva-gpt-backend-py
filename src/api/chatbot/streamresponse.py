@@ -5,6 +5,7 @@ import logging
 import random
 import string
 from typing import Any, Dict, List, Optional, Tuple
+import asyncio
 
 from fastapi import APIRouter, HTTPException, Request, Query
 from starlette.responses import StreamingResponse
@@ -49,9 +50,9 @@ def _to_wire_dict(v: StreamVariant) -> Dict[str, Any]:
         return {"variant": kind, "content": payload}
     return d
 
-def _sse_event(event: str, data_obj: Dict[str, Any]) -> bytes:
+def _sse_data(data_obj: Dict[str, Any]) -> bytes:
     payload = json.dumps(data_obj, ensure_ascii=False)
-    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+    return f"{payload}\n\n".encode("utf-8")
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
 async def streamresponse_get(
@@ -62,8 +63,8 @@ async def streamresponse_get(
     chatbot: Optional[str] = Query(None),
 ):
     """
-    Rust-parity GET endpoint that emits a short SSE burst:
-      ServerHint → User → Assistant (FULL text once) → StreamEnd
+    Rust-parity GET endpoint that streams tokens over SSE:
+      ServerHint → User → Assistant (multiple incremental chunks) → StreamEnd
     """
     ui = user_input if user_input is not None else input
     model_name = chatbot or default_chatbot()
@@ -103,15 +104,15 @@ async def streamresponse_get(
         append_thread(thread_id, [err_v, end_v])
 
         async def _err():
-            yield _sse_event("ServerError", _to_wire_dict(err_v))
-            yield _sse_event("StreamEnd", _to_wire_dict(end_v))
+            yield _sse_data(_to_wire_dict(err_v))
+            yield _sse_data(_to_wire_dict(end_v))
 
         return StreamingResponse(
             _err(),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
-    
+
     # Add current user input & persist hint+user
     messages.append({"role": "user", "content": ui or ""})
     hint = SVServerHint(data={"thread_id": thread_id})
@@ -119,24 +120,61 @@ async def streamresponse_get(
     append_thread(thread_id, [hint, user_v])
 
     async def _gen():
+        # Emit hint & user immediately so UI opens the assistant bubble
+        yield _sse_data(_to_wire_dict(hint))
+
+        accumulated_parts: list[str] = []
         try:
-            resp = await acomplete(model=model_name, messages=messages)
-            assistant_text = first_text(resp) or ""
-            assistant_v = SVAssistant(text=assistant_text)
+            # Request true streaming from LiteLLM
+            resp = await acomplete(model=model_name, messages=messages, stream=True)  # async iterator or dict
+
+            if hasattr(resp, "__aiter__"):
+                # Stream chunks as they arrive
+                async for chunk in resp:  # type: ignore
+                    try:
+                        choice = (chunk.get("choices") or [{}])[0]
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content") or ""
+                        if piece:
+                            accumulated_parts.append(piece)
+                            yield _sse_data({"variant": "Assistant", "content": piece})
+                        if choice.get("finish_reason"):
+                            break
+                    except Exception:
+                        continue
+            else:
+                # Fallback: provider ignored streaming → chunk the full text
+                full_txt = first_text(resp) or ""
+                if full_txt:
+                    import re
+                    for piece in re.findall(r"\S+\s*", full_txt):
+                        accumulated_parts.append(piece)
+                        yield _sse_data({"variant": "Assistant", "content": piece})
+
+            # Persist final assistant + end marker
+            final_text = "".join(accumulated_parts)
+            assistant_v = SVAssistant(text=final_text)
             end_v = SVStreamEnd(message="Done")
             append_thread(thread_id, [assistant_v, end_v])
 
-            # Burst: full answer in one Assistant event
-            yield _sse_event("ServerHint", _to_wire_dict(hint))
-            yield _sse_event("User", _to_wire_dict(user_v))
-            yield _sse_event("Assistant", _to_wire_dict(assistant_v))
-            yield _sse_event("StreamEnd", _to_wire_dict(end_v))
+            yield _sse_data(_to_wire_dict(end_v))
+
+        except asyncio.CancelledError:
+            # Client disconnected; persist what we have
+            final_text = "".join(accumulated_parts)
+            assistant_v = SVAssistant(text=final_text)
+            end_v = SVStreamEnd(message="Cancelled")
+            append_thread(thread_id, [assistant_v, end_v])
+            # connection is gone; don't yield more
         except Exception as e:
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Error")
             append_thread(thread_id, [err_v, end_v])
-            yield _sse_event("ServerError", _to_wire_dict(err_v))
-            yield _sse_event("StreamEnd", _to_wire_dict(end_v))
+            yield _sse_data(_to_wire_dict(err_v))
+            yield _sse_data(_to_wire_dict(end_v))
 
-    return StreamingResponse(_gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"})
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )

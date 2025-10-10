@@ -3,9 +3,9 @@ import os
 import json
 import time
 import asyncio
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
 
-import requests  # sync HTTP; we'll run it in a thread
+import httpx
 
 from src.settings import get_settings
 # ---------------------------------------------------------------------------
@@ -18,8 +18,6 @@ from src.settings import get_settings
 def _completions_url() -> str:
     s = get_settings()
     return f"{s.LITE_LLM_ADDRESS.rstrip('/')}/v1/chat/completions"
-
-COMPLETIONS_URL = _completions_url()
 
 # Optional bearer to satisfy proxies that require it.
 AUTH_TOKEN = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY") or ""
@@ -36,11 +34,12 @@ def _headers() -> Dict[str, str]:
         h["Authorization"] = f"Bearer {AUTH_TOKEN}"
     return h
 
-def _do_request(payload: Dict[str, Any]) -> Dict[str, Any]:
-    resp = requests.post(COMPLETIONS_URL, headers=_headers(), data=json.dumps(payload), timeout=300)
-    # Let the caller see the real LiteLLM error payload
-    resp.raise_for_status()
-    return resp.json()
+async def _post_json(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    timeout = httpx.Timeout(60.0, read=300.0, write=30.0, connect=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post(url, json=payload, headers=_headers())
+        r.raise_for_status()
+        return r.json()
 
 def _extract_text(resp: Any) -> str:
     try:
@@ -51,23 +50,58 @@ def _extract_text(resp: Any) -> str:
 # ---------------------------------------------------------------------------
 # Public API (non-streaming)
 # ---------------------------------------------------------------------------
-async def acomplete(*, model: str, messages: List[Dict[str, Any]], **params) -> Dict[str, Any]:
+async def acomplete(
+    *,
+    model: str,
+    messages: Iterable[Dict[str, Any]],
+    stream: bool = False,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any] | AsyncIterator[Dict[str, Any]]:
     """
-    Send a non-streaming /v1/chat/completions request to the LiteLLM proxy.
-    - `model` must be the *config name* from your litellm_config.yaml (e.g., "qwen2.5:3b")
-    - `messages` are standard OpenAI chat messages
-    - extra **params go into the JSON body (after sanitization)
+    Call LiteLLM /v1/chat/completions.
+    - stream=False: return JSON dict
+    - stream=True: return **async iterator** yielding OpenAI-style stream chunks (dicts)
     """
-    payload = {
+    url = _completions_url()
+    payload: Dict[str, Any] = {
         "model": model,
-        "messages": messages,
-        "stream": False,
-        "n": 1,
+        "messages": list(messages),
+        "stream": stream,
     }
-    payload.update(_passthrough_params(params))
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+    if extra:
+        payload.update(extra)
+    payload.update(_passthrough_params(None))
 
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, lambda: _do_request(payload))
+    if not stream:
+        return await _post_json(url, payload)
+
+    timeout = httpx.Timeout(60.0, read=300.0, write=30.0, connect=30.0)
+    client = httpx.AsyncClient(timeout=timeout)
+
+    async def _aiter() -> AsyncIterator[Dict[str, Any]]:
+        try:
+            async with client.stream("POST", url, json=payload, headers=_headers()) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        yield json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+        finally:
+            await client.aclose()
+    return _aiter()
+
 
 def first_text(resp: Any) -> str:
     return _extract_text(resp)

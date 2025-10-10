@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from src.auth import AuthRequired
 
 from .availablechatbots import router as availablechatbots_router
 from .getthread import router as getthread_router
@@ -8,8 +7,7 @@ from .streamresponse import router as streamresponse_router
 from .stop import router as stop_router
 from .heartbeat import router as heartbeat_router
 
-# Aggregate router with shared auth dependency (parity with the single-file version)
-router = APIRouter(dependencies=[AuthRequired])
+router = APIRouter()
 
 # Mount individual endpoint routers
 router.include_router(availablechatbots_router)

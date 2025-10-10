@@ -31,9 +31,9 @@ def app():
     from src.app import app as fastapi_app
     return fastapi_app
 
-GOOD_HEADERS = {"Authorization": "Bearer good", "x-freva-rest-url": "http://rest.example"}
+GOOD_HEADERS = {"Authorization": "Bearer good", "x-freva-rest-url": "http://rest.example", "x-freva-vault-url": "mongodb://dummy-vault",}
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_getthread_requires_thread_id(app):
     with respx.mock(assert_all_called=False) as mock:
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name": "alice"})
@@ -42,17 +42,42 @@ async def test_getthread_requires_thread_id(app):
             assert r.status_code == 422
             assert r.json()["detail"] == "Missing required parameter: thread_id"
 
-@pytest.mark.anyio
-async def test_getthread_ok_with_thread_id(app):
+@pytest.mark.asyncio
+async def test_getthread_ok_with_thread_id(app, monkeypatch):
+    # Make the route attempt a DB call, but keep it deterministic for the test.
+    from src.services.storage import mongodb_storage, router as storage_router
+
+    async def fake_get_database(vault_url: str):
+        class DummyDB: ...
+        # Assert we actually read the header the route requires
+        assert vault_url == "mongodb://dummy-vault"
+        return DummyDB()
+
+    async def fake_read_thread(thread_id: str, database):
+        assert thread_id == "t-123"
+        # Include a Prompt variant so we can assert filtering happens
+        return [
+            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {"variant": "AssistantMessage", "text": "kept"},
+            {"variant": "ToolResult", "text": "also kept"},
+        ]
+
+    monkeypatch.setattr(mongodb_storage, "get_database", fake_get_database)
+    monkeypatch.setattr(storage_router, "read_thread", fake_read_thread)
+
     with respx.mock(assert_all_called=False) as mock:
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name": "alice"})
         async with make_async_client(app) as client:
             r = await client.get("/api/chatbot/getthread", params={"thread_id": "t-123"}, headers=GOOD_HEADERS)
             assert r.status_code == 200
             body = r.json()
-            assert body["ok"] is True and body["thread_id"] == "t-123"
+            # Prompt should be filtered out by the route
+            assert isinstance(body, list)
+            variants = [item.get("variant") for item in body]
+            assert "Prompt" not in variants
+            assert "AssistantMessage" in variants and "ToolResult" in variants
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_streamresponse_accepts_params_and_headers(app):
     with respx.mock(assert_all_called=False) as mock:
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name": "alice"})
@@ -63,13 +88,12 @@ async def test_streamresponse_accepts_params_and_headers(app):
                 headers={**GOOD_HEADERS, "X-Freva-ConfigPath": "/tmp/config.yml"},
             )
             assert r.status_code == 200
-            j = r.json()
-            assert j["thread_id"] == "t-999"
-            assert j["user_input"] == "hello"
-            assert j["config_path"] == "/tmp/config.yml"
-            assert j["mode"] == "non-streaming-stub"
+            assert r.headers.get("content-type", "").startswith("text/event-stream")
+            # Optional: the body should look like SSE (contains 'event:' lines)
+            text = r.text
+            assert "event:" in text
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_stop_allows_optional_thread_id_get_and_post(app):
     with respx.mock(assert_all_called=False) as mock:
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name": "alice"})

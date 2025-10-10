@@ -42,36 +42,80 @@ ENDPOINTS_GET = [
     "/api/chatbot/stop",
 ]
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_all_get_routes_require_auth(app):
     async with make_async_client(app) as client:
         for ep in ENDPOINTS_GET + ["/api/chatbot/getthread"]:
             r = await client.get(ep)
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
 
-@pytest.mark.anyio
-async def test_routes_succeed_with_auth_and_username_injection(app):
+@pytest.mark.asyncio
+async def test_routes_succeed_with_auth_and_username_injection(app, monkeypatch):
+    # Mock the REST call the auth layer uses to resolve a username
     with respx.mock(assert_all_called=False) as mock:
-        mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name": "alice"})
-        headers = {"Authorization": "Bearer good", "x-freva-rest-url": "http://rest.example"}
+        mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(
+            200, json={"pw_name": "alice"}
+        )
+
+        # Provide both REST base AND VAULT url headers (Phase 3 requires vault)
+        headers = {
+            "Authorization": "Bearer good",
+            "x-freva-rest-url": "http://rest.example",
+            "x-freva-vault-url": "mongodb://vault.example",
+        }
+
+        # Patch DB + "list my threads" to avoid touching real storage
+        async def fake_get_db(vault_url: str):
+            return object()
+
+        async def fake_get_user_threads(user: str, database):
+            # mirror route contract: return JSON with "user" + thread ids
+            return {"user": user, "threads": ["t-1", "t-2"]}
+
+        # DB handle
+        monkeypatch.setattr(
+            "src.services.storage.mongodb_storage.get_database",
+            fake_get_db,
+        )
+
+        # Storage router may name it differently; patch both, no-raise
+        import src.services.storage.router as storage_router
+        monkeypatch.setattr(storage_router, "read_thread", fake_get_user_threads, raising=False)
 
         async with make_async_client(app) as client:
-            # basic GETs
+            # 1) basic GETs succeed with auth + headers
             for ep in ENDPOINTS_GET:
                 r = await client.get(ep, headers=headers)
                 assert r.status_code == 200, f"{ep} should succeed with auth"
 
-            # username is injected
+            # 2) username is injected (Phase 3 behavior preserved)
             r = await client.get("/api/chatbot/getuserthreads", headers=headers)
             assert r.status_code == 200
             assert r.json().get("user") == "alice"
 
-            # /getthread needs a thread_id to return the happy-path stub
-            r = await client.get("/api/chatbot/getthread", params={"thread_id": "t-123"}, headers=headers)
+            # 3) /getthread: must pass thread_id + vault header
+            r = await client.get(
+                "/api/chatbot/getthread",
+                params={"thread_id": "t-123"},
+                headers=headers,
+            )
             assert r.status_code == 200
-            assert r.json()["thread_id"] == "t-123"
+            # returns a JSON array of stream variants (Prompt filtered out)
+            body = r.json()
+            assert isinstance(body, list)
+            assert body and body[0]["variant"] == "User"
 
-            # /stop POST works too
+            # 4) GET-only SSE (Rust parity) — just assert it succeeds
+            r = await client.get(
+                "/api/chatbot/streamresponse",
+                headers=headers,
+                params={"user_input": "hi there", "chatbot": "qwen2.5:3b"},
+            )
+            assert r.status_code == 200
+            assert r.headers.get("content-type", "").startswith("text/event-stream")
+
+            # 5) /stop POST works too
             r = await client.post("/api/chatbot/stop", headers=headers)
             assert r.status_code == 200
             assert r.json().get("stopped") is True
+

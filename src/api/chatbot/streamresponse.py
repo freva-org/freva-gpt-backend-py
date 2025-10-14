@@ -55,7 +55,7 @@ def _sse_data(data_obj: Dict[str, Any]) -> bytes:
     return f"{payload}\n\n".encode("utf-8")
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
-async def streamresponse_get(
+async def streamresponse(
     request: Request,
     thread_id: Optional[str] = Query(None),
     user_input: Optional[str] = Query(None),   # preferred
@@ -66,6 +66,8 @@ async def streamresponse_get(
     Rust-parity GET endpoint that streams tokens over SSE:
       ServerHint → User → Assistant (multiple incremental chunks) → StreamEnd
     """
+    log.debug("stream: params thread_id=%r user_input=%r chatbot=%r", thread_id, user_input or input, chatbot)
+
     ui = user_input if user_input is not None else input
     model_name = chatbot or default_chatbot()
     username = getattr(request.state, "username", None)  # set by AuthRequired
@@ -74,12 +76,16 @@ async def streamresponse_get(
     create_new = not thread_id or not thread_id.strip()
     if create_new:
         thread_id = _new_conversation_id()
+    log.debug("stream: thread_decision create_new=%s thread_id=%s", create_new, thread_id)
+
     user_id = username or "anonymous"
 
     # Ensure per-thread storage dir
     try:
         recursively_create_dir_at_rw_dir(user_id, thread_id)
-    except Exception:
+        log.debug("stream: ensured_rw_dir user=%s thread_id=%s", user_id, thread_id)
+    except Exception as e:
+        log.error("stream: ensure_rw_dir_failed user=%s thread_id=%s err=%s", user_id, thread_id, e)
         log.debug("ensure rw_dir failed", exc_info=True)
 
     # Build messages (either fresh prompt or from prior conversation)
@@ -89,14 +95,22 @@ async def streamresponse_get(
             prompt_json = get_entire_prompt_json(user_id, thread_id, model_name)
             append_thread(thread_id, [SVPrompt(payload=prompt_json)])
             messages = list(base)
+            log.debug("stream: new_thread base_msgs=%d", len(messages))
         else:
-            prior_conv = read_thread(thread_id)
-            messages = help_convert_sv_ccrm(
-                prior_conv,
-                include_images=model_supports_images(model_name),
-                include_meta=False,
-            )
+            try:
+                prior_conv = read_thread(thread_id)
+                log.debug("stream: loaded_thread sv_items=%d", len(prior_conv))
+                messages = help_convert_sv_ccrm(
+                    prior_conv,
+                    include_images=model_supports_images(model_name),
+                    include_meta=False,
+                )
+                log.debug("stream: converted_msgs=%d", len(messages))
+            except Exception as e:
+                log.error("stream: read_thread_failed thread_id=%s err=%s", thread_id, e)
+                raise
     except Exception as e:
+        log.debug("stream: converted_msgs=%d", len(messages))
         # Bind values outside the generator; don't reference 'e' inside the closure.
         msg = f"prompt/history assembly failed: {e}"
         err_v = SVServerError(message=msg)
@@ -126,9 +140,11 @@ async def streamresponse_get(
         accumulated_parts: list[str] = []
         try:
             # Request true streaming from LiteLLM
+            log.debug("stream: llm_call model=%s msg_count=%d", model_name, len(messages))
             resp = await acomplete(model=model_name, messages=messages, stream=True)  # async iterator or dict
 
             if hasattr(resp, "__aiter__"):
+                chunk_count = 0
                 # Stream chunks as they arrive
                 async for chunk in resp:  # type: ignore
                     try:
@@ -136,6 +152,10 @@ async def streamresponse_get(
                         delta = choice.get("delta") or {}
                         piece = delta.get("content") or ""
                         if piece:
+                            chunk_count += 1
+                            if chunk_count <= 3 or (chunk_count % 50 == 0):  # avoid spam
+                                log.debug("stream: chunk n=%d sample=%r", chunk_count, piece[:40])
+
                             accumulated_parts.append(piece)
                             yield _sse_data({"variant": "Assistant", "content": piece})
                         if choice.get("finish_reason"):
@@ -144,6 +164,7 @@ async def streamresponse_get(
                         continue
             else:
                 # Fallback: provider ignored streaming → chunk the full text
+                log.debug("stream: fallback_manual_chunking")
                 full_txt = first_text(resp) or ""
                 if full_txt:
                     import re
@@ -153,6 +174,7 @@ async def streamresponse_get(
 
             # Persist final assistant + end marker
             final_text = "".join(accumulated_parts)
+            log.info("stream: done thread_id=%s chunks=%d chars=%d", thread_id, chunk_count, len(final_text))
             assistant_v = SVAssistant(text=final_text)
             end_v = SVStreamEnd(message="Done")
             append_thread(thread_id, [assistant_v, end_v])
@@ -162,11 +184,13 @@ async def streamresponse_get(
         except asyncio.CancelledError:
             # Client disconnected; persist what we have
             final_text = "".join(accumulated_parts)
+            log.info("stream: client_disconnected thread_id=%s chunks=%d chars=%d", thread_id, chunk_count, len(final_text))
             assistant_v = SVAssistant(text=final_text)
             end_v = SVStreamEnd(message="Cancelled")
             append_thread(thread_id, [assistant_v, end_v])
             # connection is gone; don't yield more
         except Exception as e:
+            log.error("stream: error thread_id=%s chunks=%d err=%s", thread_id, chunk_count, e)
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Error")
             append_thread(thread_id, [err_v, end_v])

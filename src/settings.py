@@ -13,6 +13,10 @@ class Settings:
     AUTH_KEY: str = os.getenv("AUTH_KEY", "")       
     ALLOW_GUESTS: bool = os.getenv("ALLOW_GUESTS", "false").lower() in {"1", "true", "yes"}
     LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
+    MONGODB_DATABASE_NAME: str = os.getenv("MONGODB_DATABASE_NAME", "chatbot")
+    MONGODB_COLLECTION_NAME: str = os.getenv("MONGODB_COLLECTION_NAME", "threads")
+    MONGODB_COLLECTION_NAME_EMB: str = os.getenv("MONGODB_COLLECTION_NAME_EMB", "embeddings")
+    CLEAR_MONGODB_EMBEDDINGS: bool = os.getenv("CLEAR_MONGODB_EMBEDDINGS", "").lower() in {"1","true","yes"}
     VERSION: str = os.getenv("VERSION", "0.1.0")      
 
 

@@ -1,87 +1,75 @@
 import os
-
 import requests
-from fastmcp import FastMCP
-from fastmcp.server.auth.providers.jwt import JWTVerifier
-from fastmcp.server.auth.oauth_proxy import OAuthProxy
+from functools import lru_cache
+from contextvars import ContextVar
 
-from src.variables import *
-from src.servers.rag.helpers import *
-from src.servers.rag.document_loaders import CustomDirectoryLoader
-from src.servers.rag.text_splitters import CustomDocumentSplitter
+from pymongo import MongoClient
+
+from fastmcp import FastMCP
+
+from src.tools.rag.helpers import *
+from src.tools.rag.document_loaders import CustomDirectoryLoader
+from src.tools.rag.text_splitters import CustomDocumentSplitter
+from src.tools.rag.header_gate import make_header_gate, VAULT_URI_HDR, REST_URL_HDR
+from src.tools.server_auth import jwt_verifier
 
 from src.logging_setup import configure_logging
+from src.settings import get_settings
 
 logger = configure_logging()
+settings = get_settings()
 
+_disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
+mcp = FastMCP("rag_server", auth=None if _disable_auth else jwt_verifier)
 
-ISSUER   = os.getenv("OIDC_ISSUER", "https://www.freva.dkrz.de/api/freva-nextgen/")  # TODO: check this
-AUDIENCE = os.getenv("OIDC_AUDIENCE", "mcp-servers")
+# ── Config ───────────────────────────────────────────────────────────────────
+EMBEDDING_MODEL="ollama/mxbai-embed-large:latest"
+EMBEDDING_LENGTH = 1024
 
-# Discover JWKS from OIDC config
-disc = requests.get(ISSUER.rstrip("/") + "/.well-known/openid-configuration", timeout=10).json()
-JWKS_URI = disc["jwks_uri"]
+RESOURCE_DIRECTORY="resources"
+AVAILABLE_LIBRARIES={"stableclimgen"}
 
-token_verifier = JWTVerifier(
-    jwks_uri=JWKS_URI,
-    issuer=ISSUER,          # must match token `iss` exactly
-    audience=AUDIENCE       # must match token `aud` (string or in array)
-)
+# ── Mongo helpers ────────────────────────────────────────────────────────────
+# Per-request header context
+vault_uri_ctx: ContextVar[str | None] = ContextVar("vault_uri_ctx", default=None)
+rest_url_ctx:  ContextVar[str | None] = ContextVar("rest_url_ctx",  default=None)
 
-# # Create the OAuth proxy
-# auth = OAuthProxy(
-#     # Provider's OAuth endpoints (from their documentation)
-#     upstream_authorization_endpoint="https://freva-keycloak.cloud.dkrz.de/realms/Freva/protocol/openid-connect/auth",
-#     upstream_token_endpoint="https://freva-keycloak.cloud.dkrz.de/realms/Freva/protocol/openid-connect/token",
+@lru_cache(maxsize=32)
+def _client_for(uri: str) -> MongoClient:
+    return MongoClient(uri, serverSelectionTimeoutMS=5000)
 
-#     # Your registered app credentials
-#     upstream_client_id="freva",
-#     upstream_client_secret="your-client-secret",
-
-#     # Token validation (see Token Verification guide)
-#     token_verifier=token_verifier,
-
-#     # Your FastMCP server's public URL
-#     base_url="http://localhost:8050",
-
-#     # Optional: customize the callback path (default is "/auth/callback")
-#     redirect_path="/callback",
-# )
-
-mcp = FastMCP("rag_server", auth=token_verifier)
-
-PROXY_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
-API_KEY   = os.getenv("LITELLM_API_KEY", "dummy")  # set on the proxy
-
+def _collection():
+    uri = vault_uri_ctx.get()
+    if not uri:
+        raise RuntimeError(f"Missing required header '{VAULT_URI_HDR}'")
+    db = _client_for(uri)["rag"]
+    return db["embeddings"]
 
 def get_embedding(text):
     """Get embedding for a given text"""
     payload = {
-        "model": EMBEDDING_MODEL,  # or a proxy alias you define
+        "model": EMBEDDING_MODEL, 
         "input": text,
         "temperature": 0.2,
         }
     r = requests.post(
-            f"{PROXY_URL}/v1/embeddings",
-            headers={"Authorization": f"Bearer {API_KEY}"},
+            f"{settings.LITE_LLM_ADDRESS}/v1/embeddings",
             json=payload,
             timeout=60,
             )
-    response = r.json()
-    # response = litellm.embedding(
-    #     input=text,
-    #     model=EMBEDDING_MODEL, # os.getenv("EMBEDDING_MODEL"),  # Model to use for embeddings
-    #     temperature=0.2,  # Temperature for the model
-    #     api_base= OLLAMA_BASE_URL,  # Base URL for the API
-    # )
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        raise RuntimeError(f"Embeddings proxy error {r.status_code}: {r.text[:300]}") from e
 
-    if response.data and len(response.data) != 0:
-        embedding = response.data[0]['embedding']
-        return embedding
-    elif not response.data:
-        raise ValueError("No embedding data returned from the model.")
-    if not isinstance(response.data[0], dict) or 'embedding' not in response.data[0]:
-        raise ValueError("Embedding data is not in the expected format.")
+    response = r.json()
+    data = response.get("data")
+    if not data or not isinstance(data, list):
+        raise ValueError(f"Bad embeddings payload: {response}")
+    first = data[0]
+    if not isinstance(first, dict) or "embedding" not in first:
+        raise ValueError(f"Missing 'embedding' in item: {first}")
+    return first["embedding"]
 
 
 def create_db_entry_for_document(document):
@@ -100,7 +88,8 @@ def create_db_entry_for_document(document):
 
 def store_documents_in_mongodb(documents):
     """Create and store embeddings for the provided documents."""
-    new_documents = get_new_or_changes_documents(documents, DB_COLLECTION)
+    col = _collection()
+    new_documents = get_new_or_changes_documents(documents, col)
     new_entries = []
 
     for d in new_documents:
@@ -110,18 +99,19 @@ def store_documents_in_mongodb(documents):
     # Insert new embeddings
     if new_entries:
         logger.info(f"Inserting {len(new_entries)} new embeddings into MongoDB")
-        DB_COLLECTION.insert_many(new_entries)
+        col.insert_many(new_entries)
 
 
 def get_query_results(query: str, resource_name):
     """Gets results from a vector search query."""
-    add_vector_search_index_to_db(DB_COLLECTION, EMBEDDING_LENGTH)
+    col = _collection()
+    add_vector_search_index_to_db(col, EMBEDDING_LENGTH)
 
     logger.info(f"Searching for query: {query}")
     query_embedding = get_embedding(query)
     query_results = []
 
-    src_types = DB_COLLECTION.distinct("resource_type")
+    src_types = col.distinct("resource_type")
     for src_t in src_types:
         pipeline = [
         {
@@ -152,7 +142,7 @@ def get_query_results(query: str, resource_name):
         }
         ]
 
-        query_results.append(list(DB_COLLECTION.aggregate(pipeline)))
+        query_results.append(list(col.aggregate(pipeline)))
 
     if query_results:
         return postprocessing_query_result(query_results)
@@ -172,14 +162,18 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
         str: Relevant context extracted from the library documentation.
     """
     logger.info(f"Searching for context in {resources_to_retrieve_from} documentation for question: {question}")
-    if resources_to_retrieve_from not in AVAILABLE_RESOURCES:
+    if resources_to_retrieve_from not in AVAILABLE_LIBRARIES:
         logger.error(f"Library '{resources_to_retrieve_from}' is not supported.")
         return f"Library '{resources_to_retrieve_from}' is not supported."
 
-    if CLEAR_EMBEDDINGS == "True":
-        clear_embeddings_collection(DB_COLLECTION)
+    if settings.CLEAR_MONGODB_EMBEDDINGS:
+        clear_embeddings_collection(_collection())
 
-    dir_loader = CustomDirectoryLoader(os.path.join(RESOURCE_DIR, resources_to_retrieve_from))
+    src_dir = os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from)
+    if not os.path.isdir(src_dir):
+        return f"Resource directory not found: {src_dir}"
+    
+    dir_loader = CustomDirectoryLoader(src_dir)
     documents = dir_loader.load()
     doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
     chunked_documents = doc_splitter.split()
@@ -194,13 +188,13 @@ def debug():
     resources_to_retrieve_from = "stableclimgen"
     question = "Get global temperature data from February 2nd 1940"
 
-    dir_loader = CustomDirectoryLoader(os.path.join(RESOURCE_DIR, resources_to_retrieve_from))
+    dir_loader = CustomDirectoryLoader(os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from))
     documents = dir_loader.load()
     doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
     chunked_documents = doc_splitter.split()
 
-    if CLEAR_EMBEDDINGS == "True":
-        clear_embeddings_collection(DB_COLLECTION)
+    if settings.CLEAR_MONGODB_EMBEDDINGS:
+        clear_embeddings_collection(_collection())
 
     store_documents_in_mongodb(chunked_documents)
 
@@ -209,14 +203,20 @@ def debug():
 
     
 if __name__ == "__main__":
-    # Configure Streamable HTTP transport (optionally HTTPS)
+    # Configure Streamable HTTP transport 
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8050"))
 
     # Start the MCP server using Streamable HTTP transport
-    mcp.run(
-        transport="http",
-        host=host,
-        port=port,
+    wrapped_app = make_header_gate(
+        mcp.http_app(),
+        vault_ctx=vault_uri_ctx,
+        rest_ctx=rest_url_ctx,
+        logger=logger,       
+        mcp_path="/mcp",  
     )
+
+    import uvicorn
+    uvicorn.run(wrapped_app, host=host, port=port)
+
     # debug()

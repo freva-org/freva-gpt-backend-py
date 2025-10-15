@@ -1,6 +1,5 @@
 from pathlib import Path
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, Union
-import json
+from typing import List
 import ast
 
 from langchain_core.documents import Document
@@ -27,7 +26,6 @@ loader_kwargs_dict={
                "json_lines": True},
     ".pdf": {},
 }
-
 
 class CustomDirectoryLoader(DirectoryLoader):
     def __init__(self, path: str, **kwargs):

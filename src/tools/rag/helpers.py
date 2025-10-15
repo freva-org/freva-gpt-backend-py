@@ -4,7 +4,6 @@ import json
 import time
 from operator import itemgetter
 
-from pymongo import MongoClient
 from pymongo.operations import SearchIndexModel
 
 from src.logging_setup import configure_logging

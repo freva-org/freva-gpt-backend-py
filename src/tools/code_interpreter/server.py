@@ -13,7 +13,6 @@ from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
 
 logger = configure_logging()
 
-# --- auth toggle to match RAG server style ---
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 

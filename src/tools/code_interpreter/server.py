@@ -19,7 +19,7 @@ logger = configure_logging()
 # ──────────────────────────────────────────────────────────────────────────────
 ISSUER   = os.getenv("OIDC_ISSUER",   "https://www.freva.dkrz.de/api/freva-nextgen/")
 AUDIENCE = os.getenv("OIDC_AUDIENCE", "freva")
-REQUIRED_SCOPES = [s.strip() for s in os.getenv("MCP_REQUIRED_SCOPES", "mcp:execute").split(",") if s.strip()]
+REQUIRED_SCOPES = [s.strip() for s in os.getenv("MCP_REQUIRED_SCOPES", "openid profile").split(",") if s.strip()]
 
 disc = requests.get(ISSUER.rstrip("/") + "/.well-known/openid-configuration", timeout=10).json()
 JWKS_URI = disc["jwks_uri"]
@@ -72,35 +72,6 @@ def _run_code(code: str) -> str:
         return _truncate(out.strip())
     return "Code executed successfully with no output."
 
-@mcp.tool()
-def auth_health() -> dict:
-    """
-    Debug-only: returns server auth expectations and the parsed access token claims.
-    Remove after debugging.
-    """
-    tok = get_access_token()
-    return {
-        "server_expectations": {
-            "ISSUER_env": ISSUER,
-            "AUDIENCE_env": AUDIENCE,
-            "REQUIRED_SCOPES_env": REQUIRED_SCOPES,
-        },
-        "token": {
-            "issuer": tok.issuer,
-            "audience": tok.audience,       # may be str or list depending on provider
-            "subject": tok.subject,
-            "client_id": getattr(tok, "client_id", None),
-            "scopes": tok.scopes,           # parsed scopes if available
-            "expires_at": getattr(tok, "expires_at", None),
-            "raw_claims_subset": {          # helpful peek; keep it minimal
-                "iss": tok.issuer,
-                "aud": tok.audience,
-                "sub": tok.subject,
-                "scope": getattr(tok, "scope", None),
-            },
-        },
-    }
-
 
 @mcp.tool()
 def code_interpreter(code: str, require_scope: Optional[str] = None) -> str:
@@ -136,7 +107,7 @@ if __name__ == "__main__":
     # Streamable HTTP transport (recommended for scaling)
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8051"))
-    path = os.getenv("MCP_PATH", "/mcp")  # standard mount path
+    path = os.getenv("MCP_PATH", "/mcp")  # standard path
 
     logger.info("Starting code-interpreter MCP server on %s:%s%s", host, port, path)
     mcp.run(
@@ -144,5 +115,5 @@ if __name__ == "__main__":
         host=host,
         port=port,
         path=path,
-        # tip: consider `stateless_http=True` if you want to scale horizontally with no sticky sessions
+        # consider `stateless_http=True` to scale horizontally with no sticky sessions
     )

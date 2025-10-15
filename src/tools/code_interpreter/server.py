@@ -1,54 +1,42 @@
+# --- imports ---
 import os
 import sys
 from io import StringIO
 from typing import Optional
 
-import requests
 from IPython.core.interactiveshell import InteractiveShell
-
 from fastmcp import FastMCP
-from fastmcp.server.auth.providers.jwt import JWTVerifier
-from fastmcp.server.dependencies import get_access_token  # exposes parsed token in tools
+from fastmcp.server.dependencies import get_access_token
 
 from src.logging_setup import configure_logging
+from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
 
 logger = configure_logging()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# OAuth/OIDC → JWT Bearer verification (JWKS discovery)
-# ──────────────────────────────────────────────────────────────────────────────
-ISSUER   = os.getenv("OIDC_ISSUER",   "https://www.freva.dkrz.de/api/freva-nextgen/")
-AUDIENCE = os.getenv("OIDC_AUDIENCE", "freva")
-REQUIRED_SCOPES = [s.strip() for s in os.getenv("MCP_REQUIRED_SCOPES", "openid profile").split(",") if s.strip()]
+# --- auth toggle to match RAG server style ---
+_disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
+mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
-disc = requests.get(ISSUER.rstrip("/") + "/.well-known/openid-configuration", timeout=10).json()
-JWKS_URI = disc["jwks_uri"]
-
-jwt_verifier = JWTVerifier(
-    jwks_uri=JWKS_URI,
-    issuer=ISSUER,
-    audience=AUDIENCE,
-)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# MCP server
-# ──────────────────────────────────────────────────────────────────────────────
-mcp = FastMCP("code-interpreter-server", auth=jwt_verifier)
-
-# Single shared IPython shell (Jupyter-like)
 _shell = InteractiveShell.instance()
 
-# Hard limits to avoid memory blowups in logs / responses
-MAX_STD_CAP = int(os.getenv("MCP_MAX_STD_CAP", "200_000"))  # ~200 KB
+MAX_STD_CAP = int(os.getenv("MCP_MAX_STD_CAP", "200_000"))
 TRUNC_MSG = "\n\n[output truncated]\n"
 
+EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "20"))  # soft guard
+
 def _truncate(s: str, cap: int = MAX_STD_CAP) -> str:
-    if len(s) <= cap:
-        return s
-    return s[:cap] + TRUNC_MSG
+    return s if len(s) <= cap else s[:cap] + TRUNC_MSG
 
 def _run_code(code: str) -> str:
-    """Execute Python code in a persistent IPython shell and capture stdout/stderr/result."""
+    # optional: POSIX-only soft timeout
+    try:
+        import signal
+        def _raise_timeout(*_): raise TimeoutError(f"Execution exceeded {EXEC_TIMEOUT}s")
+        signal.signal(signal.SIGALRM, _raise_timeout)
+        signal.alarm(EXEC_TIMEOUT)
+    except Exception:
+        pass  # ignore on non-POSIX
+
     old_out, old_err = sys.stdout, sys.stderr
     out_buf, err_buf = StringIO(), StringIO()
     sys.stdout, sys.stderr = out_buf, err_buf
@@ -56,11 +44,14 @@ def _run_code(code: str) -> str:
         result = _shell.run_cell(code, store_history=False)
     finally:
         sys.stdout, sys.stderr = old_out, old_err
+        try:
+            import signal; signal.alarm(0)
+        except Exception:
+            pass
 
     out = out_buf.getvalue()
     err = err_buf.getvalue()
 
-    # Append repr of expression value if present
     if result and getattr(result, "result", None) is not None:
         if out and not out.endswith("\n"):
             out += "\n"
@@ -72,33 +63,25 @@ def _run_code(code: str) -> str:
         return _truncate(out.strip())
     return "Code executed successfully with no output."
 
-
 @mcp.tool()
 def code_interpreter(code: str, require_scope: Optional[str] = None) -> str:
     """
     Execute Python in a Jupyter-like IPython context.
-
-    Args:
-        code: The Python code to execute.
-        require_scope: Optional extra scope to enforce for this call (in addition to global REQUIRED_SCOPES).
-
-    Returns:
-        Captured stdout/stderr and last expression value (repr), truncated if too large.
-
-    Security:
-        - Requires a valid Bearer token (JWT) with audience={AUDIENCE} and issuer={ISSUER}.
-        - Enforces global REQUIRED_SCOPES (env MCP_REQUIRED_SCOPES) and optional per-call `require_scope`.
+    Returns stdout/stderr + last expr repr (truncated).
     """
-    # Fine-grained authorization: verify scopes from the validated token
-    access_token = get_access_token()
-    missing_global = [s for s in REQUIRED_SCOPES if s and s not in access_token.scopes]
-    if missing_global:
-        raise Exception(f"Missing required scopes: {', '.join(missing_global)}")
-    if require_scope and require_scope not in access_token.scopes:
-        raise Exception(f"Missing required scope: {require_scope}")
+    # Skip scope checks if auth is disabled (local dev)
+    if not _disable_auth:
+        access_token = get_access_token()
+        missing_global = [s for s in REQUIRED_SCOPES if s and s not in access_token.scopes]
+        if missing_global:
+            raise Exception(f"Missing required scopes: {', '.join(missing_global)}")
+        if require_scope and require_scope not in access_token.scopes:
+            raise Exception(f"Missing required scope: {require_scope}")
 
     try:
         return _run_code(code)
+    except TimeoutError as e:
+        return f"Error: {e}"
     except Exception as e:
         logger.exception("code_interpreter: unhandled execution error")
         raise Exception(f"Execution failed: {type(e).__name__}: {e}")
@@ -109,11 +92,11 @@ if __name__ == "__main__":
     port = int(os.getenv("MCP_PORT", "8051"))
     path = os.getenv("MCP_PATH", "/mcp")  # standard path
 
-    logger.info("Starting code-interpreter MCP server on %s:%s%s", host, port, path)
+    logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
+                host, port, path, "off" if _disable_auth else "on")
     mcp.run(
         transport="streamable-http",
         host=host,
         port=port,
         path=path,
-        # consider `stateless_http=True` to scale horizontally with no sticky sessions
     )

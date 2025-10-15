@@ -7,9 +7,6 @@ from operator import itemgetter
 from pymongo import MongoClient
 from pymongo.operations import SearchIndexModel
 
-from src.utils import read_jsonl_file, read_txt_file
-from src.variables import EMBEDDING_LENGTH
-
 from src.logging_setup import configure_logging
 
 logger = configure_logging()

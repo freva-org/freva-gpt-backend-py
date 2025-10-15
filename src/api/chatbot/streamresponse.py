@@ -36,7 +36,7 @@ def _to_wire_dict(v: StreamVariant) -> Dict[str, Any]:
     if kind == "Prompt":
         return {"variant": kind, "content": d["payload"]}
     if kind == "ServerHint":
-        return {"variant": kind, "content": d["data"]}
+        return {"variant": kind, "content": json.dumps(d["data"], ensure_ascii=False)} #d["data"]}
     if kind == "ServerError":
         return {"variant": kind, "content": d["message"]}
     if kind == "StreamEnd":

@@ -392,7 +392,14 @@ def from_wire_dict(obj: dict) -> StreamVariant:
     if v == PROMPT:
         return SVPrompt(payload="" if c is None else str(c))
     if v == SERVER_HINT:
-        return SVServerHint(data=c if isinstance(c, dict) else {})
+        # return SVServerHint(data=c if isinstance(c, dict) else {})
+        data = c
+        if isinstance(c, str):
+            try:
+                data = json.loads(c)
+            except Exception:
+                data = {"raw": c}
+        return SVServerHint(data=data or {})
     if v == SERVER_ERROR:
         return SVServerError(message="" if c is None else str(c))
     if v == OPENAI_ERROR:
@@ -445,8 +452,12 @@ def to_wire_dict(v: StreamVariant) -> dict:
         return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
-    if kind == SERVER_HINT:
-        return {"variant": SERVER_HINT, "content": d["data"]}
+    # if kind == SERVER_HINT:
+    #     return {"variant": SERVER_HINT, "content": d["data"]}
+    if kind == SERVER_HINT: # TODO: Fix this with Bianca
+        # Frontend expects the content as a JSON STRING, not an object
+        # e.g. {"variant":"ServerHint","content":"{\"thread_id\":\"abc\"}"}
+        return {"variant": SERVER_HINT, "content": json.dumps(d["data"], ensure_ascii=False)}
     if kind == SERVER_ERROR:
         return {"variant": SERVER_ERROR, "content": d["message"]}
     if kind == OPENAI_ERROR:

@@ -9,6 +9,7 @@ from src.settings import Settings, get_settings
 from src.logging_setup import configure_logging
 from src.runtime_checks import run_startup_checks
 from src.auth import close_http_client
+from src.services.mcp.mcp_manager import build_mcp_manager
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
@@ -19,10 +20,12 @@ async def lifespan(app: FastAPI):
     # Startup (was @app.on_event("startup"))
     configure_logging()
     run_startup_checks(get_settings())
+    app.state.mcp = build_mcp_manager()
     try:
         yield
     finally:
         # Shutdown (was @app.on_event("shutdown"))
+        app.state.mcp.close()
         await close_http_client()
 
 

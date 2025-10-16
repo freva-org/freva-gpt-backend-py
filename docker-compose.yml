@@ -26,6 +26,7 @@ services:
       - freva-gpt
   rag:
     platform: linux/amd64
+    image: localhost/rag-server-${INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/Dockerfile.rag
@@ -49,6 +50,7 @@ services:
       - freva-gpt
   code:
     platform: linux/amd64
+    image: localhost/code-interpreter-server-${INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/Dockerfile.code

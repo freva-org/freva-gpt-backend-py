@@ -97,7 +97,7 @@ ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
 
 # Copy source code
 COPY src /app/src
-COPY test /app/test
+COPY tests /app/tests
 
 # -------------------------
 # Launch

@@ -4,7 +4,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY docker/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
-COPY . /app
+COPY src /app/src
 ENV MCP_HOST=0.0.0.0 MCP_PORT=8051
 EXPOSE 8051
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

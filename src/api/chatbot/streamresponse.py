@@ -19,6 +19,8 @@ from src.core.stream_variants import (
 )
 from src.services.models.litellm_client import acomplete, first_text
 from src.services.storage.thread_storage import append_thread, read_thread, recursively_create_dir_at_rw_dir
+from src.core.stream_orchestrator import stream_with_tools
+from src.services.mcp.mcp_manager import McpManager
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -141,36 +143,20 @@ async def streamresponse(
         try:
             # Request true streaming from LiteLLM
             log.debug("stream: llm_call model=%s msg_count=%d", model_name, len(messages))
-            resp = await acomplete(model=model_name, messages=messages, stream=True)  # async iterator or dict
-
-            if hasattr(resp, "__aiter__"):
-                chunk_count = 0
-                # Stream chunks as they arrive
-                async for chunk in resp:  # type: ignore
-                    try:
-                        choice = (chunk.get("choices") or [{}])[0]
-                        delta = choice.get("delta") or {}
-                        piece = delta.get("content") or ""
-                        if piece:
-                            chunk_count += 1
-                            if chunk_count <= 3 or (chunk_count % 50 == 0):  # avoid spam
-                                log.debug("stream: chunk n=%d sample=%r", chunk_count, piece[:40])
-
-                            accumulated_parts.append(piece)
-                            yield _sse_data({"variant": "Assistant", "content": piece})
-                        if choice.get("finish_reason"):
-                            break
-                    except Exception:
-                        continue
-            else:
-                # Fallback: provider ignored streaming → chunk the full text
-                log.debug("stream: fallback_manual_chunking")
-                full_txt = first_text(resp) or ""
-                if full_txt:
-                    import re
-                    for piece in re.findall(r"\S+\s*", full_txt):
-                        accumulated_parts.append(piece)
-                        yield _sse_data({"variant": "Assistant", "content": piece})
+            
+            chunk_count = 0
+            # Orchestrated streaming 
+            mgr: McpManager = request.app.state.mcp
+            async for piece in stream_with_tools(
+                request,
+                model=model_name,
+                messages=messages,
+                mcp=mgr,
+                acomplete_func=acomplete,   # async wrapper
+            ):
+                accumulated_parts.append(piece)
+                chunk_count += 1
+                yield _sse_data({"variant": "Assistant", "content": piece})
 
             # Persist final assistant + end marker
             final_text = "".join(accumulated_parts)

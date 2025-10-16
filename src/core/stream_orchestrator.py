@@ -3,7 +3,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import Request
 
-from src.services.mcp_manager import McpManager
+from src.services.mcp.mcp_manager import McpManager
 
 
 # --------- helpers: assemble tool_calls from streaming deltas -----------------

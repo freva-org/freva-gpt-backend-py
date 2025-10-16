@@ -4,7 +4,14 @@ services:
     image: localhost/freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
-      dockerfile: dockerfiles/backend/Dockerfile
+      dockerfile: docker/Dockerfile
+    depends_on:
+      rag:
+        condition: service_healthy
+      code:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
     hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
     ports:
       - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
@@ -17,7 +24,47 @@ services:
       - /scratch/b/b380001/freva-gpt/rw_dir/:/app/rw_dir # All instances share the rw_dir for accessing the data the LLM generated.
     networks:
       - freva-gpt
+  rag:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.rag
+    container_name: rag_server
+    env_file: .env
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8050
+      MCP_DISABLE_AUTH: "0"  
+      LITE_LLM_ADDRESS: ${LITE_LLM_ADDRESS}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://www.freva.dkrz.de/api/freva-nextgen/}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-freva}
+    depends_on:
+      litellm:
+        condition: service_healthy
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./resources:/app/resources:ro
+    networks: 
+      - freva-gpt
+  code:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.code
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8051
+      MCP_PATH: /mcp
+      MCP_DISABLE_AUTH: "0"  
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://www.freva.dkrz.de/api/freva-nextgen/}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-freva}
+    ports:
+      - "8051:8051"
+    networks: 
+      - freva-gpt
   litellm:
+    platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${INSTANCE_NAME}
     volumes:
@@ -34,7 +81,7 @@ services:
     image: ollama
     build:
       context: .
-      dockerfile: dockerfiles/ollama/Dockerfile
+      dockerfile: docker/Dockerfile.ollama
     hostname: ollama-instance-${INSTANCE_NAME}
     networks:
       - freva-gpt

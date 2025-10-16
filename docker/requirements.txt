@@ -1,0 +1,6 @@
+fastmcp==1.17.0
+uvicorn==0.30.6
+httpx==0.27.2
+IPython==8.27.0
+requests==2.32.3
+pymongo==4.10.1

@@ -23,7 +23,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.rag
-    container_name: rag_server
     env_file: .env
     environment:
       MCP_HOST: 0.0.0.0

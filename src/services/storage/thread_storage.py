@@ -172,10 +172,12 @@ def _variant_to_legacy_line(variant: StreamVariant) -> Optional[str]:
 
 def append_thread(thread_id: str, content: Conversation, ensure_end: bool = True) -> None:
     THREADS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.debug("append_thread: content=%r", content)
     content = cleanup_conversation(content, append_stream_end=ensure_end)
     if not content:
         return
-
+    logger.debug("append_thread: content after cleanup_conversation=%r", content)
+    
     # convert to wire dicts
     to_write = []
     for v in content:

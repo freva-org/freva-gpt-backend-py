@@ -6,7 +6,7 @@ Env: MONGODB_DATABASE_NAME, MONGODB_COLLECTION_NAME
 import os
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from src.core.stream_variants import Conversation
+from src.services.streaming.stream_variants import Conversation
 
 
 async def get_database(vault_url: str) -> AsyncIOMotorDatabase:

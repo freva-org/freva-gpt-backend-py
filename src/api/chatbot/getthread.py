@@ -4,12 +4,13 @@ from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY, 
 
 from src.services.storage import router as storage_router
 from src.services.storage import mongodb_storage
-from src.core.stream_variants import is_prompt
-from src.auth import AuthRequired
+from src.services.streaming.stream_variants import is_prompt
+from src.core.auth import AuthRequired
 
 router = APIRouter()
 
 # TODO: check error codes returned in Rust
+# TODO: check parity with Rust - not able to reload old threads
 @router.get("/getthread", dependencies=[AuthRequired])
 async def get_thread(request: Request, thread_id: str | None = Query(None)):
     """

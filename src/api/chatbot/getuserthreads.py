@@ -4,10 +4,11 @@ from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_422_UNPROCESSABLE_ENTIT
 
 from src.services.storage import router as storage_router
 from src.services.storage import mongodb_storage 
-from src.auth import AuthRequired
+from src.core.auth import AuthRequired
 
 router = APIRouter()
 
+# TODO: check parity with Rust - check compatibility with frontend
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(request: Request):
     """

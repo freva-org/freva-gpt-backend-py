@@ -1,5 +1,5 @@
 import logging
-from src.settings import Settings
+from src.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 

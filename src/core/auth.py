@@ -16,7 +16,7 @@ from typing import Optional
 import httpx
 from fastapi import Depends, HTTPException, Request, status
 
-from src.settings import get_settings
+from src.core.settings import get_settings
 
 log = logging.getLogger(__name__)
 

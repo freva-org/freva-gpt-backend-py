@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.document_loaders import TextLoader, JSONLoader, PyPDFLoader
 
-from src.logging_setup import configure_logging
+from src.core.logging_setup import configure_logging
 
 logger = configure_logging()
 

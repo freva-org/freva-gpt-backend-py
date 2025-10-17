@@ -10,16 +10,16 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Request, Query
 from starlette.responses import StreamingResponse
 
-from src.auth import AuthRequired
+from src.core.auth import AuthRequired
 from src.core.available_chatbots import default_chatbot, model_supports_images
 from src.core.prompting import get_entire_prompt, get_entire_prompt_json
-from src.core.stream_variants import (
+from src.services.streaming.stream_variants import (
     SVAssistant, SVPrompt, SVServerError, SVServerHint, SVStreamEnd, SVUser,
     StreamVariant, help_convert_sv_ccrm,
 )
 from src.services.models.litellm_client import acomplete, first_text
 from src.services.storage.thread_storage import append_thread, read_thread, recursively_create_dir_at_rw_dir
-from src.core.stream_orchestrator import stream_with_tools
+from src.services.streaming.stream_orchestrator import stream_with_tools
 from src.services.mcp.mcp_manager import McpManager
 
 router = APIRouter()

@@ -6,7 +6,7 @@ from operator import itemgetter
 
 from pymongo.operations import SearchIndexModel
 
-from src.logging_setup import configure_logging
+from src.core.logging_setup import configure_logging
 
 logger = configure_logging()
 

@@ -31,7 +31,7 @@ from typing import Optional, List, Dict, Any
 
 from pydantic import TypeAdapter
 
-from src.core.stream_variants import (
+from src.services.streaming.stream_variants import (
     # Types
     Conversation,
     StreamVariant,

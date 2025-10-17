@@ -36,7 +36,7 @@ from typing import Any, Dict, List
 
 from src.core.available_chatbots import model_is_gpt_5
 from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
-from src.core.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
+from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
 
 logger = logging.getLogger(__name__)
 

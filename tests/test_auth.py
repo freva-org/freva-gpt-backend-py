@@ -20,10 +20,10 @@ def _env():
 @pytest.fixture
 def app():
     # Reload settings singleton to pick up env fresh
-    import src.settings as settings
+    import src.core.settings as settings
     importlib.reload(settings)
     # Reload auth to ensure clean httpx client state
-    import src.auth as auth
+    import src.core.auth as auth
     importlib.reload(auth)
     # Import app after env & settings are ready
     from src.app import app as fastapi_app

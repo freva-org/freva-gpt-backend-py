@@ -5,10 +5,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api import static, chatbot
-from src.settings import Settings, get_settings
-from src.logging_setup import configure_logging
-from src.runtime_checks import run_startup_checks
-from src.auth import close_http_client
+from src.core.settings import Settings, get_settings
+from src.core.logging_setup import configure_logging
+from src.core.runtime_checks import run_startup_checks
+from src.core.auth import close_http_client
 from src.services.mcp.mcp_manager import build_mcp_manager
 
 # ──────────────────────────────────────────────────────────────────────────────

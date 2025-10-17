@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from src.core.stream_variants import (
+from src.services.streaming.stream_variants import (
     SVUser, SVAssistant, SVCode, SVCodeOutput, SVStreamEnd, SVServerHint, SVServerError,
     cleanup_conversation, normalize_for_prompt, help_convert_sv_ccrm,
     to_wire_dict, from_wire_dict,

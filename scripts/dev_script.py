@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.core.available_chatbots import default_chatbot, model_supports_images
 from src.core.prompting import get_entire_prompt, get_entire_prompt_json
-from src.core.stream_variants import (
+from src.services.streaming.stream_variants import (
     SVAssistant, SVPrompt, SVServerError, SVServerHint, SVStreamEnd, SVUser,
     help_convert_sv_ccrm,
 )

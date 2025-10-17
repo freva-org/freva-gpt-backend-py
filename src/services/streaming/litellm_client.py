@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
 
 import httpx
 
-from src.settings import get_settings
+from src.core.settings import get_settings
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------

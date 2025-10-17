@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from src.services.storage import thread_storage as ts
-from src.core.stream_variants import SVPrompt, SVUser, SVAssistant, SVStreamEnd
+from src.services.streaming.stream_variants import SVPrompt, SVUser, SVAssistant, SVStreamEnd
 
 def test_append_and_read_thread(tmp_path: Path, monkeypatch):
     # Redirect THREADS_DIR to tmp

@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from src.core.stream_variants import Conversation
+from src.services.streaming.stream_variants import Conversation
 from . import thread_storage, mongodb_storage
 
 

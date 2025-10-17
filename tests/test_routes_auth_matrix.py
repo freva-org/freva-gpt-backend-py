@@ -27,9 +27,9 @@ def _env():
 @pytest.fixture
 def app():
     # reload singletons so env is re-read cleanly
-    import src.settings as settings
+    import src.core.settings as settings
     importlib.reload(settings)
-    import src.auth as auth
+    import src.core.auth as auth
     importlib.reload(auth)
     from src.app import app as fastapi_app
     return fastapi_app

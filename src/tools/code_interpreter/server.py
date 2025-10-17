@@ -8,7 +8,7 @@ from IPython.core.interactiveshell import InteractiveShell
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
-from src.logging_setup import configure_logging
+from src.core.logging_setup import configure_logging
 from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
 
 logger = configure_logging()

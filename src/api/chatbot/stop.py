@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, status
 
-from src.auth import AuthRequired
+from src.core.auth import AuthRequired
 
 
 router = APIRouter()

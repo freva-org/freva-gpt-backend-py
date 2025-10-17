@@ -13,8 +13,8 @@ from src.tools.rag.text_splitters import CustomDocumentSplitter
 from src.tools.rag.header_gate import make_header_gate, VAULT_URI_HDR, REST_URL_HDR
 from src.tools.server_auth import jwt_verifier
 
-from src.logging_setup import configure_logging
-from src.settings import get_settings
+from src.core.logging_setup import configure_logging
+from src.core.settings import get_settings
 
 logger = configure_logging()
 settings = get_settings()

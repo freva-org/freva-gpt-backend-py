@@ -41,10 +41,6 @@ COPY pyproject.toml /app/pyproject.toml
 RUN source activate env && uv export --format requirements-txt \
     | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
 
-
-
-COPY .env /app/.env
-
 # Python env paths
 ENV PYTHONUSERBASE /opt/conda/envs/env
 ENV PYTHONPATH=/opt/conda/envs/env/lib/python3.11/site-packages
@@ -52,11 +48,9 @@ ENV PATH /opt/conda/envs/env/bin/:$PATH
 ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-ENV MCP_HOST=0.0.0.0 MCP_PORT=8050
 EXPOSE 8050
 
 COPY src /app/src
-COPY resources /app/resources
 
 # Launch RAG server
 CMD ["python","-m","src.tools.rag.server"]

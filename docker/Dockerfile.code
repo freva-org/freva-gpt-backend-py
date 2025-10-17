@@ -49,8 +49,6 @@ RUN source activate env && uv pip install \
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch
 
-COPY .env /app/.env
-
 # Python env paths
 ENV PYTHONUSERBASE /opt/conda/envs/env
 ENV PYTHONPATH=/opt/conda/envs/env/lib/python3.11/site-packages
@@ -58,7 +56,6 @@ ENV PATH /opt/conda/envs/env/bin/:$PATH
 ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-ENV MCP_HOST=0.0.0.0 MCP_PORT=8051
 EXPOSE 8051
 
 COPY src /app/src

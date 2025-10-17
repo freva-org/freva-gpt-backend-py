@@ -76,8 +76,6 @@ RUN source activate env && uv export --format requirements-txt \
 # Config + source
 # -------------------------
 
-# Copy over the secrets file to have access to the openai account and so that the backend is configured correctly
-COPY .env /app/.env
 # The litellm also needs to be copied over to the backend so that the list of chatbots can be extracted
 COPY litellm_config.yaml /app/litellm_config.yaml
 
@@ -95,4 +93,13 @@ COPY tests /app/tests
 # Launch
 # -------------------------
 
-ENTRYPOINT ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8502", "--proxy-headers"]
+# ENTRYPOINT ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8502", "--proxy-headers"]
+ENTRYPOINT ["/bin/sh", "-c", "\
+  if [ \"${DEBUG,,}\" = \"true\" ] || [ \"${DEBUG}\" = \"1\" ]; then \
+    echo \"[backend] DEBUG on → waiting for debugger on ${DEBUG_PORT:-5678}\"; \
+    exec python -m debugpy --listen 0.0.0.0:${DEBUG_PORT:-5678} --wait-for-client \
+         -m uvicorn src.app:app --host 0.0.0.0 --port ${BACKEND_PORT:-8502} --proxy-headers; \
+  else \
+    echo \"[backend] DEBUG off → starting plain uvicorn\"; \
+    exec uvicorn src.app:app --host 0.0.0.0 --port ${BACKEND_PORT:-8502} --proxy-headers; \
+  fi"]

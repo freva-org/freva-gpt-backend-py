@@ -5,9 +5,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    env_file: .env
     hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
     ports:
       - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
+      - "${DEBUG_PORT:-5678}:${DEBUG_PORT:-5678}" # Port for debugpy
     volumes:
       - /work:/work:ro
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/logs:/app/logs
@@ -15,7 +17,7 @@ services:
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/target:/app/target
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/python_pickles:/app/python_pickles
       - /scratch/b/b380001/freva-gpt/rw_dir/:/app/rw_dir # All instances share the rw_dir for accessing the data the LLM generated.
-    networks:
+    networks: 
       - freva-gpt
   rag:
     platform: linux/amd64
@@ -27,14 +29,8 @@ services:
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8050
-      MCP_DISABLE_AUTH: "0"  
-      LITE_LLM_ADDRESS: ${LITE_LLM_ADDRESS}
-      OIDC_ISSUER: ${OIDC_ISSUER:-https://www.freva.dkrz.de/api/freva-nextgen/}
-      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-freva}
-    ports:
-      - "8050:8050"
-    volumes:
-      - ./resources:/app/resources:ro
+    ports: "8050:8050"
+    volumes: ./resources:/app/resources:ro
     networks: 
       - freva-gpt
   code:
@@ -43,30 +39,22 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.code
+    env_file: .env
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8051
-      MCP_PATH: /mcp
-      MCP_DISABLE_AUTH: "0"  
-      OIDC_ISSUER: ${OIDC_ISSUER:-https://www.freva.dkrz.de/api/freva-nextgen/}
-      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-freva}
-    ports:
-      - "8051:8051"
+    ports: "8051:8051"
     networks: 
       - freva-gpt
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${INSTANCE_NAME}
-    volumes:
-      - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
-    command:
-      - "--config=/app/config.yaml"
-    env_file:
-      - .env # Load local .env file
-    ports:
-      - "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
-    networks:
+    volumes: ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
+    command: "--config=/app/config.yaml"
+    env_file: .env 
+    ports: "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
+    networks: 
       - freva-gpt
   ollama: # Ollama is only for the backend and not accessible from the outside. Port 11434 is not exposed.
     image: ollama
@@ -74,7 +62,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.ollama
     hostname: ollama-instance-${INSTANCE_NAME}
-    networks:
+    networks: 
       - freva-gpt
     deploy:
       resources:

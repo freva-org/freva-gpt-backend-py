@@ -4,6 +4,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from fastapi import Request
 
 from src.services.mcp.mcp_manager import McpManager
+from src.services.streaming.litellm_client import first_text
 
 
 # --------- helpers: assemble tool_calls from streaming deltas -----------------
@@ -129,7 +130,6 @@ async def stream_with_tools(
                 break
     else:
         # non-streaming fallback
-        from src.services.models.litellm_client import first_text
         full_txt = first_text(resp) or ""
         if full_txt:
             import re
@@ -176,7 +176,6 @@ async def stream_with_tools(
             if choice.get("finish_reason"):
                 break
     else:
-        from src.services.models.litellm_client import first_text
         full_txt = first_text(resp2) or ""
         if full_txt:
             import re

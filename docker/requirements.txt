@@ -1,6 +1,0 @@
-fastmcp>=2.12.4
-uvicorn[standard]>=0.35.0
-httpx>=0.28.1
-IPython==8.27.0
-requests==2.32.3
-pymongo==4.10.1

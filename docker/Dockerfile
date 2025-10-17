@@ -49,14 +49,6 @@ COPY pyproject.toml /app/pyproject.toml
 RUN source activate env && uv export --format requirements-txt \
     | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
 
-# Install Python deps via uv (this replaces `pip install ...`)
-RUN source activate env && uv pip install \
-    freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy 
-
-# These libraries cannot be installed by uv, so we use conda.
-RUN conda install --yes -c conda-forge -n env pytorch
-
 # # Install necessary dependencies for CrocoDash, also not found on pypi.
 # RUN conda install --yes -c conda-forge -n env "esmpy>=8.6.1,<8.7.0"
 

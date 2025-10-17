@@ -73,7 +73,6 @@ async def streamresponse(
     ui = user_input if user_input is not None else input
     model_name = chatbot or default_chatbot()
     username = getattr(request.state, "username", None)  # set by AuthRequired
-    log.debug("username=%r", username)
 
     # Create new thread if none provided
     create_new = not thread_id or not thread_id.strip()
@@ -95,9 +94,7 @@ async def streamresponse(
     try:
         if create_new:
             base = get_entire_prompt(user_id, thread_id, model_name)
-            log.debug("base prompt=%r", base)
             prompt_json = get_entire_prompt_json(user_id, thread_id, model_name)
-            log.debug("json prompt=%r", prompt_json)
             append_thread(thread_id, [SVPrompt(payload=prompt_json)], ensure_end=False)
             messages = list(base)
             log.debug("stream: new_thread base_msgs=%d", len(messages))

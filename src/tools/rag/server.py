@@ -1,5 +1,6 @@
 import os
 import requests
+import logging
 from functools import lru_cache
 from contextvars import ContextVar
 
@@ -16,7 +17,9 @@ from src.tools.server_auth import jwt_verifier
 from src.core.logging_setup import configure_logging
 from src.core.settings import get_settings
 
-logger = configure_logging()
+configure_logging()
+logger = logging.getLogger(__name__)
+
 settings = get_settings()
 
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing

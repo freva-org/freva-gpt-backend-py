@@ -1,6 +1,7 @@
 # --- imports ---
 import os
 import sys
+import logging
 from io import StringIO
 from typing import Optional
 
@@ -11,7 +12,8 @@ from fastmcp.server.dependencies import get_access_token
 from src.core.logging_setup import configure_logging
 from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
 
-logger = configure_logging()
+configure_logging()
+logger = logging.getLogger(__name__)
 
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)

@@ -17,7 +17,7 @@ from src.services.streaming.stream_variants import (
     SVAssistant, SVPrompt, SVServerError, SVServerHint, SVStreamEnd, SVUser,
     StreamVariant, help_convert_sv_ccrm,
 )
-from src.services.models.litellm_client import acomplete, first_text
+from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.storage.thread_storage import append_thread, read_thread, recursively_create_dir_at_rw_dir
 from src.services.streaming.stream_orchestrator import stream_with_tools
 from src.services.mcp.mcp_manager import McpManager

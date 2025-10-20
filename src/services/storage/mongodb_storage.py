@@ -1,60 +1,188 @@
-"""
-MongoDB storage for conversations (Rust: mongodb_storage.rs).
-Env: MONGODB_DATABASE_NAME, MONGODB_COLLECTION_NAME
-"""
+from __future__ import annotations
 
-import os
+from dataclasses import dataclass
 from typing import List, Optional
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from src.services.streaming.stream_variants import Conversation
+import logging
 
+from fastapi import HTTPException
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+
+from .thread_storage import cleanup_conversation
+from src.services.streaming.litellm_client import acomplete, first_text
+from src.services.streaming.stream_variants import (
+    StreamVariant, SVUser,
+    to_wire_dict, from_wire_dict, 
+)
+from src.core.available_chatbots import default_chatbot
+from src.core.auth import get_mongodb_uri
+from src.core.settings import get_settings
+
+log = logging.getLogger(__name__)
+
+# ==== Config from settings.py (singleton) ====
+_settings = get_settings()
+MONGODB_DATABASE_NAME = _settings.MONGODB_DATABASE_NAME
+MONGODB_COLLECTION_NAME = _settings.MONGODB_COLLECTION_NAME
+
+# ==== Model ====
+
+@dataclass
+class MongoDBThread:
+    user_id: str
+    thread_id: str
+    date: str  # ISO 8601
+    topic: str
+    content: List[StreamVariant]
+
+# ---------- helpers: (de)serialize ----------
+def _serialize_sv_list(items: List[StreamVariant]) -> List[dict]:
+    out: List[dict] = []
+    for v in items:
+        try:
+            out.append(to_wire_dict(v))
+        except Exception as e:
+            # last resort: Pydantic dump
+            log.warning("serialize fallback for %r: %s", getattr(v, "variant", type(v)), e)
+            out.append(v.model_dump())
+    return out
+
+def _deserialize_sv_list(items: List[dict]) -> List[StreamVariant]:
+    out: List[StreamVariant] = []
+    for obj in items or []:
+        try:
+            out.append(from_wire_dict(obj))
+        except Exception as e:
+            log.warning("deserialize failure for %r: %s", obj, e)
+            # skip malformed rows rather than crashing
+    return out
+
+# ==== Connection ====
 
 async def get_database(vault_url: str) -> AsyncIOMotorDatabase:
     """
-    Rust: pub async fn get_database(vault_url) -> Result<Database, HttpResponse>.
-    For now we ignore vault URL parsing complexity, just connect via motor.
+    Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
+    If connection fails, retry once without URI options (strip trailing ?query).
     """
-    db_name = os.getenv("MONGODB_DATABASE_NAME")
-    if not db_name:
-        raise RuntimeError("MONGODB_DATABASE_NAME not set")
-    uri = vault_url or "mongodb://localhost:27017"
-    client = AsyncIOMotorClient(uri)
-    return client[db_name]
+    mongodb_uri = await get_mongodb_uri(vault_url)
 
+    try:
+        client = AsyncIOMotorClient(mongodb_uri)
+        return client[MONGODB_DATABASE_NAME]
+    except Exception:
+        # Rust-style fallback: strip query options and retry once
+        if "?" in mongodb_uri:
+            stripped = mongodb_uri.rsplit("?", 1)[0]
+            try:
+                client = AsyncIOMotorClient(stripped)
+                return client[MONGODB_DATABASE_NAME]
+            except Exception:
+                pass
+        raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")
 
-async def append_thread(thread_id: str, user_id: str, content: Conversation, database: AsyncIOMotorDatabase) -> None:
+# ==== Summarization for topic ====
+
+def _fallback_topic(raw: str | None) -> str:
+    if not raw:
+        return "Untitled"
+    # naive single-line truncation
+    s = " ".join(raw.split())
+    return (s[:80] + "…") if len(s) > 80 else s
+
+async def summarize_topic(topic: str) -> str:
     """
-    Rust: pub async fn append_thread(thread_id, user_id, content, database).
-    Upsert thread by id; append content.
+    Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     """
-    coll_name = os.getenv("MONGODB_COLLECTION_NAME", "threads")
-    coll = database[coll_name]
+    prompt = (
+        "Summarize this chat topic in at most ~12 words, neutral tone.\n\n"
+        f"Topic:\n{(topic or '')[:2000]}"
+    )
+    try:
+        resp = await acomplete(
+            messages=[{"role": "user", "content": prompt}],
+            model=default_chatbot(),
+            max_tokens=50,
+            temperature=0.2,
+        )
+        text = (first_text(resp) or "").strip()
+        return text or _fallback_topic(topic)
+    except Exception as e:
+        log.warning("summarize_topic: falling back due to error: %s", e)
+        return _fallback_topic(topic)
+    
+# ==== CRUD ====
+
+async def append_thread(
+    thread_id: str,
+    user_id: str,
+    content: List[StreamVariant],
+    database: AsyncIOMotorDatabase,
+) -> None:
+    content = cleanup_conversation(content, append_stream_end=True)
     if not content:
         return
-    await coll.update_one(
-        {"thread_id": thread_id, "user_id": user_id},
-        {"$push": {"content": {"$each": content}}, "$set": {"date": {"$currentDate": {"$type": "date"}}}},
-        upsert=True,
-    )
+
+    coll = database[MONGODB_COLLECTION_NAME]
+
+    existing = await coll.find_one({"thread_id": thread_id})
+    if existing:
+        existing_sv = _deserialize_sv_list(existing.get("content", []))
+        merged_sv: List[StreamVariant] = existing_sv + content
+        # topic: keep existing if present
+        topic = existing.get("topic", "") or None
+    else:
+        merged_sv = content
+        topic = None
+
+    # compute topic if missing
+    first_user_text = next((sv.text if isinstance(sv, SVUser) else getattr(sv, "content", None)
+                            for sv in merged_sv
+                            if isinstance(sv, SVUser)), None)
+    if not topic:
+        try:
+            topic = await summarize_topic(first_user_text or "Untitled")
+        except Exception as e:
+            log.warning("append_thread: summarize_topic failed: %s", e)
+            topic = _fallback_topic(first_user_text or "Untitled")
+
+    doc = {
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "date": _iso_now(),
+        "topic": topic,
+        "content": _serialize_sv_list(merged_sv),  # <- store JSON-safe dicts
+    }
+
+    if existing:
+        await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
+    else:
+        await coll.insert_one(doc)
 
 
-async def read_thread(thread_id: str, database: AsyncIOMotorDatabase) -> Optional[dict]:
-    """
-    Rust: pub async fn read_thread(thread_id, database) -> Option<MongoDBThread>.
-    Returns document with .content
-    """
-    coll_name = os.getenv("MONGODB_COLLECTION_NAME", "threads")
-    coll = database[coll_name]
+async def read_thread(thread_id: str, database: AsyncIOMotorDatabase) -> List[StreamVariant]:
+    coll = database[MONGODB_COLLECTION_NAME]
     doc = await coll.find_one({"thread_id": thread_id})
-    return doc
+    if not doc:
+        raise FileNotFoundError("Thread not found")
+    return doc.get("content", [])
 
 
-async def read_threads(user_id: str, database: AsyncIOMotorDatabase) -> List[dict]:
-    """
-    Rust: pub async fn read_threads(user_id, database) -> Vec<MongoDBThread>.
-    Returns latest 10 threads for a user.
-    """
-    coll_name = os.getenv("MONGODB_COLLECTION_NAME", "threads")
-    coll = database[coll_name]
-    cursor = coll.find({"user_id": user_id}).sort("date", -1).limit(10)
-    return [doc async for doc in cursor]
+async def read_threads(user_id: str, database: AsyncIOMotorDatabase) -> List[MongoDBThread]:
+    coll = database[MONGODB_COLLECTION_NAME]
+    cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).limit(10)
+    docs = await cursor.to_list(length=10)
+    return [
+        MongoDBThread(
+            user_id=d["user_id"],
+            thread_id=d["thread_id"],
+            date=d["date"],
+            topic=d.get("topic", ""),
+            content=d.get("content", []),
+        )
+        for d in docs
+    ]
+
+# ==== utils ====
+
+def _iso_now() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(tz=timezone.utc).isoformat()

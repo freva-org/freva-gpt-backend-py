@@ -43,4 +43,4 @@ async def read_thread(thread_id: str, database: AsyncIOMotorDatabase) -> Convers
     doc = await mongodb_storage.read_thread(thread_id, database)
     if not doc:
         raise FileNotFoundError("Thread not found")
-    return doc.get("content", [])
+    return doc

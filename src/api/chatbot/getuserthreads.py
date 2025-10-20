@@ -1,49 +1,59 @@
-from fastapi import APIRouter, Request, HTTPException
-from starlette.responses import JSONResponse
-from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
+from __future__ import annotations
 
-from src.services.storage import router as storage_router
-from src.services.storage import mongodb_storage 
-from src.core.auth import AuthRequired
+from fastapi import APIRouter, HTTPException, Request, Query
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+
+from src.core.auth import AuthRequired, ALLOW_FALLBACK_OLD_AUTH  # match Rust flags
+from src.services.storage.mongodb_storage import get_database, read_threads
 
 router = APIRouter()
 
-# TODO: check parity with Rust - check compatibility with frontend
+def _get_user_id_from_request(request: Request) -> str | None:
+    """
+    Username is provided by AuthRequired (auth layer sets request.state.username)    
+    """
+    # 1) Preferred: identity from auth middleware
+    user_id = getattr(getattr(request, "state", None), "username", None)
+
+    # 2) Fallback: query param
+    if not user_id and ALLOW_FALLBACK_OLD_AUTH:
+        user_id = request.query_params.get("user_id")
+
+    return user_id
+
+
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(request: Request):
     """
-    Returns the latest 10 threads of a user.
-    Rust parity:
-    - Requires header x-freva-vault-url
-    - user_id can come from auth, or fallback query param if fallback enabled
-    - Always queries Mongo (not Disk)
+    Returns the latest 10 threads of the authenticated user.
+    Requires x-freva-vault-url header for DB bootstrap.
     """
-    headers = request.headers
-    vault_url = headers.get("x-freva-vault-url")
-    if not vault_url:
+    user_id = _get_user_id_from_request(request)
+    if not user_id:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers.",
+            detail="Missing user_id (auth or query).",
         )
 
-    # Username is provided by AuthRequired (your auth layer sets request.state.username)
-    username = getattr(request.state, "username", None) or getattr(request.state, "user", None)
-    if not username:
-        raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail="Missing authenticated username.",
-        )
+    vault_url = request.headers.get("x-freva-vault-url")
+    if not vault_url:
+        raise HTTPException(status_code=503, detail="No vault URL provided.")
 
-    # Connect to database
     try:
-        database = await mongodb_storage.get_database(vault_url)
-    except Exception as e:
-        raise HTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to connect to the database: {e}",
-        )
+        database = await get_database(vault_url)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Failed to connect to the database.")
 
-    # Fetch threads
-    threads = await storage_router.read_thread(username, database)
-
-    return JSONResponse(content=threads)
+    threads = await read_threads(user_id, database)
+    # FastAPI will jsonify dataclasses; if you need custom shape, map here.
+    return [
+        {
+            "user_id": t.user_id,
+            "thread_id": t.thread_id,
+            "date": t.date,
+            "topic": t.topic,
+            # omit heavy content for listing? Rust returns full docs; keep parity:
+            "content": t.content,
+        }
+        for t in threads
+    ]

@@ -208,3 +208,28 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail="Token check response is malformed, no username found.",
     )
+
+async def get_mongodb_uri(vault_url: str) -> str:
+    # 1) GET vault_url
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(vault_url)
+    except Exception:
+        # Rust -> 503 ServiceUnavailable
+        raise HTTPException(status_code=503, detail="Error sending request to vault.")
+    if not r.is_success:
+        # Rust -> 502 BadGateway
+        raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
+
+    # 2) Parse JSON and extract key
+    try:
+        data = r.json()
+    except Exception:
+        # Rust -> 502 BadGateway
+        raise HTTPException(status_code=502, detail="Vault response was malformed.")
+
+    uri = data.get("mongodb.url") or data.get("mongo.url")
+    if not uri:
+        # Rust -> 502 BadGateway
+        raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
+    return uri.strip()

@@ -2,181 +2,102 @@ from __future__ import annotations
 
 import json
 import logging
-import random
-import string
-from typing import Any, Dict, List, Optional, Tuple
-import asyncio
+import os
+from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, Request, Query, HTTPException
 from starlette.responses import StreamingResponse
 
 from src.core.auth import AuthRequired
-from src.core.available_chatbots import default_chatbot, model_supports_images
-from src.core.prompting import get_entire_prompt, get_entire_prompt_json
-from src.services.streaming.stream_variants import (
-    SVAssistant, SVPrompt, SVServerError, SVServerHint, SVStreamEnd, SVUser,
-    StreamVariant, help_convert_sv_ccrm, to_wire_dict
-)
-from src.services.streaming.litellm_client import acomplete, first_text
-from src.services.storage.router import append_thread, read_thread
-from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
-from src.services.storage.mongodb_storage import get_database
-from src.services.streaming.stream_orchestrator import stream_with_tools
+from src.core.available_chatbots import default_chatbot
+from src.services.streaming.stream_variants import StreamVariant, to_wire_dict
+from src.services.streaming.stream_orchestrator import run_stream
 from src.services.mcp.mcp_manager import McpManager
+
+# storage backends
+from src.services.storage.thread_storage import (
+    append_thread as disk_append_thread,
+    read_thread as disk_read_thread,
+    recursively_create_dir_at_rw_dir,
+)
+from src.services.storage.mongodb_storage import get_database
+from src.services.storage import router as storage_router  # optional Mongo wrapper
 
 router = APIRouter()
 log = logging.getLogger(__name__)
 
-def _new_conversation_id(length: int = 32) -> str:
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
-def _sse_data(data_obj: Dict[str, Any]) -> bytes:
-    payload = json.dumps(data_obj, ensure_ascii=False)
+def _sse_data(obj: dict) -> bytes:
+    payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n\n".encode("utf-8")
+
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
 async def streamresponse(
     request: Request,
     thread_id: Optional[str] = Query(None),
-    user_input: Optional[str] = Query(None),   # preferred
-    input: Optional[str] = Query(None),        # tolerated alias
+    user_input: Optional[str] = Query(None),
+    input: Optional[str] = Query(None),
     chatbot: Optional[str] = Query(None),
 ):
     """
-    Rust-parity GET endpoint that streams tokens over SSE:
-      ServerHint → User → Assistant (multiple incremental chunks) → StreamEnd
+    Thin HTTP wrapper that selects storage (Mongo vs Disk) and delegates streaming to the orchestrator.
+    The orchestrator ensures MCP session key == thread_id for per-conversation isolation.
     """
-    log.debug("stream: params thread_id=%r user_input=%r chatbot=%r", thread_id, user_input or input, chatbot)
-
     ui = user_input if user_input is not None else input
+    if ui is None:
+        raise HTTPException(status_code=422, detail="Missing user input")
+
     model_name = chatbot or default_chatbot()
-    username = getattr(request.state, "username", None)  # set by AuthRequired
+    user_id = getattr(request.state, "username", "anonymous")
+    recursively_create_dir_at_rw_dir(user_id, thread_id or "tmp")
 
-    # Create new thread if none provided
-    create_new = not thread_id or not thread_id.strip()
-    if create_new:
-        thread_id = _new_conversation_id()
-    log.debug("stream: thread_decision create_new=%s thread_id=%s", create_new, thread_id)
-
-    user_id = username or "anonymous"
-
-    # Ensure per-thread storage dir
-    try:
-        recursively_create_dir_at_rw_dir(user_id, thread_id)
-        log.debug("stream: ensured_rw_dir user=%s thread_id=%s", user_id, thread_id)
-    except Exception as e:
-        log.error("stream: ensure_rw_dir_failed user=%s thread_id=%s err=%s", user_id, thread_id, e)
-        log.debug("ensure rw_dir failed", exc_info=True)
-
+    # Storage decision:
     vault_url = request.headers.get("x-freva-vault-url")
-    if not vault_url:
-        vault_url = "mongodb://localhost:27017"  # default for local dev
-    # Get database
-    try:
-        database = await get_database(vault_url)
-    except Exception as e:
-        log.error("stream: get_database_failed vault_url=%s err=%s", vault_url, e)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to connect to the database: {e}",
-        )
+    prefer_disk_env = os.getenv("FREVA_STORAGE", "").lower() == "disk"
 
-    # Build messages (either fresh prompt or from prior conversation)
-    try:
-        if create_new:
-            base = get_entire_prompt(user_id, thread_id, model_name)
-            prompt_json = get_entire_prompt_json(user_id, thread_id, model_name)
-            # append_thread(thread_id, [SVPrompt(payload=prompt_json)], ensure_end=False)
-            await append_thread(thread_id, user_id, [SVPrompt(payload=prompt_json)], database)
-            messages = list(base)
-            log.debug("stream: new_thread base_msgs=%d", len(messages))
-        else:
-            try:
-                prior_conv = read_thread(thread_id)
-                log.debug("stream: loaded_thread sv_items=%d", len(prior_conv))
-                messages = help_convert_sv_ccrm(
-                    prior_conv,
-                    include_images=model_supports_images(model_name),
-                    include_meta=False,
-                )
-                log.debug("stream: converted_msgs=%d", len(messages))
-            except Exception as e:
-                log.error("stream: read_thread_failed thread_id=%s err=%s", thread_id, e)
-                raise
-    except Exception as e:
-        log.debug("stream: converted_msgs=%d", len(messages))
-        # Bind values outside the generator; don't reference 'e' inside the closure.
-        msg = f"prompt/history assembly failed: {e}"
-        err_v = SVServerError(message=msg)
-        end_v = SVStreamEnd(message="Error")
-        await append_thread(thread_id, user_id, [err_v, end_v], database)
-
-        async def _err():
-            yield _sse_data(to_wire_dict(err_v))
-            yield _sse_data(to_wire_dict(end_v))
-
-        return StreamingResponse(
-            _err(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-        )
-
-    # Add current user input & persist hint+user
-    messages.append({"role": "user", "content": ui or ""})
-    hint = SVServerHint(data={"thread_id": thread_id})
-    user_v = SVUser(text=ui or "")
-    await append_thread(thread_id, user_id, [hint, user_v], database)
-
-    async def _gen():
-        # Emit hint & user immediately so UI opens the assistant bubble
-        yield _sse_data(to_wire_dict(hint))
-
-        accumulated_parts: list[str] = []
+    use_mongo = bool(vault_url) and not prefer_disk_env
+    database = None
+    if use_mongo:
         try:
-            # Request true streaming from LiteLLM
-            log.debug("stream: llm_call model=%s msg_count=%d", model_name, len(messages))
-            
-            chunk_count = 0
-            # Orchestrated streaming 
-            mgr: McpManager = request.app.state.mcp
-            async for piece in stream_with_tools(
-                request,
-                model=model_name,
-                messages=messages,
-                mcp=mgr,
-                acomplete_func=acomplete,   # async wrapper
-            ):
-                accumulated_parts.append(piece)
-                chunk_count += 1
-                yield _sse_data({"variant": "Assistant", "content": piece})
-
-            # Persist final assistant + end marker
-            final_text = "".join(accumulated_parts)
-            log.info("stream: done thread_id=%s chunks=%d chars=%d", thread_id, chunk_count, len(final_text))
-            assistant_v = SVAssistant(text=final_text)
-            end_v = SVStreamEnd(message="Done")
-            await append_thread(thread_id, user_id, [assistant_v, end_v], database)
-
-            yield _sse_data(to_wire_dict(end_v))
-
-        except asyncio.CancelledError:
-            # Client disconnected; persist what we have
-            final_text = "".join(accumulated_parts)
-            log.info("stream: client_disconnected thread_id=%s chunks=%d chars=%d", thread_id, chunk_count, len(final_text))
-            assistant_v = SVAssistant(text=final_text)
-            end_v = SVStreamEnd(message="Cancelled")
-            await append_thread(thread_id, user_id, [assistant_v, end_v], database)
-            # connection is gone; don't yield more
+            database = await get_database(vault_url)
         except Exception as e:
-            log.error("stream: error thread_id=%s chunks=%d err=%s", thread_id, chunk_count, e)
-            err_v = SVServerError(message=str(e))
-            end_v = SVStreamEnd(message="Error")
-            await append_thread(thread_id, user_id, database, [err_v, end_v])
-            yield _sse_data(to_wire_dict(err_v))
-            yield _sse_data(to_wire_dict(end_v))
+            log.warning("streamresponse: Mongo unavailable, falling back to Disk: %s", e)
+            use_mongo = False
+
+    # Persist hook (async)
+    async def persist(variants: List[StreamVariant]) -> None:
+        if use_mongo and database is not None:
+            await storage_router.append_thread(thread_id_val, user_id, variants, database)  # type: ignore
+        else:
+            disk_append_thread(thread_id_val, variants, ensure_end=False)
+
+    # Load hook (sync)
+    def load_thread(thread_id_in: str) -> List[StreamVariant]:
+        if use_mongo and database is not None:
+            # If you need Mongo continuation, prefetch prior SVs here (async) before run_stream
+            # and close over them instead. For now, use disk for continuation.
+            raise RuntimeError("Reading prior thread from Mongo in sync context is not supported here.")
+        return disk_read_thread(thread_id_in)
+
+    thread_id_val = thread_id or None
+    mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
+
+    async def event_stream():
+        async for variant in run_stream(
+            model=model_name,
+            thread_id=thread_id_val,
+            user_id=user_id,
+            user_input=ui,
+            request=request,
+            mcp=mcp_mgr,              # reuses the app's global MCP manager
+            persist=persist,
+            load_thread=load_thread,
+        ):
+            yield _sse_data(to_wire_dict(variant))
 
     return StreamingResponse(
-        _gen(),
+        event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

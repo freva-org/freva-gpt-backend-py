@@ -31,6 +31,7 @@ from typing import Optional, List, Dict, Any
 
 from pydantic import TypeAdapter
 
+from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_variants import (
     # Types
     Conversation,
@@ -48,6 +49,7 @@ from src.services.streaming.stream_variants import (
 )
 
 logger = logging.getLogger(__name__)
+configure_logging()
 
 THREADS_DIR = Path("./threads")
 RW_DIR_ROOT = Path("./rw_dir")

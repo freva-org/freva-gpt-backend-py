@@ -29,8 +29,10 @@ services:
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8050
-    ports: "8050:8050"
-    volumes: ./resources:/app/resources:ro
+    ports: 
+      - "8050:8050"
+    volumes: 
+      - ./resources:/app/resources:ro
     networks: 
       - freva-gpt
   code:
@@ -43,17 +45,20 @@ services:
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8051
-    ports: "8051:8051"
+    ports: 
+      - "8051:8051"
     networks: 
       - freva-gpt
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${INSTANCE_NAME}
-    volumes: ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
+    volumes: 
+      - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
     command: "--config=/app/config.yaml"
     env_file: .env 
-    ports: "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
+    ports: 
+      - "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
     networks: 
       - freva-gpt
   ollama: # Ollama is only for the backend and not accessible from the outside. Port 11434 is not exposed.

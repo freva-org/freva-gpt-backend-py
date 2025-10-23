@@ -58,6 +58,7 @@ async def acomplete(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
     extra: Optional[Dict[str, Any]] = None,
+    **request_params: Any,
 ) -> Dict[str, Any] | AsyncIterator[Dict[str, Any]]:
     """
     Call LiteLLM /v1/chat/completions.
@@ -77,6 +78,8 @@ async def acomplete(
     if extra:
         payload.update(extra)
     payload.update(_passthrough_params(None))
+    if request_params:
+        payload.update(_passthrough_params(request_params))
 
     if not stream:
         return await _post_json(url, payload)

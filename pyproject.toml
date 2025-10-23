@@ -20,4 +20,5 @@ dependencies = [
     "respx>=0.22.0",
     "uvicorn[standard]>=0.35.0",
     "debugpy>=1.8.0",
+    "jq>=1.10.0",
 ]

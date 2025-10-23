@@ -10,7 +10,7 @@ Headless dev/benchmark runner mirroring /chatbot/streamresponse behaviour.
 - RUNS/CONCURRENCY for benchmarks; set CONCURRENCY=1 for clean mode.
 - Uses ONE global McpManager; orchestrator ties MCP session to thread_id.
 """
-
+import os
 import asyncio
 import json
 import logging
@@ -23,11 +23,7 @@ from typing import List, Optional
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_orchestrator import run_stream, new_conversation_id
 from src.services.streaming.stream_variants import StreamVariant, to_wire_dict
-from src.services.storage.thread_storage import (
-    append_thread as disk_append_thread,
-    read_thread as disk_read_thread,
-    recursively_create_dir_at_rw_dir,
-)
+from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
 from src.services.mcp.mcp_manager import build_mcp_manager
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -55,8 +51,13 @@ log = logging.getLogger("dev_script")
 configure_logging()
 
 # One global MCP manager reused by all runs
+mongodb_uri = os.getenv("MONGODB_URI_LOCAL")
 MCP = build_mcp_manager()
-
+headers = {"rag": {"mongodb-uri": mongodb_uri,
+                    },
+            "code": {},
+            }
+MCP.initialize(headers)
 
 @dataclass
 class RunResult:
@@ -75,14 +76,6 @@ def _derive_thread_id(idx: int) -> str:
     return new_conversation_id() if NEW_THREAD_PER_RUN else "dev-thread"
 
 
-async def _persist_disk(thread_id: str, variants: List[StreamVariant]) -> None:
-    disk_append_thread(thread_id, variants, ensure_end=False)
-
-
-def _load_disk(thread_id: str) -> List[StreamVariant]:
-    return disk_read_thread(thread_id)
-
-
 async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
     async with sem:
         thread_id = _derive_thread_id(idx)
@@ -93,25 +86,13 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
         char_count = 0
         status = "Done"
 
-        async def persist(variants: List[StreamVariant]) -> None:
-            await _persist_disk(thread_id, variants)
-            if PRINT_STREAM:
-                for v in variants:
-                    print(json.dumps(to_wire_dict(v), ensure_ascii=False))
-
-        def load_thread(_: str) -> List[StreamVariant]:
-            return _load_disk(thread_id)
-
         try:
             async for variant in run_stream(
                 model=MODEL,
                 thread_id=(None if NEW_THREAD_PER_RUN else thread_id),
                 user_id=USER_ID,
                 user_input=PROMPT,
-                request=None,
                 mcp=MCP,                 # ← reuse single McpManager
-                persist=persist,
-                load_thread=(None if NEW_THREAD_PER_RUN else load_thread),
             ):
                 if getattr(variant, "variant", None) == "Assistant":
                     txt = getattr(variant, "text", "") or ""

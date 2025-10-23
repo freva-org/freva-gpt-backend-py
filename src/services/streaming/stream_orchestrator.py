@@ -7,6 +7,7 @@ import random
 import re
 import string
 from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, List, Optional
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 try:
     from fastapi import Request  # only for typing; safe to be None in headless runs
@@ -27,6 +28,7 @@ from src.services.streaming.stream_variants import (
 )
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt, get_entire_prompt_json
+from src.services.storage.router import append_thread, read_thread
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +83,6 @@ def _finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 async def _run_tool_via_mcp(
     *,
-    request: Optional[Request],
     mcp: McpManager,
     name: str,
     arguments_json: str,
@@ -102,9 +103,15 @@ async def _run_tool_via_mcp(
                 "question": args.get("question", ""),
                 "resources_to_retrieve_from": args.get("resources_to_retrieve_from", ""),
             },
-            extra_headers={
-                "x-freva-vault-url": request.headers.get("x-freva-vault-url", "") if request else "",
-                "x-freva-rest-url":  request.headers.get("x-freva-rest-url", "") if request else "",
+        )
+        return json.dumps(res)
+    elif name=="code_interpreter":
+        res = mcp.call_tool(
+            "code",
+            session_key=session_key,
+            name="code_interpreter",
+            arguments={
+                "code": args.get("code", ""),
             },
         )
         return json.dumps(res)
@@ -115,10 +122,6 @@ async def _run_tool_via_mcp(
         session_key=session_key,
         name=name,
         arguments=args,
-        extra_headers={
-            "x-freva-vault-url": request.headers.get("x-freva-vault-url", "") if request else "",
-            "x-freva-rest-url":  request.headers.get("x-freva-rest-url", "") if request else "",
-        },
     )
     return json.dumps(res)
 
@@ -127,7 +130,6 @@ async def _run_tool_via_mcp(
 # ──────────────────────────────────────────────────────────────────────────────
 
 async def stream_with_tools(
-    request: Optional[Request],
     *,
     model: str,
     messages: List[Dict[str, Any]],
@@ -184,7 +186,7 @@ async def stream_with_tools(
         args_json = (tc.get("function") or {}).get("arguments", "")
         try:
             result_text = await _run_tool_via_mcp(
-                request=request, mcp=mcp, name=name, arguments_json=args_json, session_key=session_key
+                mcp=mcp, name=name, arguments_json=args_json, session_key=session_key
             )
         except Exception as e:
             log.exception("Tool %s failed", name)
@@ -221,11 +223,8 @@ async def run_stream(
     thread_id: Optional[str],
     user_id: str,
     user_input: str,
-    request: Optional[Request] = None,
+    database: Optional[AsyncIOMotorDatabase] = None,
     mcp: Optional[McpManager] = None,
-    # storage hooks:
-    persist: Optional[PersistFn] = None,          # called with [SVPrompt?] and [hint,user], then with [assistant,end] or [error,end]
-    load_thread: Optional[LoadThreadFn] = None,   # when continuing a thread, returns prior SVs to be converted
 ) -> AsyncGenerator[StreamVariant, None]:
     """
     Orchestrate a single turn, yielding StreamVariant objects.
@@ -243,11 +242,10 @@ async def run_stream(
         if create_new:
             base = get_entire_prompt(user_id, thread_id, model)
             prompt_json = get_entire_prompt_json(user_id, thread_id, model)
-            if persist:
-                await persist([SVPrompt(payload=prompt_json)])
+            await append_thread(thread_id, user_id, [SVPrompt(payload=prompt_json)], database)
             messages = list(base)
         else:
-            prior_sv: List[StreamVariant] = load_thread(thread_id) if load_thread else []
+            prior_sv: List[StreamVariant] = read_thread(thread_id, database)
             messages = help_convert_sv_ccrm(
                 prior_sv, include_images=model_supports_images(model), include_meta=False
             )
@@ -256,8 +254,7 @@ async def run_stream(
         log.exception(msg)
         err = SVServerError(message=msg)
         end = SVStreamEnd(message="Error")
-        if persist:
-            await persist([err, end])
+        await append_thread(thread_id, user_id,[err, end], database)
         yield err
         yield end
         return
@@ -266,8 +263,7 @@ async def run_stream(
     messages.append({"role": "user", "content": user_input or ""})
     hint = SVServerHint(data={"thread_id": thread_id})
     user_v = SVUser(text=user_input or "")
-    if persist:
-        await persist([hint, user_v])
+    await append_thread(thread_id, user_id, [hint, user_v], database)
     yield hint
     yield user_v
 
@@ -277,7 +273,6 @@ async def run_stream(
     try:
         mgr = mcp or McpManager()
         async for piece in stream_with_tools(
-            request,
             model=model,
             messages=messages,
             mcp=mgr,
@@ -291,22 +286,19 @@ async def run_stream(
         final_text = "".join(accumulated)
         assistant_v = SVAssistant(text=final_text)
         end_v = SVStreamEnd(message="Done")
-        if persist:
-            await persist([assistant_v, end_v])
+        await append_thread(thread_id, user_id,[assistant_v, end_v], database)
         yield end_v
 
     except asyncio.CancelledError:
         final_text = "".join(accumulated)
         assistant_v = SVAssistant(text=final_text)
         end_v = SVStreamEnd(message="Cancelled")
-        if persist:
-            await persist([assistant_v, end_v])
+        await append_thread(thread_id, user_id, [assistant_v, end_v], database)
     except Exception as e:
         log.exception("stream error: %s", e)
         err_v = SVServerError(message=str(e))
         end_v = SVStreamEnd(message="Error")
-        if persist:
-            await persist([err_v, end_v])
+        await append_thread(thread_id, user_id, [err_v, end_v], database)
         yield err_v
         yield end_v
 

@@ -24,7 +24,6 @@ def _post_process(v: list[StreamVariant]) -> list[StreamVariant]:
         cleaned.append(v)
     return cleaned
 
-# TODO: fallback or .env parameter for loading from disk storage 
 @router.get("/getthread", dependencies=[AuthRequired])
 async def get_thread(request: Request, thread_id: str | None = Query(None)):
     """

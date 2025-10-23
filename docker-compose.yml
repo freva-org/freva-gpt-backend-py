@@ -24,7 +24,7 @@ services:
     image: localhost/rag-server-${INSTANCE_NAME}
     build:
       context: .
-      dockerfile: docker/Dockerfile.rag
+      dockerfile: docker/rag-server/Dockerfile
     env_file: .env
     environment:
       MCP_HOST: 0.0.0.0
@@ -40,7 +40,7 @@ services:
     image: localhost/code-interpreter-server-${INSTANCE_NAME}
     build:
       context: .
-      dockerfile: docker/Dockerfile.code
+      dockerfile: docker/code-interpreter-server/Dockerfile
     env_file: .env
     environment:
       MCP_HOST: 0.0.0.0

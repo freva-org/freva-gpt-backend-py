@@ -1,0 +1,16 @@
+[project]
+name = "rag-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11.10,<3.12"
+dependencies = [
+    "fastapi>=0.116.1",
+    "fastmcp>=2.12.4",
+    "httpx>=0.28.1",
+    "langchain-community>=0.3.31",
+    "litellm>=1.76.2",
+    "motor>=3.7.1",
+    "uvicorn[standard]>=0.35.0",
+    "jq>=1.10.0",
+]

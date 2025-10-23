@@ -2,6 +2,7 @@ from typing import Dict, Any
 from fastapi import Request
 
 from src.services.mcp.mcp_manager import McpManager
+from src.core.auth import get_mongodb_uri
 
 
 def session_key_from_request(request: Request) -> str:
@@ -29,9 +30,14 @@ async def call_rag(
     mgr: McpManager = request.app.state.mcp
     session_key = session_key_from_request(request)
 
+    vault_url = request.headers.get("x-freva-vault-url")
+    mongodb_uri = get_mongodb_uri(vault_url)
+
+    auth = request.headers.get("Authorization")
+
     extra_headers = {
-        "x-freva-vault-url": request.headers.get("x-freva-vault-url", ""),
-        "x-freva-rest-url":  request.headers.get("x-freva-rest-url", ""),
+        "Authorization": auth if auth else None,
+        "mongo-uri": mongodb_uri,
     }
 
     res = mgr.call_tool(
@@ -60,7 +66,7 @@ async def call_code(
     mgr: McpManager = request.app.state.mcp
     session_key = session_key_from_request(request)
 
-    auth = request.headers.get("authorization")
+    auth = request.headers.get("Authorization")
     extra_headers = {"Authorization": auth} if auth else None
 
     res = mgr.call_tool(

@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from src.tools.rag.helpers import *
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
-from src.tools.rag.header_gate import make_header_gate, VAULT_URI_HDR, REST_URL_HDR
+from src.tools.rag.header_gate import make_header_gate, MONGODB_URI_HDR
 from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
@@ -34,17 +34,16 @@ AVAILABLE_LIBRARIES={"stableclimgen"}
 
 # ── Mongo helpers ────────────────────────────────────────────────────────────
 # Per-request header context
-vault_uri_ctx: ContextVar[str | None] = ContextVar("vault_uri_ctx", default=None)
-rest_url_ctx:  ContextVar[str | None] = ContextVar("rest_url_ctx",  default=None)
+mongo_uri_ctx: ContextVar[str | None] = ContextVar("mongo_uri_ctx", default=None)
 
 @lru_cache(maxsize=32)
 def _client_for(uri: str) -> MongoClient:
     return MongoClient(uri, serverSelectionTimeoutMS=5000)
 
 def _collection():
-    uri = vault_uri_ctx.get()
+    uri = mongo_uri_ctx.get()
     if not uri:
-        raise RuntimeError(f"Missing required header '{VAULT_URI_HDR}'")
+        raise RuntimeError(f"Missing required header '{MONGODB_URI_HDR}'")
     db = _client_for(uri)["rag"]
     return db["embeddings"]
 
@@ -213,8 +212,7 @@ if __name__ == "__main__":
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
         mcp.http_app(),
-        vault_ctx=vault_uri_ctx,
-        rest_ctx=rest_url_ctx,
+        mongo_ctx=mongo_uri_ctx,
         logger=logger,       
         mcp_path="/mcp",  
     )

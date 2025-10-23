@@ -2,21 +2,18 @@ from typing import Callable, Awaitable, Dict, Any
 from contextvars import ContextVar
 import logging
 
-VAULT_URI_HDR = "x-freva-vault-url"
-REST_URL_HDR  = "x-freva-rest-url"
+MONGODB_URI_HDR = "mongodb-uri"
 
 def make_header_gate(
     inner_app,
     *,
-    vault_ctx: ContextVar[str | None],
-    rest_ctx:  ContextVar[str | None],
+    mongo_ctx: ContextVar[str | None],
     logger: logging.Logger | None = None,
     mcp_path: str = "/mcp",
 ):
     """
     Wrap the FastMCP ASGI app so every request to `mcp_path`:
-      - logs x-freva-* headers,
-      - enforces a valid mongodb URI in x-freva-vault-url,
+      - enforces a valid mongodb URI in mongodb-uri,
       - sets ContextVars for downstream code.
     """
     log = logger or logging.getLogger("rag.header_gate")
@@ -43,8 +40,7 @@ def make_header_gate(
                 k.decode("latin-1").lower(): v.decode("latin-1")
                 for k, v in scope.get("headers", [])
             }
-            v = hdrs.get(VAULT_URI_HDR)
-            r = hdrs.get(REST_URL_HDR)
+            v = hdrs.get(MONGODB_URI_HDR)
 
             try:
                 log.info("RAG headers (ASGI wrap): vault=%r rest=%r", v, r)
@@ -56,7 +52,7 @@ def make_header_gate(
                 body = (
                     b'event: message\r\n'
                     b'data: {"jsonrpc":"2.0","error":{"code":-32600,'
-                    b'"message":"Missing or invalid header \'' + VAULT_URI_HDR.encode("utf-8") + b'\' '
+                    b'"message":"Missing or invalid header \'' + MONGODB_URI_HDR.encode("utf-8") + b'\' '
                     b'(expected mongodb:// or mongodb+srv://)"}}\r\n\r\n'
                 )
                 await send({
@@ -72,13 +68,10 @@ def make_header_gate(
                 return
 
             # Set ContextVars for downstream code
-            tok_v = vault_ctx.set(v)
-            tok_r = rest_ctx.set(r) if r is not None else None
+            tok_v = mongo_ctx.set(v)
             try:
                 return await self.app(scope, receive, send)
             finally:
-                vault_ctx.reset(tok_v)
-                if tok_r is not None:
-                    rest_ctx.reset(tok_r)
+                mongo_ctx.reset(tok_v)
 
     return HeaderCaptureASGI(inner_app)

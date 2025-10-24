@@ -1,11 +1,23 @@
+from __future__ import annotations
+
 import json
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Tuple
+import logging
+import threading
 
 import httpx
 
+from src.core.logging_setup import configure_logging
+
+log = logging.getLogger(__name__)
+configure_logging()
+
+MCP_PROTOCOL_VERSION = "2025-03-26"
+DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
+DISCOVERY_SESSION_KEY = "__discovery__"
 
 # ---- public dataclass you can log/inspect -------------------------------------------------------
 
@@ -16,182 +28,228 @@ class McpCallResult:
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
     status_code: Optional[int] = None
-    raw: Optional[str] = None
-    duration_ms: int = 0
 
 
-# ---- errors --------------------------------------------------------------------------------------
+# ---- exceptions ---------------------------------------------------------------------------------
 
-class McpError(Exception):
-    pass
-
-class McpInvalidParams(McpError):
-    pass
-
-class McpUnauthorized(McpError):
-    pass
-
-class McpBadRequest(McpError):
-    pass
+class McpError(Exception): ...
+class McpUnauthorized(McpError): ...
+class McpBadRequest(McpError): ...
+class McpInvalidParams(McpError): ...
 
 
-# ---- core client --------------------------------------------------------------------------------
+# ---- client -------------------------------------------------------------------------------------
 
 class McpClient:
     """
-    Minimal JSON-RPC over Streamable HTTP (SSE) client with:
-      - initialize() that returns & caches Mcp-Session-Id
-      - tools call with method fallback: tools/call → tools.call → tools.invoke
-      - automatic dual Accept header
-      - per-server default headers + per-call extra headers
+    Minimal JSON-RPC over HTTP client with SSE support (FastMCP style). Also includes
+    discovery helpers for listing tools (tries multiple strategies).
     """
 
-    def __init__(
-        self,
-        base_url: str,  # e.g. http://rag:8050/mcp
-        *,
-        default_headers: Optional[Dict[str, str]] = None,
-        connect_timeout: float = 10.0,
-        read_timeout: float = 30.0,
-    ):
+    def __init__(self, base_url: str, *, default_headers: Optional[Dict[str, str]] = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.default_headers = default_headers or {}
         self._session_id: Optional[str] = None
-        self._http = httpx.Client(
-            timeout=httpx.Timeout(connect=connect_timeout, read=read_timeout),
-            transport=httpx.HTTPTransport(retries=0),
-        )
+        self._lock = threading.RLock()
+        self._session_ids: Dict[str, str] = {}
 
-    # --- headers ----------------------------------------------------------------
+        # simple shared client; in prod you may prefer a pool per target
+        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(30.0))
 
-    def _headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    # --- session -----------------------------------------------------------------------------
+
+    def set_session_id(self, sid: Optional[str]) -> None:
+        self._session_id = sid
+
+    def _ensure_session(self, logical_key: str) -> str:
+        lk = logical_key or "__anon__"
+        with self._lock:
+            existing = self._session_ids.get(lk)
+            if existing:
+                self._session_id = existing
+                return existing
+
+        new_sid = self._start_session()
+        with self._lock:
+            self._session_ids[lk] = new_sid
+            self._session_id = new_sid
+        return new_sid
+
+    def _start_session(self) -> str:
+        init_body = {
+            "jsonrpc": "2.0",
+            "id": str(uuid.uuid4()),
+            "method": "initialize",
+            "params": {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {},
+                "clientInfo": DEFAULT_CLIENT_INFO,
+            },
+        }
+        self._session_id = None
+        init_resp = self._http.post("/mcp", headers=self._headers(include_session=False), json=init_body)
+        init_payload, sid = self._extract_payload_and_session(init_resp)
+
+        if not sid:
+            raise McpError("MCP server did not include a session id during initialize()")
+        if isinstance(init_payload, dict) and init_payload.get("error"):
+            raise McpError(f"MCP initialize failed: {init_payload['error']}")
+
+        self._session_id = sid
+        notify_body = {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}
+        notify_resp = self._http.post("/mcp", headers=self._headers(), json=notify_body)
+        notify_payload, _ = self._extract_payload_and_session(notify_resp)
+        if isinstance(notify_payload, dict) and notify_payload.get("error"):
+            raise McpError(f"MCP notifications/initialized failed: {notify_payload['error']}")
+
+        return sid
+
+    def _extract_payload_and_session(self, response: httpx.Response) -> Tuple[Optional[Any], Optional[str]]:
+        session_id = response.headers.get("mcp-session-id")
+        payload: Optional[Any] = None
+        content_type = response.headers.get("content-type", "")
+
+        try:
+            if "text/event-stream" in content_type:
+                text = response.text
+                for line in text.splitlines():
+                    if line.startswith("data:"):
+                        data = line[5:].strip()
+                        if data:
+                            payload = json.loads(data)
+                            break
+            elif response.content:
+                payload = response.json()
+        except Exception as e:
+            raise McpError(f"Invalid MCP response payload: {e}") from e
+
+        return payload, session_id
+
+    # --- headers ------------------------------------------------------------------------------
+
+    def _headers(self, extra: Optional[Dict[str, str]] = None, *, include_session: bool = True) -> Dict[str, str]:
         h = {
             "Content-Type": "application/json",
-            # IMPORTANT: dual accept is required by FastMCP streamable http
             "Accept": "application/json, text/event-stream",
         }
         h.update(self.default_headers)
-        if self._session_id:
+        if include_session and self._session_id:
             h["Mcp-Session-Id"] = self._session_id
-            h["Mcp-Protocol-Version"] = "2025-03-26"
+            h["Mcp-Protocol-Version"] = MCP_PROTOCOL_VERSION
         if extra:
             h.update(extra)
         return h
 
-    # --- sse response parsing ---------------------------------------------------
+    # --- tool discovery -----------------------------------------------------------------------
 
-    @staticmethod
-    def _parse_sse_text(s: str) -> Dict[str, Any]:
+    def tools_list_rpc(self, *, dot_name: bool = False) -> McpCallResult:
         """
-        Fast path: server usually returns a single 'event: message' with one 'data: {...}'.
-        We scan lines and parse the last data: payload.
+        Try JSON-RPC method: 'tools/list' (default) or 'tools.list' (dot_name=True).
         """
-        data_line = None
-        for line in s.splitlines():
-            if line.startswith("data: "):
-                data_line = line[6:]
-        if not data_line:
-            raise McpError(f"Missing SSE 'data:' line in response: {s[:200]}")
-        try:
-            return json.loads(data_line)
-        except json.JSONDecodeError:
-            # sometimes server returns plain body without SSE prefix
-            try:
-                return json.loads(s)
-            except Exception:
-                raise McpError(f"Failed to parse server response: {s[:300]}")
+        rpc_id = str(uuid.uuid4())
+        self._ensure_session(DISCOVERY_SESSION_KEY)
+        rpc_id = str(uuid.uuid4())
+        method = "tools.list" if dot_name else "tools/list"
+        body = {"jsonrpc": "2.0", "id": rpc_id, "method": method, "params": {}}
+        r = self._http.post("/mcp", headers=self._headers(), json=body)
+        return self._rpc_result(r, rpc_id)
 
-    # --- initialize -------------------------------------------------------------
-
-    def initialize(self, client_name: str = "backend", client_version: str = "1.0",
-                   extra_headers: Optional[Dict[str, str]] = None) -> str:
+    def tools_list_http(self) -> List[Dict[str, Any]]:
         """
-        Performs JSON-RPC initialize and captures Mcp-Session-Id from response headers.
-        Returns the session id (also cached on the client).
+        Try plain HTTP GET /tools (some implementations expose this).
         """
-        payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {},
-                "clientInfo": {"name": client_name, "version": client_version},
-            },
-        }
-        t0 = time.time()
-        r = self._http.post(self.base_url, headers=self._headers(extra_headers), json=payload)
-        dur = int((time.time() - t0) * 1000)
+        r = self._http.get("/tools", headers=self._headers())
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, dict) and "tools" in data:
+            return data["tools"]
+        if isinstance(data, list):
+            return data
+        return []
 
-        # FastMCP puts session in header
-        sid = r.headers.get("mcp-session-id") or r.headers.get("Mcp-Session-Id")
-        if not sid:
-            # some builds don’t echo it; still OK to proceed
-            pass
-        else:
-            self._session_id = sid
-
-        body = r.text
-        obj = self._parse_sse_text(body)
-
-        if "error" in obj:
-            err = obj["error"]
-            raise McpBadRequest(f"initialize failed: {err.get('message')} ({err})")
-
-        return self._session_id or "no-session-id"
-
-    # --- tools call with method fallback ---------------------------------------
+    # --- call tool ----------------------------------------------------------------------------
 
     def call_tool(
         self,
-        name: str,
-        arguments: Dict[str, Any],
-        extra_headers: Optional[Dict[str, str]] = None,
         *,
-        request_id: Optional[str] = None,
-    ) -> McpCallResult:
+        name: str,
+        args: Dict[str, Any],
+        session_key: str,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         """
-        Call a tool with graceful fallback across method name variants:
-          tools/call → tools.call → tools.invoke
+        Call a tool via JSON-RPC method 'tools/call' or fallbacks.
+        Sets session id based on session_key to keep continuity.
         """
-        rid = request_id or uuid.uuid4().hex[:8]
-        methods = ["tools/call", "tools.call", "tools.invoke"]
+        # Session continuity
+        self._ensure_session(session_key or "__anon__")
 
-        last_err: Optional[Dict[str, Any]] = None
-        t0 = time.time()
-        for m in methods:
-            payload = {"jsonrpc": "2.0", "id": rid, "method": m,
-                       "params": {"name": name, "arguments": arguments}}
+        # Strategy 1: JSON-RPC tools/call
+        rpc_id = str(uuid.uuid4())
+        body = {
+            "jsonrpc": "2.0",
+            "id": rpc_id,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }
+        r = self._http.post("/mcp", headers=self._headers(extra_headers), json=body)
+        res = self._rpc_result(r, rpc_id)
+        if res.ok and isinstance(res.result, dict):
+            return res.result
 
-            r = self._http.post(self.base_url, headers=self._headers(extra_headers), json=payload)
-            raw = r.text
-            obj = self._parse_sse_text(raw)
-            status = r.status_code
+        # Strategy 2: JSON-RPC tools.call
+        rpc_id2 = str(uuid.uuid4())
+        body2 = {
+            "jsonrpc": "2.0",
+            "id": rpc_id2,
+            "method": "tools.call",
+            "params": {"name": name, "arguments": args},
+        }
+        r2 = self._http.post("/mcp", headers=self._headers(extra_headers), json=body2)
+        res2 = self._rpc_result(r2, rpc_id2)
+        if res2.ok and isinstance(res2.result, dict):
+            return res2.result
 
-            if "error" not in obj:
-                return McpCallResult(
-                    ok=True, id=str(rid), result=obj.get("result"), status_code=status,
-                    raw=raw, duration_ms=int((time.time() - t0) * 1000)
-                )
+        # Strategy 3: direct POST /tools/call
+        r3 = self._http.post(
+            "/tools/call",
+            headers=self._headers(extra_headers),
+            json={"name": name, "arguments": args},
+        )
+        r3.raise_for_status()
+        data = r3.json()
+        if isinstance(data, dict):
+            return data
+        return {"ok": True, "result": data}
 
-            # stash and see if this is the classic -32602 mismatch
-            last_err = obj["error"]
-            if last_err.get("code") == -32602:
-                # try next method name
-                continue
-            # other errors → map and stop
-            code = last_err.get("code")
-            msg = last_err.get("message", "")
-            if status in (401, 403) or "Unauthorized" in msg:
-                raise McpUnauthorized(msg or str(last_err))
-            if status == 400:
-                raise McpBadRequest(msg or str(last_err))
-            raise McpError(f"MCP error {code}: {msg or last_err}")
+    # --- rpc result helper --------------------------------------------------------------------
 
-        # all fallbacks exhausted
-        raise McpInvalidParams(f"All method variants failed with -32602. Last error: {last_err}")
+    def _rpc_result(self, response: httpx.Response, rpc_id: str) -> McpCallResult:
+        payload, session_id = self._extract_payload_and_session(response)
+        if session_id:
+            self._session_id = session_id
 
-    # --- convenience ------------------------------------------------------------
+        if isinstance(payload, dict):
+            if "error" in payload and payload["error"]:
+                err = payload["error"]
+                code = err.get("code", 500)
+                status = response.status_code
+                msg = err.get("message", "")
+                if status in (401, 403):
+                    raise McpUnauthorized(msg or str(err))
+                if status == 400:
+                    raise McpBadRequest(msg or str(err))
+                if code == -32602:
+                    raise McpInvalidParams(msg or str(err))
+                raise McpError(msg or str(err))
+            return McpCallResult(ok=True, id=rpc_id, result=payload.get("result"), status_code=response.status_code)
 
-    def close(self):
-        self._http.close()
+        return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)
+
+    # --- convenience --------------------------------------------------------------------------
+
+    def close(self) -> None:
+        try:
+            self._http.close()
+        except Exception:
+            pass

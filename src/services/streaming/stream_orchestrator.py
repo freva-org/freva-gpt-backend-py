@@ -21,6 +21,8 @@ from src.services.streaming.stream_variants import (
     SVPrompt,
     SVCode,
     SVCodeOutput,
+    SVCodeError,
+    SVImage,
     SVServerError,
     SVServerHint,
     SVStreamEnd,
@@ -156,10 +158,19 @@ async def stream_with_tools(
 
                 piece = delta.get("content") or ""
                 if piece:
-                    yield piece
+                    yield SVAssistant(text=piece)
 
-                if delta.get("tool_calls"):
+                tc_list = delta.get("tool_calls") or []
+                if tc_list:
                     _accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
+                    tool_name = tool_agg.get("by_index")[0].get("function").get("name") if tool_agg else None
+                    for tc in tc_list:
+                        fn = tc.get("function") or {}
+                        args_chunk = fn.get("arguments")
+                        if args_chunk and tool_name=="code_interpreter":
+                            tool_id = tc.get("id") or ""
+                            # stream arguments chunk immediately
+                            yield SVCode(code=args_chunk, call_id=tool_id)
 
                 if choice.get("finish_reason"):
                     break
@@ -167,7 +178,7 @@ async def stream_with_tools(
             full_txt = first_text(resp) or ""
             for p in re.findall(r"\S+\s*", full_txt):
                 if p:
-                    yield p
+                    yield SVAssistant(text=full_txt)
 
     async for p in _handle_stream(resp1):
         yield p
@@ -183,11 +194,17 @@ async def stream_with_tools(
     tool_result_messages: List[Dict[str, Any]] = []
     for tc in tool_calls:
         name = (tc.get("function") or {}).get("name", "")
+        id = tc.get("id", "")
         args_json = (tc.get("function") or {}).get("arguments", "")
         try:
             result_text = await _run_tool_via_mcp(
                 mcp=mcp, name=name, arguments_json=args_json, session_key=session_key
             )
+            if name =="code_interpreter":
+                result = json.loads(result_text)
+                out = result.get("content")[0].get("text") 
+                yield SVCodeOutput(output=out, call_id=id)
+                #TODO: CodeError, Image
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
@@ -265,9 +282,10 @@ async def run_stream(
     user_v = SVUser(text=user_input or "")
     await append_thread(thread_id, user_id, [hint, user_v], database)
     yield hint
-    yield user_v
 
     # Stream model/tool output
+    p_type_check = None
+    streamed_v: List[StreamVariant] = []
     accumulated: List[str] = []
     chunk_count = 0
     try:
@@ -277,21 +295,43 @@ async def run_stream(
             messages=messages,
             mcp=mgr,
             acomplete_func=acomplete,
-            session_key_override=thread_id,   # ← HERE: per-thread MCP session
-        ):
-            accumulated.append(piece)
+            session_key_override=thread_id,   # per-thread MCP session
+        ):  
+            if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage)):
+                final = "".join(accumulated)
+                accumulated = []
+                if p_type_check == SVAssistant:
+                    streamed_v.append(SVAssistant(text=final))
+                elif p_type_check == SVCode:
+                    streamed_v.append(SVCode(code=final, call_id=id))
+                streamed_v.append(piece)
+            elif isinstance(piece, SVAssistant):
+                if p_type_check != SVAssistant and accumulated:
+                    final = "".join(accumulated)
+                    streamed_v.append(SVCode(code=final, call_id=id))
+                    accumulated = []
+                accumulated.append(piece.text)
+                p_type_check = SVAssistant
+            elif isinstance(piece, SVCode):
+                if p_type_check != SVCode and accumulated:
+                    final = "".join(accumulated)
+                    streamed_v.append(SVAssistant(text=final))
+                    accumulated = []
+                accumulated.append(piece.code)
+                id = piece.call_id or ""
+                p_type_check = SVCode
             chunk_count += 1
-            yield SVAssistant(text=piece)
 
         final_text = "".join(accumulated)
         assistant_v = SVAssistant(text=final_text)
         end_v = SVStreamEnd(message="Done")
-        await append_thread(thread_id, user_id,[assistant_v, end_v], database)
+        streamed_v.extend([assistant_v, end_v])
+        await append_thread(thread_id, user_id, streamed_v, database)
         yield end_v
 
     except asyncio.CancelledError:
         final_text = "".join(accumulated)
-        assistant_v = SVAssistant(text=final_text)
+        assistant_v = SVAssistant(text=final)
         end_v = SVStreamEnd(message="Cancelled")
         await append_thread(thread_id, user_id, [assistant_v, end_v], database)
     except Exception as e:

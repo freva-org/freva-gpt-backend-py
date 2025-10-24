@@ -19,6 +19,8 @@ from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
     SVAssistant,
     SVPrompt,
+    SVCode,
+    SVCodeOutput,
     SVServerError,
     SVServerHint,
     SVStreamEnd,
@@ -154,9 +156,7 @@ async def stream_with_tools(
 
                 piece = delta.get("content") or ""
                 if piece:
-                    for p in re.findall(r"\S+\s*", piece):
-                        if p:
-                            yield p
+                    yield piece
 
                 if delta.get("tool_calls"):
                     _accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)

@@ -172,9 +172,9 @@ def _variant_to_legacy_line(variant: StreamVariant) -> Optional[str]:
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
 
-def append_thread(thread_id: str, content: Conversation, ensure_end: bool = True) -> None:
+def append_thread(thread_id: str, content: Conversation) -> None:
     THREADS_DIR.mkdir(parents=True, exist_ok=True)
-    content = cleanup_conversation(content, append_stream_end=ensure_end)
+    content = cleanup_conversation(content)
     if not content:
         return
     

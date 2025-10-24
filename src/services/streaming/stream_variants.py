@@ -165,7 +165,7 @@ Conversation = List[StreamVariant]
 # Helpers: conversation normalization
 # ──────────────────────────────────────────────────────────────────────────────
 
-def cleanup_conversation(conv: Conversation, append_stream_end: bool = True) -> Conversation:
+def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) -> Conversation:
     """
     Insert missing CodeOutput after Code and ensure StreamEnd at the end.
     Mirrors the spirit of Rust's cleanup_conversation with class-based variants.

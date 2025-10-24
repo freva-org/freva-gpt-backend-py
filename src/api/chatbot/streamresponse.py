@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 def _sse_data(obj: dict) -> bytes:
     payload = json.dumps(obj, ensure_ascii=False)
-    return f"{payload}\n\n".encode("utf-8")
+    return f"{payload}\n".encode("utf-8")
 
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
@@ -70,7 +70,8 @@ async def streamresponse(
         )
 
     mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
-    headers = {"rag": {"mongodb-uri": get_mongodb_uri(vault_url),
+    mongodb_uri = await get_mongodb_uri(vault_url)
+    headers = {"rag": {"mongodb-uri":  mongodb_uri,
                        "Authentication": request.headers.get("Authentication")},
                "code": {"Authentication": request.headers.get("Authentication")},
                }

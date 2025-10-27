@@ -71,11 +71,21 @@ async def streamresponse(
 
     mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
     mongodb_uri = await get_mongodb_uri(vault_url)
-    headers = {"rag": {"mongodb-uri":  mongodb_uri,
-                       "Authentication": request.headers.get("Authentication")},
-               "code": {"Authentication": request.headers.get("Authentication")},
-               }
-    mcp_mgr.initialize(headers)
+    auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")
+    headers = {
+        "rag": {
+            "mongodb-uri":  mongodb_uri,
+            "Authorization": auth_header,
+            },
+        "code": {
+            "Authorization": auth_header,
+            },
+            }
+    try:
+        mcp_mgr.initialize(headers)
+    except Exception as e:
+        # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
+        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
 
     async def event_stream():
         async for variant in run_stream(

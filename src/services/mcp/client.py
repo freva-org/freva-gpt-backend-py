@@ -37,6 +37,9 @@ class McpUnauthorized(McpError): ...
 class McpBadRequest(McpError): ...
 class McpInvalidParams(McpError): ...
 
+def drop_none(d: dict) -> None:
+    """Remove keys from d whose value is None."""
+    return {k: v for k, v in d.items() if v is not None}
 
 # ---- client -------------------------------------------------------------------------------------
 
@@ -138,7 +141,7 @@ class McpClient:
             h["Mcp-Protocol-Version"] = MCP_PROTOCOL_VERSION
         if extra:
             h.update(extra)
-        return h
+        return drop_none(h)
 
     # --- tool discovery -----------------------------------------------------------------------
 
@@ -150,7 +153,12 @@ class McpClient:
         self._ensure_session(DISCOVERY_SESSION_KEY)
         rpc_id = str(uuid.uuid4())
         method = "tools.list" if dot_name else "tools/list"
-        body = {"jsonrpc": "2.0", "id": rpc_id, "method": method, "params": {}}
+        body = {
+            "jsonrpc": "2.0", 
+            "id": rpc_id, 
+            "method": method, 
+            "params": {"cursor": None},
+            }
         r = self._http.post("/mcp", headers=self._headers(), json=body)
         return self._rpc_result(r, rpc_id)
 

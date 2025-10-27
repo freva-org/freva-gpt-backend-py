@@ -256,16 +256,18 @@ async def run_stream(
 
     # Build messages: new thread -> system prompt; else -> convert prior conversation
     try:
+        base = get_entire_prompt(user_id, thread_id, model)
         if create_new:
-            base = get_entire_prompt(user_id, thread_id, model)
-            prompt_json = get_entire_prompt_json(user_id, thread_id, model)
-            await append_thread(thread_id, user_id, [SVPrompt(payload=prompt_json)], database)
+            hint = SVServerHint(data={"thread_id": thread_id})
+            yield hint
+            await append_thread(thread_id, user_id, [hint], database)
             messages = list(base)
         else:
             prior_sv: List[StreamVariant] = await read_thread(thread_id, database)
-            messages = help_convert_sv_ccrm(
-                prior_sv, include_images=model_supports_images(model), include_meta=False
-            )
+            messages = list(base)
+            messages.extend(
+                help_convert_sv_ccrm(prior_sv, include_images=model_supports_images(model), include_meta=False)
+                )
     except Exception as e:
         msg = f"prompt/history assembly failed: {e}"
         log.exception(msg)
@@ -278,11 +280,9 @@ async def run_stream(
 
     # Append user content and persist hint+user
     messages.append({"role": "user", "content": user_input or ""})
-    hint = SVServerHint(data={"thread_id": thread_id})
     user_v = SVUser(text=user_input or "")
-    await append_thread(thread_id, user_id, [hint, user_v], database)
-    yield hint
-
+    await append_thread(thread_id, user_id, [user_v], database)
+    
     # Stream model/tool output
     p_type_check = None
     streamed_v: List[StreamVariant] = []
@@ -297,6 +297,7 @@ async def run_stream(
             acomplete_func=acomplete,
             session_key_override=thread_id,   # per-thread MCP session
         ):  
+            yield piece
             if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage)):
                 final = "".join(accumulated)
                 accumulated = []

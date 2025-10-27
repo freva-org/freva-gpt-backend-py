@@ -117,7 +117,7 @@ async def append_thread(
     content: List[StreamVariant],
     database: AsyncIOMotorDatabase,
 ) -> None:
-    content = cleanup_conversation(content, append_stream_end=True)
+    content = cleanup_conversation(content)
     if not content:
         return
 

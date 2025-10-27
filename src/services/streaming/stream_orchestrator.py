@@ -262,7 +262,7 @@ async def run_stream(
             await append_thread(thread_id, user_id, [SVPrompt(payload=prompt_json)], database)
             messages = list(base)
         else:
-            prior_sv: List[StreamVariant] = read_thread(thread_id, database)
+            prior_sv: List[StreamVariant] = await read_thread(thread_id, database)
             messages = help_convert_sv_ccrm(
                 prior_sv, include_images=model_supports_images(model), include_meta=False
             )

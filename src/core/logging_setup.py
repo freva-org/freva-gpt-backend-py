@@ -5,8 +5,7 @@ _SILENCED = False
 
 def configure_logging() -> None:
     """Basic console logging"""
-    debug_mode = os.getenv("DEBUG_MODE", "off").lower() in ("1", "true", "on")
-    level = "DEBUG" if debug_mode else "INFO"
+    level = os.getenv("LOG_LEVEL", "INFO")
     logging.basicConfig(
         level=getattr(logging, level, logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",

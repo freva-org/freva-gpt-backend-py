@@ -34,11 +34,11 @@ FREVA_CONFIG_HDR = "freva-config-path"
 freva_cfg_ctx: ContextVar[str | None] = ContextVar("freva_cfg_ctx", default=None)
 
 def _set_freva_config_path():
-    uri = freva_cfg_ctx.get()
-    if not uri:
+    freva_path = freva_cfg_ctx.get()
+    if not freva_path:
         logger.warning(f"Missing required header '{FREVA_CONFIG_HDR}'"\
                        "Not setting freva_config_path, this WILL break any calls to the code interpreter that require it.")
-    os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_cfg_ctx
+    os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_path
 
 def _truncate(s: str, cap: int = MAX_STD_CAP) -> str:
     return s if len(s) <= cap else s[:cap] + TRUNC_MSG

@@ -64,12 +64,15 @@ configure_logging()
 
 # One global MCP manager reused for the whole session
 mongodb_uri = os.getenv("MONGODB_URI_LOCAL")
+freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
 MCP = build_mcp_manager()
 headers = {
     "rag": {
         "mongodb-uri": mongodb_uri,
     },
-    "code": {},
+    "code": {
+        "freva-config-path": freva_cfg_path,
+    },
 }
 MCP.initialize(headers)
 

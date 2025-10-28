@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 
 
 def _sse_data(obj: dict) -> bytes:
+    if obj.get("variant") == "Code":
+        obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n".encode("utf-8")
 

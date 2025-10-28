@@ -466,8 +466,8 @@ def to_wire_dict(v: StreamVariant) -> dict:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
         return {"variant": IMAGE, "content": {"b64": d["b64"], "mime": d["mime"]}}
-    if kind == CODE:
-        return {"variant": CODE, "content": [{"code": d["code"]}, d["call_id"]]}
+    if kind == CODE: # TODO: Fix this with Bianca
+        return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:
         return {"variant": CODE_OUTPUT, "content": [d["output"], d["call_id"]]}
     return d

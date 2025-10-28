@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from starlette.responses import JSONResponse
@@ -17,7 +18,8 @@ def _post_process(v: list[StreamVariant]) -> list[StreamVariant]:
     items = [item for item in v if not is_prompt(item)]
     cleaned: list[StreamVariant] = []
     for i, v in enumerate(items):
-        if isinstance(v, SVStreamEnd):
+        type_v = v.get("variant")
+        if type_v == "StreamEnd":
             is_last = (i == len(items) - 1)
             if (not is_last) or ("unexpected manner" in (getattr(v, "message", "") or "").lower()):
                 continue
@@ -53,4 +55,5 @@ async def get_thread(request: Request, thread_id: str | None = Query(None)):
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading thread file.")
 
-    return _post_process(content)
+    content = _post_process(content)
+    return content

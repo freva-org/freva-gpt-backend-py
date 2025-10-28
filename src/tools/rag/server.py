@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from src.tools.rag.helpers import *
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
-from src.tools.rag.header_gate import make_header_gate, MONGODB_URI_HDR
+from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
@@ -34,6 +34,7 @@ AVAILABLE_LIBRARIES={"stableclimgen"}
 
 # ── Mongo helpers ────────────────────────────────────────────────────────────
 # Per-request header context
+MONGODB_URI_HDR = "mongodb-uri"
 mongo_uri_ctx: ContextVar[str | None] = ContextVar("mongo_uri_ctx", default=None)
 
 @lru_cache(maxsize=32)
@@ -208,13 +209,18 @@ if __name__ == "__main__":
     # Configure Streamable HTTP transport 
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8050"))
+    path = os.getenv("MCP_PATH", "/mcp")  # standard path
+
+    logger.info("Starting RAG MCP server on %s:%s%s (auth=%s)",
+                host, port, path, "off" if _disable_auth else "on")
 
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
         mcp.http_app(),
-        mongo_ctx=mongo_uri_ctx,
+        ctx=mongo_uri_ctx,
+        header_name=MONGODB_URI_HDR,
         logger=logger,       
-        mcp_path="/mcp",  
+        mcp_path=path,  
     )
 
     import uvicorn

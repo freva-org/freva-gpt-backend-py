@@ -4,12 +4,14 @@ import sys
 import logging
 from io import StringIO
 from typing import Optional
+from contextvars import ContextVar
 
 from IPython.core.interactiveshell import InteractiveShell
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
 from src.core.logging_setup import configure_logging
+from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
 
 logger = logging.getLogger(__name__)
@@ -20,10 +22,23 @@ mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_ver
 
 _shell = InteractiveShell.instance()
 
+# ── Config ───────────────────────────────────────────────────────────────────
 MAX_STD_CAP = int(os.getenv("MCP_MAX_STD_CAP", "200_000"))
 TRUNC_MSG = "\n\n[output truncated]\n"
 
 EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "20"))  # soft guard
+
+# ── Header helpers ────────────────────────────────────────────────────────────
+# Per-request header context
+FREVA_CONFIG_HDR = "freva-config-path"
+freva_cfg_ctx: ContextVar[str | None] = ContextVar("freva_cfg_ctx", default=None)
+
+def _set_freva_config_path():
+    uri = freva_cfg_ctx.get()
+    if not uri:
+        logger.warning(f"Missing required header '{FREVA_CONFIG_HDR}'"\
+                       "Not setting freva_config_path, this WILL break any calls to the code interpreter that require it.")
+    os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_cfg_ctx
 
 def _truncate(s: str, cap: int = MAX_STD_CAP) -> str:
     return s if len(s) <= cap else s[:cap] + TRUNC_MSG
@@ -70,6 +85,8 @@ def code_interpreter(code: str, require_scope: Optional[str] = None) -> str:
     Execute Python in a Jupyter-like IPython context.
     Returns stdout/stderr + last expr repr (truncated).
     """
+    _set_freva_config_path()
+    # TODO check if scope check is necessary
     # Skip scope checks if auth is disabled (local dev)
     if not _disable_auth:
         access_token = get_access_token()
@@ -88,16 +105,22 @@ def code_interpreter(code: str, require_scope: Optional[str] = None) -> str:
         raise Exception(f"Execution failed: {type(e).__name__}: {e}")
 
 if __name__ == "__main__":
-    # Streamable HTTP transport (recommended for scaling)
+    # Configure Streamable HTTP transport 
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8051"))
     path = os.getenv("MCP_PATH", "/mcp")  # standard path
 
     logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
                 host, port, path, "off" if _disable_auth else "on")
-    mcp.run(
-        transport="streamable-http",
-        host=host,
-        port=port,
-        path=path,
+    
+    # Start the MCP server using Streamable HTTP transport
+    wrapped_app = make_header_gate(
+        mcp.http_app(),
+        ctx=freva_cfg_ctx,
+        header_name=FREVA_CONFIG_HDR,
+        logger=logger,       
+        mcp_path=path,  
     )
+
+    import uvicorn
+    uvicorn.run(wrapped_app, host=host, port=port)

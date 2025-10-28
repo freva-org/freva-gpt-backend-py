@@ -1,13 +1,16 @@
 from typing import Callable, Awaitable, Dict, Any
 from contextvars import ContextVar
 import logging
+from src.core.logging_setup import configure_logging
 
-MONGODB_URI_HDR = "mongodb-uri"
+log = logging.getLogger(__name__)
+configure_logging()
 
 def make_header_gate(
     inner_app,
     *,
-    mongo_ctx: ContextVar[str | None],
+    ctx: ContextVar[str | None],
+    header_name: str,
     logger: logging.Logger | None = None,
     mcp_path: str = "/mcp",
 ):
@@ -16,7 +19,7 @@ def make_header_gate(
       - enforces a valid mongodb URI in mongodb-uri,
       - sets ContextVars for downstream code.
     """
-    log = logger or logging.getLogger("rag.header_gate")
+    log = logger or logging.getLogger("header_gate")
 
     class HeaderCaptureASGI:
         def __init__(self, app):
@@ -40,19 +43,20 @@ def make_header_gate(
                 k.decode("latin-1").lower(): v.decode("latin-1")
                 for k, v in scope.get("headers", [])
             }
-            v = hdrs.get(MONGODB_URI_HDR)
+            v = hdrs.get(header_name)
 
             try:
-                log.info("RAG headers (ASGI wrap): vault=%r rest=%r", v, r)
+                log.info("Server headers (ASGI wrap): %s", v)
             except Exception:
                 pass  # never fail on logging
 
-            # Enforce required vault header
-            if not v or not (v.startswith("mongodb://") or v.startswith("mongodb+srv://")):
+            # Enforce required conditions on header
+            # We do not do the same for CI because it doesn't have to be that strict, it can operate without freva access. We warn about this
+            if header_name=="mongodb-uri" and (not v or not (v.startswith("mongodb://") or v.startswith("mongodb+srv://"))):
                 body = (
                     b'event: message\r\n'
                     b'data: {"jsonrpc":"2.0","error":{"code":-32600,'
-                    b'"message":"Missing or invalid header \'' + MONGODB_URI_HDR.encode("utf-8") + b'\' '
+                    b'"message":"Missing or invalid header \'' + header_name.encode("utf-8") + b'\' '
                     b'(expected mongodb:// or mongodb+srv://)"}}\r\n\r\n'
                 )
                 await send({
@@ -68,10 +72,10 @@ def make_header_gate(
                 return
 
             # Set ContextVars for downstream code
-            tok_v = mongo_ctx.set(v)
+            tok_v = ctx.set(v)
             try:
                 return await self.app(scope, receive, send)
             finally:
-                mongo_ctx.reset(tok_v)
+                ctx.reset(tok_v)
 
     return HeaderCaptureASGI(inner_app)

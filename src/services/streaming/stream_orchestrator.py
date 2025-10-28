@@ -136,6 +136,9 @@ async def _run_tool_via_mcp(
 async def stream_with_tools(
     *,
     model: str,
+    thread_id: str,
+    user_id: str,
+    database: Optional[AsyncIOMotorDatabase] = None,
     messages: List[Dict[str, Any]],
     mcp: McpManager,
     acomplete_func=acomplete,
@@ -192,18 +195,23 @@ async def stream_with_tools(
     # Use per-thread session if provided, else fall back to previous behaviour
     session_key = session_key_override or (messages[0].get("content", "") if messages else "")
     tool_result_messages: List[Dict[str, Any]] = []
+    id = ""
     for tc in tool_calls:
         name = (tc.get("function") or {}).get("name", "")
-        id = tc.get("id", "")
+        id = tc.get("id", id)
         args_json = (tc.get("function") or {}).get("arguments", "")
         try:
             result_text = await _run_tool_via_mcp(
                 mcp=mcp, name=name, arguments_json=args_json, session_key=session_key
             )
             if name =="code_interpreter":
+                code = json.loads(args_json or "{}").get("code", "")
                 result = json.loads(result_text)
                 out = result.get("content")[0].get("text") 
-                yield SVCodeOutput(output=out, call_id=id)
+                code_v = SVCode(code=code, call_id=id)
+                codeout_v = SVCodeOutput(output=out, call_id=id)
+                yield codeout_v
+                await append_thread(thread_id, user_id, [code_v, codeout_v], database)
                 #TODO: CodeError, Image
         except Exception as e:
             log.exception("Tool %s failed", name)
@@ -288,9 +296,13 @@ async def run_stream(
     streamed_v: List[StreamVariant] = []
     accumulated: List[str] = []
     chunk_count = 0
+    # id = ""
     try:
         mgr = mcp or McpManager()
         async for piece in stream_with_tools(
+            thread_id=thread_id,
+            user_id=user_id,
+            database=database,
             model=model,
             messages=messages,
             mcp=mgr,
@@ -298,29 +310,29 @@ async def run_stream(
             session_key_override=thread_id,   # per-thread MCP session
         ):  
             yield piece
-            if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage)):
+            if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage, SVCode)) and accumulated:
                 final = "".join(accumulated)
                 accumulated = []
                 if p_type_check == SVAssistant:
                     streamed_v.append(SVAssistant(text=final))
-                elif p_type_check == SVCode:
-                    streamed_v.append(SVCode(code=final, call_id=id))
-                streamed_v.append(piece)
+                # elif p_type_check == SVCode:
+                #     streamed_v.append(SVCode(code=final, call_id=id))
+                # streamed_v.append(piece)
             elif isinstance(piece, SVAssistant):
-                if p_type_check != SVAssistant and accumulated:
-                    final = "".join(accumulated)
-                    streamed_v.append(SVCode(code=final, call_id=id))
-                    accumulated = []
+                # if p_type_check != SVAssistant and accumulated:
+                #     final = "".join(accumulated)
+                #     streamed_v.append(SVCode(code=final, call_id=id))
+                #     accumulated = []
                 accumulated.append(piece.text)
                 p_type_check = SVAssistant
-            elif isinstance(piece, SVCode):
-                if p_type_check != SVCode and accumulated:
-                    final = "".join(accumulated)
-                    streamed_v.append(SVAssistant(text=final))
-                    accumulated = []
-                accumulated.append(piece.code)
-                id = piece.call_id or ""
-                p_type_check = SVCode
+            # elif isinstance(piece, SVCode):
+            #     if p_type_check != SVCode and accumulated:
+            #         final = "".join(accumulated)
+            #         streamed_v.append(SVAssistant(text=final))
+            #         accumulated = []
+            #         id = piece.call_id or id
+                # accumulated.append(piece.code)
+                # p_type_check = SVCode
             chunk_count += 1
 
         final_text = "".join(accumulated)

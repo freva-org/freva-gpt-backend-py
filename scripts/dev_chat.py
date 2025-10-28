@@ -110,8 +110,6 @@ async def _run_turn(
             user_input=user_input,
             mcp=MCP,
         ):
-            vname = getattr(variant, "variant", None)
-
             if isinstance(variant, SVAssistant):
                 txt = getattr(variant, "text", "") or ""
                 if first_chunk:
@@ -121,8 +119,8 @@ async def _run_turn(
                 print(txt, end="", flush=True)
                 chunk_count += 1
                 char_count += len(txt)
-            elif vname=="SVCode":
-                txt = getattr(variant, "text", "") or ""
+            elif isinstance(variant, SVCode):
+                txt = getattr(variant, "code", "") or ""
                 if first_chunk:
                     # Print a header once per assistant message
                     print("\nCode:", end=" ", flush=True)

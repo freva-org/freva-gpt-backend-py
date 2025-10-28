@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from typing import Optional, List
+from pathlib import Path
 
 from fastapi import APIRouter, Request, Query, HTTPException
 from starlette.responses import StreamingResponse
@@ -27,6 +28,14 @@ def _sse_data(obj: dict) -> bytes:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n".encode("utf-8")
+
+def verify_access_to_file(file_path):
+    try:
+        with open(file_path) as f:
+            s = f.read()
+    except:
+        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
+                    "Note that if it is freva-config path, any usage of the freva library will fail.")
 
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
@@ -74,6 +83,13 @@ async def streamresponse(
     mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
     mongodb_uri = await get_mongodb_uri(vault_url)
     auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")
+    
+    freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config")
+    if not freva_cfg_path:
+        log.warning("The User requested a stream for a thread that is already being streamed. Thread ID: {}", thread_id)
+        freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
+    verify_access_to_file(freva_cfg_path)
+    
     headers = {
         "rag": {
             "mongodb-uri":  mongodb_uri,
@@ -81,8 +97,10 @@ async def streamresponse(
             },
         "code": {
             "Authorization": auth_header,
+            "freva-config-path": freva_cfg_path,
             },
             }
+    
     try:
         mcp_mgr.initialize(headers)
     except Exception as e:

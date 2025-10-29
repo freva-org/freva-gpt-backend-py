@@ -98,6 +98,7 @@ async def _run_tool_via_mcp(
         args = {"_raw": arguments_json}
 
     # bespoke mapping preserved (extend as needed)
+    #TODO: standardize this call
     if name == "get_context_from_resources":
         res = mcp.call_tool(
             "rag",

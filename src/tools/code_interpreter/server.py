@@ -1,18 +1,16 @@
-# --- imports ---
 import os
 import sys
 import logging
-from io import StringIO
-from typing import Optional
 from contextvars import ContextVar
 
-from IPython.core.interactiveshell import InteractiveShell
 from fastmcp import FastMCP
-from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.dependencies import get_context
+
+from jupyter_client import KernelManager
 
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
-from src.tools.server_auth import jwt_verifier, REQUIRED_SCOPES
+from src.tools.server_auth import jwt_verifier
 
 logger = logging.getLogger(__name__)
 configure_logging()
@@ -20,86 +18,109 @@ configure_logging()
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
-_shell = InteractiveShell.instance()
+_KERNEL_REGISTRY: dict[str, KernelManager] = {}
 
 # ── Config ───────────────────────────────────────────────────────────────────
-MAX_STD_CAP = int(os.getenv("MCP_MAX_STD_CAP", "200_000"))
-TRUNC_MSG = "\n\n[output truncated]\n"
-
-EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "20"))  # soft guard
+EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "30"))  # soft guard in case the kernel hangs or runs forever
 
 # ── Header helpers ────────────────────────────────────────────────────────────
 # Per-request header context
 FREVA_CONFIG_HDR = "freva-config-path"
 freva_cfg_ctx: ContextVar[str | None] = ContextVar("freva_cfg_ctx", default=None)
 
-def _set_freva_config_path():
+def _get_freva_config_path():
     freva_path = freva_cfg_ctx.get()
     if not freva_path:
         logger.warning(f"Missing required header '{FREVA_CONFIG_HDR}'"\
                        "Not setting freva_config_path, this WILL break any calls to the code interpreter that require it.")
-    os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_path
+        return
+    else:
+        return {"EVALUATION_SYSTEM_CONFIG_FILE": freva_path}
+    
+# ── Execution helpers ─────────────────────────────────────────────────────────
 
-def _truncate(s: str, cap: int = MAX_STD_CAP) -> str:
-    return s if len(s) <= cap else s[:cap] + TRUNC_MSG
+def _current_sid() -> str:
+    ctx = get_context()
+    return (getattr(ctx, "session_id"), "")
 
-def _run_code(code: str) -> str:
-    # optional: POSIX-only soft timeout
+def _get_or_start_kernel(sid: str, session_env: dict[str, str] | None = None) -> KernelManager:
+    km = _KERNEL_REGISTRY.get(sid)
+    if km is None:
+        # We preserve the env variables set in Dockerfile and add freva-config-path 
+        env = os.environ.copy()
+        if session_env:
+            env.update({k: str(v) for k, v in session_env.items()})
+        km = KernelManager()
+        km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
+        km.start_kernel(env=env)
+        _KERNEL_REGISTRY[sid] = km
+    return km
+
+def _run_cell(sid: str, code: str) -> dict:
+
+    km = _get_or_start_kernel(sid)
+    kc = km.client()
+    kc.start_channels()
     try:
-        import signal
-        def _raise_timeout(*_): raise TimeoutError(f"Execution exceeded {EXEC_TIMEOUT}s")
-        signal.signal(signal.SIGALRM, _raise_timeout)
-        signal.alarm(EXEC_TIMEOUT)
-    except Exception:
-        pass  # ignore on non-POSIX
+        msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
+        stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
+        # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
+        # For these, we keep only the last updated version.
+        display_data_dict = {} 
 
-    old_out, old_err = sys.stdout, sys.stderr
-    out_buf, err_buf = StringIO(), StringIO()
-    sys.stdout, sys.stderr = out_buf, err_buf
-    try:
-        result = _shell.run_cell(code, store_history=False)
+        # Since Jupyter kernel runs asynchronously, it streams outputs, errors, and state messages while it executes the code.
+        # We loop to collect them in real time until the status is "idle".
+        while True:
+            msg = kc.get_iopub_msg(timeout=EXEC_TIMEOUT)
+            # We check if the msg is from the cell we just executed, just in case there are idle cells still emitting.
+            # old/stale/background messages vs current cell
+            if msg["parent_header"].get("msg_id") != msg_id:
+                continue
+
+            msg_type = msg["header"]["msg_type"]
+            if msg_type == "status" and msg["content"]["execution_state"] == "idle":
+                break
+            elif msg_type == "stream":
+                (stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts).append(msg["content"]["text"])
+            elif msg_type in ("display_data", "update_display_data"): # Jupyter also returns rich outputs (image/png, text/html, etc.)
+                display_id = msg["content"].get("transient", {}).get("display_id", "")
+                if display_id: 
+                    display_data_dict.update({display_id: msg["content"].get("data", {})})
+                else: 
+                    display_data.append(msg["content"].get("data", {}))
+            elif msg_type == "execute_result":
+                result_repr = msg["content"].get("data", {}).get("text/plain")
+            elif msg_type == "error":  # Present only if an exception occurred. We record non-exception in stderr
+                tb = "\n".join(msg["content"].get("traceback", []))
+                error = tb or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+
+        # If we got any updated display in dict, we append them to the list.
+        # Here, we are sending a list of unique output
+        if display_data_dict:
+            display_data.append(list(display_data_dict.values()))
+
+        return {
+            "stdout": "".join(stdout_parts),
+            "stderr": "".join(stderr_parts),
+            "result_repr": result_repr if result_repr else "",
+            "display_data": display_data, 
+            "error": error if error else "",
+        }
     finally:
-        sys.stdout, sys.stderr = old_out, old_err
-        try:
-            import signal; signal.alarm(0)
-        except Exception:
-            pass
-
-    out = out_buf.getvalue()
-    err = err_buf.getvalue()
-
-    if result and getattr(result, "result", None) is not None:
-        if out and not out.endswith("\n"):
-            out += "\n"
-        out += repr(result.result)
-
-    if err:
-        return _truncate(f"Error:\n{err.strip()}\n{out.strip()}")
-    if out.strip():
-        return _truncate(out.strip())
-    return "Code executed successfully with no output."
+        kc.stop_channels()
 
 @mcp.tool()
-def code_interpreter(code: str, require_scope: Optional[str] = None) -> str:
+def code_interpreter(code: str) -> dict:
     """
-    Execute Python in a Jupyter-like IPython context.
-    Returns stdout/stderr + last expr repr (truncated).
+    Execute Python in a Jupyter-like IPython Kernel.
+    Returns a structured dict with all outputs (stdout, stderr, result_rep, display_data, error)
     """
-    _set_freva_config_path()
-    # TODO check if scope check is necessary
-    # Skip scope checks if auth is disabled (local dev)
-    if not _disable_auth:
-        access_token = get_access_token()
-        missing_global = [s for s in REQUIRED_SCOPES if s and s not in access_token.scopes]
-        if missing_global:
-            raise Exception(f"Missing required scopes: {', '.join(missing_global)}")
-        if require_scope and require_scope not in access_token.scopes:
-            raise Exception(f"Missing required scope: {require_scope}")
-
+    sid = _current_sid()
+    if not sid:
+        raise RuntimeError("Missing Mcp-Session-Id")
+    
     try:
-        return _run_code(code)
-    except TimeoutError as e:
-        return f"Error: {e}"
+        return _run_cell(sid, code)
     except Exception as e:
         logger.exception("code_interpreter: unhandled execution error")
         raise Exception(f"Execution failed: {type(e).__name__}: {e}")

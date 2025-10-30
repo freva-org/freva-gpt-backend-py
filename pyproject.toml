@@ -21,4 +21,5 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
     "debugpy>=1.8.0",
     "jq>=1.10.0",
+    "ansi2html>=1.9.2",
 ]

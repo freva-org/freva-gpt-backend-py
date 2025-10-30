@@ -32,6 +32,7 @@ from src.services.storage.router import append_thread, read_thread
 
 log = logging.getLogger(__name__)
 
+# TODO: talk to Bianca: sending html messages instead of stripping color codes
 conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences (color codes). We parse them as html messages
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,11 @@ conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a
 
 def new_conversation_id(length: int = 32) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
+
+
+def strip_ansi(text: str) -> str:
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool-call accumulation helpers (OpenAI-style deltas)
@@ -232,7 +238,7 @@ async def stream_with_tools(
                 # Error
                 err = result.get("stderr", "") + "\n\n" + result.get("error", "")
                 if err.strip('\n'):
-                    err = conv.convert(err)
+                    err = strip_ansi(err)  # conv.convert(err)
                     err_v = SVCodeError(message=err, call_id=id)
                     code_block.append(err_v)
                     yield err_v

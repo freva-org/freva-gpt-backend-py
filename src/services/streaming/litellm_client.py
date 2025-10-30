@@ -13,14 +13,14 @@ from src.core.settings import get_settings
 # ---------------------------------------------------------------------------
 # Single base URL for the LiteLLM proxy (OpenAI-compatible).
 # Inside docker-compose: http://litellm:4000
-# On host (if you expose the port): http://localhost:4000
+# For local dev: http://localhost:4000
 
 def _completions_url() -> str:
     s = get_settings()
     return f"{s.LITE_LLM_ADDRESS.rstrip('/')}/v1/chat/completions"
 
 # Optional bearer to satisfy proxies that require it.
-AUTH_TOKEN = os.getenv("OPENAI_API_KEY") or os.getenv("LITELLM_API_KEY") or ""
+AUTH_TOKEN = os.getenv("OPENAI_API_KEY", "")
 
 def _passthrough_params(params: Dict[str, Any] | None) -> Dict[str, Any]:
     # Tiny wrapper to allow future param sanitization
@@ -28,7 +28,7 @@ def _passthrough_params(params: Dict[str, Any] | None) -> Dict[str, Any]:
 
 def _headers() -> Dict[str, str]:
     h = {"Content-Type": "application/json"}
-    # Many LiteLLM setups don’t require an Authorization header for Ollama models,
+    # Authorization header is not required for Ollama models,
     # but sending it (when available) doesn’t hurt and satisfies OpenAI-routed calls.
     if AUTH_TOKEN:
         h["Authorization"] = f"Bearer {AUTH_TOKEN}"

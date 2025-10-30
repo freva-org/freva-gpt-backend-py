@@ -57,8 +57,8 @@ def _get_or_start_kernel(sid: str, session_env: dict[str, str] | None = None) ->
     return km
 
 def _run_cell(sid: str, code: str) -> dict:
-
-    km = _get_or_start_kernel(sid)
+    freva_env_var = _get_freva_config_path()
+    km = _get_or_start_kernel(sid, session_env=freva_env_var)
     kc = km.client()
     kc.start_channels()
     try:

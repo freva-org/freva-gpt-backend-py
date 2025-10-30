@@ -8,11 +8,7 @@ import re
 import string
 from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
-
-try:
-    from fastapi import Request  # only for typing; safe to be None in headless runs
-except Exception:  # pragma: no cover
-    Request = Any  # type: ignore
+from ansi2html import Ansi2HTMLConverter
 
 from src.services.mcp.mcp_manager import McpManager
 from src.services.streaming.litellm_client import acomplete, first_text
@@ -31,10 +27,12 @@ from src.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
 )
 from src.core.available_chatbots import model_supports_images
-from src.core.prompting import get_entire_prompt, get_entire_prompt_json
+from src.core.prompting import get_entire_prompt
 from src.services.storage.router import append_thread, read_thread
 
 log = logging.getLogger(__name__)
+
+conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences (color codes). We parse them as html messages
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Utilities
@@ -143,7 +141,7 @@ async def stream_with_tools(
     messages: List[Dict[str, Any]],
     mcp: McpManager,
     acomplete_func=acomplete,
-    session_key_override: Optional[str] = None,   # ← NEW: allows per-thread sessions
+    session_key_override: Optional[str] = None,   # allows per-thread sessions
 ) -> AsyncIterator[str]:
     # 1) First request
     tool_agg: Dict[str, Any] = {}
@@ -200,20 +198,45 @@ async def stream_with_tools(
     for tc in tool_calls:
         name = (tc.get("function") or {}).get("name", "")
         id = tc.get("id", id)
-        args_json = (tc.get("function") or {}).get("arguments", "")
+        args_txt = (tc.get("function") or {}).get("arguments", "")
         try:
             result_text = await _run_tool_via_mcp(
-                mcp=mcp, name=name, arguments_json=args_json, session_key=session_key
+                mcp=mcp, name=name, arguments_json=args_txt, session_key=session_key
             )
             if name =="code_interpreter":
-                code = json.loads(args_json or "{}").get("code", "")
-                result = json.loads(result_text)
-                out = result.get("content")[0].get("text") 
+                # Accumulated code text
+                code = json.loads(args_txt or "{}").get("code", "")
                 code_v = SVCode(code=code, call_id=id)
-                codeout_v = SVCodeOutput(output=out, call_id=id)
-                yield codeout_v
-                await append_thread(thread_id, user_id, [code_v, codeout_v], database)
-                #TODO: CodeError, Image
+                code_block = [code_v]
+                # Code output: display data, image or error?        
+                result = json.loads(result_text).get("structuredContent", "")
+                # Printed/displayed output
+                out = result["stdout"] + "\n\n" + result["result_repr"]
+                if out.strip('\n'):
+                    codeout_v = SVCodeOutput(output=out, call_id=id)
+                    code_block.append(codeout_v)
+                    yield codeout_v
+                # Image/html etc., rich output
+                rich_out = result["display_data"]
+                if rich_out:
+                    for r in rich_out:
+                        if "image/png" in r.keys():
+                            image_v = SVImage(b64=r["image/png"])
+                            code_block.append(image_v)
+                            yield image_v
+                        if "application/json" in r.keys():
+                            #TODO: check this output, is having two codeoutput variant with the same id okay?
+                            json_v = SVCodeOutput(output=r["application/json"], call_id=id)
+                            code_block.append(json_v)
+                            yield json_v
+                # Error
+                err = result.get("stderr", "") + "\n\n" + result.get("error", "")
+                if err.strip('\n'):
+                    err = conv.convert(err)
+                    err_v = SVCodeError(message=err, call_id=id)
+                    code_block.append(err_v)
+                    yield err_v
+                await append_thread(thread_id, user_id, code_block, database)
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
@@ -235,6 +258,7 @@ async def stream_with_tools(
 
     async for p in _handle_stream(resp2):
         yield p
+    # TODO retry is skipped here
 
 # ──────────────────────────────────────────────────────────────────────────────
 # High-level orchestrator (storage-agnostic)
@@ -263,31 +287,34 @@ async def run_stream(
     else:
         create_new = False
 
-    # Build messages: new thread -> system prompt; else -> convert prior conversation
+    # Build messages
     try:
-        base = get_entire_prompt(user_id, thread_id, model)
+        system_prompt = get_entire_prompt(user_id, thread_id, model)
         if create_new:
+            # New thread
             hint = SVServerHint(data={"thread_id": thread_id})
             yield hint
             await append_thread(thread_id, user_id, [hint], database)
-            messages = list(base)
+            # Start with the system prompt
+            messages = list(system_prompt)
         else:
             prior_sv: List[StreamVariant] = await read_thread(thread_id, database)
-            messages = list(base)
+            # We strip the threads from system prompt before saving, so we need to start with that then append prior conversation
+            messages = list(system_prompt)
             messages.extend(
                 help_convert_sv_ccrm(prior_sv, include_images=model_supports_images(model), include_meta=False)
                 )
     except Exception as e:
-        msg = f"prompt/history assembly failed: {e}"
+        msg = f"Prompt/history assembly failed: {e}"
         log.exception(msg)
         err = SVServerError(message=msg)
-        end = SVStreamEnd(message="Error")
+        end = SVStreamEnd(message="Stream ended with an error.")
         await append_thread(thread_id, user_id,[err, end], database)
         yield err
         yield end
         return
 
-    # Append user content and persist hint+user
+    # Append user content
     messages.append({"role": "user", "content": user_input or ""})
     user_v = SVUser(text=user_input or "")
     await append_thread(thread_id, user_id, [user_v], database)
@@ -296,8 +323,6 @@ async def run_stream(
     p_type_check = None
     streamed_v: List[StreamVariant] = []
     accumulated: List[str] = []
-    chunk_count = 0
-    # id = ""
     try:
         mgr = mcp or McpManager()
         async for piece in stream_with_tools(
@@ -311,47 +336,35 @@ async def run_stream(
             session_key_override=thread_id,   # per-thread MCP session
         ):  
             yield piece
+            # Accumulate all the streamed assistant test and append
             if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage, SVCode)) and accumulated:
                 final = "".join(accumulated)
                 accumulated = []
                 if p_type_check == SVAssistant:
                     streamed_v.append(SVAssistant(text=final))
-                # elif p_type_check == SVCode:
-                #     streamed_v.append(SVCode(code=final, call_id=id))
-                # streamed_v.append(piece)
             elif isinstance(piece, SVAssistant):
-                # if p_type_check != SVAssistant and accumulated:
-                #     final = "".join(accumulated)
-                #     streamed_v.append(SVCode(code=final, call_id=id))
-                #     accumulated = []
                 accumulated.append(piece.text)
                 p_type_check = SVAssistant
-            # elif isinstance(piece, SVCode):
-            #     if p_type_check != SVCode and accumulated:
-            #         final = "".join(accumulated)
-            #         streamed_v.append(SVAssistant(text=final))
-            #         accumulated = []
-            #         id = piece.call_id or id
-                # accumulated.append(piece.code)
-                # p_type_check = SVCode
-            chunk_count += 1
 
-        final_text = "".join(accumulated)
-        assistant_v = SVAssistant(text=final_text)
+        if accumulated:
+            final_text = "".join(accumulated)
+            assistant_v = SVAssistant(text=final_text)
+            streamed_v.append(assistant_v)
+        
         end_v = SVStreamEnd(message="Done")
-        streamed_v.extend([assistant_v, end_v])
+        streamed_v.append(end_v)
         await append_thread(thread_id, user_id, streamed_v, database)
         yield end_v
 
     except asyncio.CancelledError:
         final_text = "".join(accumulated)
         assistant_v = SVAssistant(text=final)
-        end_v = SVStreamEnd(message="Cancelled")
+        end_v = SVStreamEnd(message="Cancelled.")
         await append_thread(thread_id, user_id, [assistant_v, end_v], database)
     except Exception as e:
         log.exception("stream error: %s", e)
         err_v = SVServerError(message=str(e))
-        end_v = SVStreamEnd(message="Error")
+        end_v = SVStreamEnd(message="Stream ended with an error.")
         await append_thread(thread_id, user_id, [err_v, end_v], database)
         yield err_v
         yield end_v

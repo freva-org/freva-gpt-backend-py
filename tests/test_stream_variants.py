@@ -3,8 +3,8 @@ import pytest
 
 from src.services.streaming.stream_variants import (
     SVUser, SVAssistant, SVCode, SVCodeOutput, SVStreamEnd, SVServerHint, SVServerError,
-    cleanup_conversation, normalize_for_prompt, help_convert_sv_ccrm,
-    to_wire_dict, from_wire_dict,
+    cleanup_conversation, normalize_conv_for_prompt, help_convert_sv_ccrm,
+    from_sv_to_json, from_json_to_sv,
 )
 
 def test_cleanup_inserts_codeoutput_and_end():
@@ -26,7 +26,7 @@ def test_normalize_drops_meta_when_false():
         SVAssistant(text="ok"),
         SVStreamEnd(message="Done"),
     ]
-    out = normalize_for_prompt(conv, include_meta=False)
+    out = normalize_conv_for_prompt(conv, include_meta=False)
     # Meta dropped, but StreamEnd will be re-added by cleanup only if needed.
     kinds = [v.variant for v in out]
     assert "ServerHint" not in kinds
@@ -45,7 +45,7 @@ def test_ccrm_conversion_basic():
 
 def test_wire_roundtrip():
     original = SVCode(code="x=1", call_id="cid")
-    wire = to_wire_dict(original)
+    wire = from_sv_to_json(original)
     assert wire == {"variant": "Code", "content": [{"code": "x=1"}, "cid"]}
-    back = from_wire_dict(wire)
+    back = from_json_to_sv(wire)
     assert back == original  # pydantic models are comparable

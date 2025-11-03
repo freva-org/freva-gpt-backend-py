@@ -23,6 +23,7 @@ Public API
 - extract_variants_from_string(raw: str) -> Conversation
 - recursively_create_dir_at_rw_dir(user_id, thread_id) -> None
 """
+# TODO drop legacy format support in future versions
 
 import json
 import logging
@@ -41,9 +42,9 @@ from src.services.streaming.stream_variants import (
     SVServerError, SVOpenAIError, SVCodeError, SVStreamEnd, SVServerHint,
     # Helpers
     cleanup_conversation,
-    from_wire_dict,
-    to_wire_dict,
-    # Variant names (for legacy parsing)
+    from_json_to_sv,
+    from_sv_to_json,
+    # Variant names
     PROMPT, USER, ASSISTANT, CODE, CODE_OUTPUT, IMAGE,
     SERVER_ERROR, OPENAI_ERROR, CODE_ERROR, STREAM_END, SERVER_HINT,
 )
@@ -65,7 +66,7 @@ _conv_adapter = TypeAdapter(List[StreamVariant])
 
 def _variant_to_json_line(variant: StreamVariant) -> str:
     """Serialize a StreamVariant to a JSON line."""
-    # model_dump gives us a dict including the discriminator `variant`
+    # model_dump gives a dict including the discriminator `variant`
     obj = variant.model_dump()
     return json.dumps(obj, ensure_ascii=False)
 
@@ -135,39 +136,6 @@ def _legacy_line_to_variant(line: str) -> Optional[StreamVariant]:
     logger.warning("Unrecognized legacy line skipped: %r", line[:200])
     return None
 
-
-def _variant_to_legacy_line(variant: StreamVariant) -> Optional[str]:
-    """
-    Encode a StreamVariant in legacy colon-separated form (best effort, used only as fallback).
-    """
-    if isinstance(variant, SVPrompt):
-        return f"{PROMPT}:{variant.payload}"
-    if isinstance(variant, SVUser):
-        return f"{USER}:{variant.text}"
-    if isinstance(variant, SVAssistant):
-        return f"{ASSISTANT}:{variant.text}"
-    if isinstance(variant, SVImage):
-        return f"{IMAGE}:{variant.b64}"
-    if isinstance(variant, SVServerError):
-        return f"{SERVER_ERROR}:{variant.message}"
-    if isinstance(variant, SVOpenAIError):
-        return f"{OPENAI_ERROR}:{variant.message}"
-    if isinstance(variant, SVCodeError):
-        # call_id may be None
-        return f"{CODE_ERROR}:{variant.message}"
-    if isinstance(variant, SVStreamEnd):
-        return f"{STREAM_END}:{variant.message}"
-    if isinstance(variant, SVServerHint):
-        # stringify dicts
-        payload = variant.data if isinstance(variant.data, str) else json.dumps(variant.data, ensure_ascii=False)
-        return f"{SERVER_HINT}:{payload}"
-    if isinstance(variant, SVCode):
-        return f"{CODE}:{variant.code}:{variant.call_id}"
-    if isinstance(variant, SVCodeOutput):
-        return f"{CODE_OUTPUT}:{variant.output}:{variant.call_id}"
-    return None
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
@@ -178,17 +146,17 @@ def append_thread(thread_id: str, content: Conversation) -> None:
     if not content:
         return
     
-    # convert to wire dicts
+    # convert to dicts
     to_write = []
     for v in content:
         try:
-            wire = to_wire_dict(v)
-            to_write.append(json.dumps(wire, ensure_ascii=False))
+            v_dict = from_sv_to_json(v)
+            to_write.append(json.dumps(v_dict, ensure_ascii=False))
         except Exception:
             # last-ditch legacy colon encoding (rare)
-            wire = to_wire_dict(v)
-            var = wire.get("variant")
-            c = wire.get("content")
+            v_dict = from_sv_to_json(v)
+            var = v_dict.get("variant")
+            c = v_dict.get("content")
             if isinstance(c, list):
                 line = f"{var}:{':'.join(map(str, c))}"
             else:
@@ -200,38 +168,21 @@ def append_thread(thread_id: str, content: Conversation) -> None:
         for line in to_write:
             f.write(line + "\n")
 
-def read_thread(thread_id: str) -> Conversation:
+def read_thread(thread_id: str) -> List[Dict]:
     path = THREADS_DIR / f"{thread_id}.txt"
     if not path.exists():
         raise FileNotFoundError("Thread not found")
 
-    conv: Conversation = []
+    conv: List = []
     for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.strip()
         if not line or line.startswith("//"):
             continue
-        # prefer JSON (wire)
         try:
             obj = json.loads(line)
-            if isinstance(obj, dict) and "variant" in obj:
-                try:
-                    conv.append(from_wire_dict(obj))
-                    continue
-                except Exception:
-                    pass
+            conv.append(obj)
         except Exception:
             pass
-        # legacy colon encoding fallback (minimal)
-        parts = line.split(":", 2)
-        if not parts:
-            continue
-        var = parts[0]
-        if var in (PROMPT, USER, ASSISTANT, IMAGE, SERVER_ERROR, OPENAI_ERROR, CODE_ERROR, STREAM_END, SERVER_HINT):
-            conv.append(from_wire_dict({"variant": var, "content": parts[1] if len(parts) > 1 else ""}))
-        elif var in (CODE, CODE_OUTPUT):
-            if len(parts) >= 3:
-                conv.append(from_wire_dict({"variant": var, "content": [parts[1], parts[2]]}))
-
     return conv
 
 

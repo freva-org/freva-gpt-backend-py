@@ -12,7 +12,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNA
 
 from src.core.auth import AuthRequired, get_mongodb_uri
 from src.core.available_chatbots import default_chatbot
-from src.services.streaming.stream_variants import StreamVariant, to_wire_dict
+from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json, from_json_to_sv, CODE, CODE_ERROR
 from src.services.streaming.stream_orchestrator import run_stream
 from src.services.mcp.mcp_manager import McpManager
 
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 
 def _sse_data(obj: dict) -> bytes:
-    if obj.get("variant") == "Code":
+    if obj.get("variant") == CODE:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n".encode("utf-8")
@@ -84,10 +84,10 @@ async def streamresponse(
     mongodb_uri = await get_mongodb_uri(vault_url)
     auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")
     
-    freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config")
+    freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
     if not freva_cfg_path:
-        log.warning("The User requested a stream for a thread that is already being streamed. Thread ID: {}", thread_id)
-        freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
+        log.warning("The User requested a stream without a freva_config path being set. Thread ID: {}", thread_id)
+    freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
     verify_access_to_file(freva_cfg_path)
     
     headers = {
@@ -116,7 +116,7 @@ async def streamresponse(
             database=database,
             mcp=mcp_mgr,          # reuses the app's global MCP manager
         ):
-            yield _sse_data(to_wire_dict(variant))
+            yield _sse_data(from_sv_to_json(variant))
 
     return StreamingResponse(
         event_stream(),

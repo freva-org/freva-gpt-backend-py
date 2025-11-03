@@ -22,7 +22,7 @@ from typing import List, Optional
 
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_orchestrator import run_stream, new_conversation_id
-from src.services.streaming.stream_variants import StreamVariant, to_wire_dict
+from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json
 from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
 from src.services.mcp.mcp_manager import build_mcp_manager
 
@@ -100,7 +100,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
                     char_count += len(txt)
 
                 if PRINT_STREAM and getattr(variant, "variant", None) != "Assistant":
-                    print(json.dumps(to_wire_dict(variant), ensure_ascii=False))
+                    print(json.dumps(from_sv_to_json(variant), ensure_ascii=False))
 
         except asyncio.CancelledError:
             status = "Cancelled"

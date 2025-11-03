@@ -32,7 +32,7 @@ from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
 from src.services.mcp.mcp_manager import build_mcp_manager
 from src.core.prompting import get_entire_prompt, get_entire_prompt_json
 from src.services.streaming.stream_variants import (
-    to_wire_dict,
+    from_sv_to_json,
     SVAssistant,
     SVPrompt,
     SVCode,
@@ -133,7 +133,7 @@ async def _run_turn(
                 char_count += len(txt)
             else:
                 if PRINT_DEBUG:
-                    print("\n[debug]", json.dumps(to_wire_dict(variant), ensure_ascii=False))
+                    print("\n[debug]", json.dumps(from_sv_to_json(variant), ensure_ascii=False))
 
     except asyncio.CancelledError:
         print("\n[Cancelled]")

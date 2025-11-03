@@ -11,7 +11,7 @@ from .thread_storage import cleanup_conversation
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
     StreamVariant, SVUser,
-    to_wire_dict, from_wire_dict, 
+    from_sv_to_json, from_json_to_sv, 
 )
 from src.core.available_chatbots import default_chatbot
 from src.core.auth import get_mongodb_uri
@@ -39,7 +39,7 @@ def _serialize_sv_list(items: List[StreamVariant]) -> List[dict]:
     out: List[dict] = []
     for v in items:
         try:
-            out.append(to_wire_dict(v))
+            out.append(from_sv_to_json(v))
         except Exception as e:
             # last resort: Pydantic dump
             log.warning("serialize fallback for %r: %s", getattr(v, "variant", type(v)), e)
@@ -50,7 +50,7 @@ def _deserialize_sv_list(items: List[dict]) -> List[StreamVariant]:
     out: List[StreamVariant] = []
     for obj in items or []:
         try:
-            out.append(from_wire_dict(obj))
+            out.append(from_json_to_sv(obj))
         except Exception as e:
             log.warning("deserialize failure for %r: %s", obj, e)
             # skip malformed rows rather than crashing

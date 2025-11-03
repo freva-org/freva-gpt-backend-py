@@ -66,7 +66,18 @@ class McpManager:
         # Cache of MCP tool descriptors and OpenAI tool schemas
         self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {"rag": [], "code": []}
         self._openai_tools_cache: Optional[List[Dict[str, Any]]] = None
+        
+    # ---------- lifecycle ----------
 
+    def close(self):
+        with self._lock:
+            if self._rag_client:
+                self._rag_client.close()
+                self._rag_client = None
+            if self._code_client:
+                self._code_client.close()
+                self._code_client = None
+            self._sid.clear()
 
     # ---------- internal clients ----------
 

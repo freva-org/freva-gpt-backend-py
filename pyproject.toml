@@ -1,5 +1,5 @@
 [project]
-name = "freva-gpt-backend"
+name = "freva-gpt-backend-py"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"

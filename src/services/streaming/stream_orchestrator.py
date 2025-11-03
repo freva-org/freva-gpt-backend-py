@@ -25,6 +25,7 @@ from src.services.streaming.stream_variants import (
     SVUser,
     StreamVariant,
     help_convert_sv_ccrm,
+    from_json_to_sv
 )
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt
@@ -214,11 +215,15 @@ async def stream_with_tools(
                 code = json.loads(args_txt or "{}").get("code", "")
                 code_v = SVCode(code=code, call_id=id)
                 code_block = [code_v]
-                # Code output: display data, image or error?        
+                # Code output: structured dict of displayed data, image or error   
                 result = json.loads(result_text).get("structuredContent", "")
-                # Printed/displayed output
-                out = result["stdout"] + "\n\n" + result["result_repr"]
-                if out.strip('\n'):
+                # Printed/displayed output + error message if exists
+                out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
+                    (("\n" + result["result_repr"]) if result["result_repr"] else "") + \
+                    (("\n" + result["stderr"]) if result["stderr"] else "") + \
+                    (("\n" + result["error"]) if result["error"] else "")
+                if out:
+                    out = strip_ansi(out)
                     codeout_v = SVCodeOutput(output=out, call_id=id)
                     code_block.append(codeout_v)
                     yield codeout_v
@@ -235,13 +240,6 @@ async def stream_with_tools(
                             json_v = SVCodeOutput(output=r["application/json"], call_id=id)
                             code_block.append(json_v)
                             yield json_v
-                # Error
-                err = result.get("stderr", "") + "\n\n" + result.get("error", "")
-                if err.strip('\n'):
-                    err = strip_ansi(err)  # conv.convert(err)
-                    err_v = SVCodeError(message=err, call_id=id)
-                    code_block.append(err_v)
-                    yield err_v
                 await append_thread(thread_id, user_id, code_block, database)
         except Exception as e:
             log.exception("Tool %s failed", name)
@@ -304,7 +302,8 @@ async def run_stream(
             # Start with the system prompt
             messages = list(system_prompt)
         else:
-            prior_sv: List[StreamVariant] = await read_thread(thread_id, database)
+            prior_json: List[dict] = await read_thread(thread_id, database)
+            prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]
             # We strip the threads from system prompt before saving, so we need to start with that then append prior conversation
             messages = list(system_prompt)
             messages.extend(

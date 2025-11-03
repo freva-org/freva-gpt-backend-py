@@ -71,15 +71,8 @@ async def streamresponse(
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
 
-    try:
-        database = await get_database(vault_url)
-    except Exception as e:
-        log.error("stream: get_database_failed vault_url=%s err=%s", vault_url, e)
-        raise HTTPException(
-            status_code=HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to connect to the database: {e}",
-        )
-
+    database = await get_database(vault_url)
+    
     mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
     mongodb_uri = await get_mongodb_uri(vault_url)
     auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")

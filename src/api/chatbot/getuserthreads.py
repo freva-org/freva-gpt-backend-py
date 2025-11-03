@@ -39,10 +39,7 @@ async def get_user_threads(request: Request):
     if not vault_url:
         raise HTTPException(status_code=503, detail="No vault URL provided.")
 
-    try:
-        database = await get_database(vault_url)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Failed to connect to the database.")
+    database = await get_database(vault_url)
 
     threads = await read_threads(user_id, database)
     # FastAPI will jsonify dataclasses; if you need custom shape, map here.

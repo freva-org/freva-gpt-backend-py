@@ -45,7 +45,7 @@ async def get_thread(request: Request, thread_id: str | None = Query(None)):
     if not vault_url:
         raise HTTPException(status_code=503, detail="No vault URL provided.")
 
-    # Storage backend is MongoDB by default (matches Rust); Disk path doesn’t need DB
+    # Storage backend is MongoDB by default (matches Rust)
     database = await get_database(vault_url)
 
     try:

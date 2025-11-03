@@ -6,9 +6,9 @@ with Pythonic refactor to typed classes (Pydantic v2 discriminated union).
 What this module provides
 -------------------------
 • Class-based StreamVariant models (discriminator: `variant`)
-• Conversation utilities: cleanup_conversation(), normalize_for_prompt()
+• Conversation utilities: cleanup_conversation(), normalize_conv_for_prompt()
 • Conversion to OpenAI Chat messages: help_convert_sv_ccrm(...)
-• Wire <-> class conversion helpers: from_wire_dict(), to_wire_dict(), parse_examples_jsonl()
+• Wire <-> class conversion helpers: from_json_to_sv(), from_sv_to_json(), parse_examples_jsonl()
 
 Differences vs Rust (documented for future parity work)
 -------------------------------------------------------
@@ -17,13 +17,12 @@ Differences vs Rust (documented for future parity work)
    - Class uses: SVPrompt.payload (renamed from 'json' to avoid BaseModel.json() clash)
 2) Images:
    - Wire expected: {"variant":"Image","content":{"b64":"...","mime":"image/png"}}
-   - Class uses: SVImage(b64, mime). We also tolerate legacy {"url": "..."} in from_wire_dict (drops to blank b64).
+   - Class uses: SVImage(b64, mime). We also tolerate legacy {"url": "..."} in from_json_to_sv (drops to blank b64).
 3) Tool-call mapping for Code/CodeOutput:
    - Code → assistant tool_call ("code_interpreter") with args {"code": "<code>"}.
    - CodeOutput → tool message with tool_call_id and name "code_interpreter".
 4) Meta inclusion toggle:
    - help_convert_sv_ccrm(..., include_meta=False) ≈ Rust prompting behavior (drops meta).
-   - Default is include_meta=True per our phase plan.
 
 Notes
 -----
@@ -132,7 +131,6 @@ class SVOpenAIError(_SVBase):
 class SVCodeError(_SVBase):
     variant: Literal["CodeError"] = Field(default=CODE_ERROR)
     message: str
-    call_id: Optional[str] = None
 
 
 class SVStreamEnd(_SVBase):
@@ -204,7 +202,7 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
     return out
 
 
-def normalize_for_prompt(conv: Conversation, include_meta: bool = True) -> Conversation:
+def normalize_conv_for_prompt(conv: Conversation, include_meta: bool = True) -> Conversation:
     """
     Prepare a conversation for conversion into chat messages.
     - Applies cleanup_conversation
@@ -307,15 +305,14 @@ def _extend_with_prompt_json(out: List[OpenAIMessage], json_str: str) -> None:
 def help_convert_sv_ccrm(
     conversation: Conversation,
     include_images: bool = False,
-    include_meta: bool = True,
+    include_meta: bool = False,
 ) -> List[OpenAIMessage]:
     """
     Convert a StreamVariant conversation to OpenAI ChatCompletion messages.
     • include_images: whether to include Image variants (Rust passes false for prompting)
     • include_meta: whether to include ServerHint/Errors/StreamEnd as system/tool messages
-      (Rust generally excludes; we default to True per our plan)
     """
-    conv = normalize_for_prompt(conversation, include_meta=include_meta)
+    conv = normalize_conv_for_prompt(conversation, include_meta=include_meta)
     out: List[OpenAIMessage] = []
 
     for v in conv:
@@ -369,13 +366,13 @@ def help_convert_sv_ccrm(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Wire <-> class conversion + examples loader
+# JSON <-> Stream Variant class conversion + examples loader
 # ──────────────────────────────────────────────────────────────────────────────
 
-def from_wire_dict(obj: dict) -> StreamVariant:
+def from_json_to_sv(obj: dict) -> StreamVariant:
     """
-    Convert a legacy/wire-shaped dict into our class-based StreamVariant.
-    Wire shape examples:
+    Convert a json/dict into class-based StreamVariant.
+    Json examples:
       {"variant":"Assistant","content":"..."}
       {"variant":"User","content":"..."}
       {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
@@ -402,6 +399,8 @@ def from_wire_dict(obj: dict) -> StreamVariant:
         return SVServerHint(data=data or {})
     if v == SERVER_ERROR:
         return SVServerError(message="" if c is None else str(c))
+    if v == CODE_ERROR:
+        return SVCodeError(message="" if c is None else str(c))
     if v == OPENAI_ERROR:
         return SVOpenAIError(message="" if c is None else str(c))
     if v == STREAM_END:
@@ -410,7 +409,6 @@ def from_wire_dict(obj: dict) -> StreamVariant:
         if isinstance(c, dict):
             b64 = c.get("b64") or ""
             mime = c.get("mime") or "image/png"
-            # tolerate {"url": "..."} legacy by mapping to empty b64
             return SVImage(b64=b64, mime=mime)
         elif isinstance(c, str):
             # legacy string URL; map to empty b64
@@ -440,9 +438,9 @@ def from_wire_dict(obj: dict) -> StreamVariant:
     raise ValueError(f"unsupported wire variant: {obj!r}")
 
 
-def to_wire_dict(v: StreamVariant) -> dict:
+def from_sv_to_json(v: StreamVariant) -> dict:
     """
-    Convert our Pydantic class back to the wire dict (serde-compatible) used by Rust.
+    Convert Pydantic class back to json/dict (parity with Rust).
     """
     d = v.model_dump()
     kind = d["variant"]
@@ -455,11 +453,13 @@ def to_wire_dict(v: StreamVariant) -> dict:
     # if kind == SERVER_HINT:
     #     return {"variant": SERVER_HINT, "content": d["data"]}
     if kind == SERVER_HINT: # TODO: Fix this with Bianca
-        # Frontend expects the content as a JSON STRING, not an object
+        # Frontend expects the content as a JSON STRING
         # e.g. {"variant":"ServerHint","content":"{\"thread_id\":\"abc\"}"}
         return {"variant": SERVER_HINT, "content": json.dumps(d["data"], ensure_ascii=False)}
     if kind == SERVER_ERROR:
         return {"variant": SERVER_ERROR, "content": d["message"]}
+    if kind == CODE_ERROR:
+        return {"variant": CODE_ERROR, "content": [d["message"]]}
     if kind == OPENAI_ERROR:
         return {"variant": OPENAI_ERROR, "content": d["message"]}
     if kind == STREAM_END:
@@ -475,7 +475,7 @@ def to_wire_dict(v: StreamVariant) -> dict:
 
 def parse_examples_jsonl(path: str | Path) -> list[StreamVariant]:
     """
-    Read examples.jsonl (wire/legacy shape), tolerate noise, return class-based variants.
+    Read examples.jsonl (JSON lines), tolerate noise, return class-based variants.
     """
     out: list[StreamVariant] = []
     p = Path(path)
@@ -492,7 +492,7 @@ def parse_examples_jsonl(path: str | Path) -> list[StreamVariant]:
             continue
         if isinstance(obj, dict) and "variant" in obj:
             try:
-                out.append(from_wire_dict(obj))
+                out.append(from_json_to_sv(obj))
             except Exception:
                 # skip unparseable lines
                 continue
@@ -516,7 +516,7 @@ def is_prompt(variant: Any) -> bool:
     if isinstance(variant, SVPrompt):
         return True
 
-    # Dict-shaped (wire/legacy)
+    # Dict-shaped
     if isinstance(variant, dict):
         name = variant.get("variant") or variant.get("type") or variant.get("kind")
         if isinstance(name, str) and name.strip().lower() == "prompt":
@@ -546,7 +546,7 @@ __all__ = [
     "ROLE_SYSTEM", "ROLE_USER", "ROLE_ASSISTANT", "ROLE_TOOL",
     "ASSISTANT_NAME", "TOOL_NAME_CODE",
     # Functions
-    "cleanup_conversation", "normalize_for_prompt",
+    "cleanup_conversation", "normalize_conv_for_prompt",
     "help_convert_sv_ccrm", "is_prompt",
-    "from_wire_dict", "to_wire_dict", "parse_examples_jsonl",
+    "from_json_to_sv", "from_sv_to_json", "parse_examples_jsonl",
 ]

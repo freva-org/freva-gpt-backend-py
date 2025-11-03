@@ -47,6 +47,8 @@ services:
       MCP_PORT: 8051
     ports: 
       - "8051:8051"
+    volumes:
+      - /work:/work:ro
     networks: 
       - freva-gpt
   litellm:

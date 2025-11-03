@@ -465,7 +465,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": {"b64": d["b64"], "mime": d["mime"]}}
+        return {"variant": IMAGE, "content": d["b64"]}
     if kind == CODE: # TODO: Fix this with Bianca
         return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:

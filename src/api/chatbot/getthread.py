@@ -6,9 +6,9 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from starlette.responses import JSONResponse
 
 from src.core.auth import AuthRequired
-from src.services.storage.router import read_thread
-from src.services.storage.mongodb_storage import get_database
-from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd
+from src.services.storage import router as storage_router
+from src.services.storage import mongodb_storage
+from src.services.streaming.stream_variants import StreamVariant, is_prompt
 
 router = APIRouter()
 
@@ -46,10 +46,10 @@ async def get_thread(request: Request, thread_id: str | None = Query(None)):
         raise HTTPException(status_code=503, detail="No vault URL provided.")
 
     # Storage backend is MongoDB by default (matches Rust)
-    database = await get_database(vault_url)
+    database = await mongodb_storage.get_database(vault_url)
 
     try:
-        content = await read_thread(thread_id, database=database)
+        content = await storage_router.read_thread(thread_id, database=database)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Thread not found")
     except Exception:

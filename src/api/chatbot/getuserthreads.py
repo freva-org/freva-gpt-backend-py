@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Query
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.core.auth import AuthRequired, ALLOW_FALLBACK_OLD_AUTH  # match Rust flags
-from src.services.storage.mongodb_storage import get_database, read_threads
+from src.services.storage import mongodb_storage 
 
 router = APIRouter()
 
@@ -39,9 +39,9 @@ async def get_user_threads(request: Request):
     if not vault_url:
         raise HTTPException(status_code=503, detail="No vault URL provided.")
 
-    database = await get_database(vault_url)
+    database = await mongodb_storage.get_database(vault_url)
 
-    threads = await read_threads(user_id, database)
+    threads = await mongodb_storage.read_threads(user_id, database)
     # FastAPI will jsonify dataclasses; if you need custom shape, map here.
     return [
         {

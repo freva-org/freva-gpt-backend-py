@@ -17,7 +17,7 @@ from src.services.streaming.stream_orchestrator import run_stream
 from src.services.mcp.mcp_manager import McpManager
 
 from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
-from src.services.storage.mongodb_storage import get_database
+from src.services.storage import mongodb_storage
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ async def streamresponse(
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
 
-    database = await get_database(vault_url)
+    database = await mongodb_storage.get_database(vault_url)
     
     mcp_mgr: McpManager = getattr(request.app.state, "mcp", None)
     mongodb_uri = await get_mongodb_uri(vault_url)
@@ -98,7 +98,7 @@ async def streamresponse(
         mcp_mgr.initialize(headers)
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
+        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
 
     async def event_stream():
         async for variant in run_stream(

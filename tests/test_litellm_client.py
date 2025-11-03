@@ -5,7 +5,7 @@ from unittest.mock import patch, Mock
 import pytest
 import requests
 
-from src.services.models.litellm_client import acomplete, first_text
+from src.services.streaming.litellm_client import acomplete, first_text
 
 class FakeResp:
     def __init__(self, status_code=200, json_body=None, text=""):
@@ -37,7 +37,7 @@ async def test_acomplete_success_roundtrip(monkeypatch):
         json_body={"choices": [{"message": {"content": "hello world"}}]},
         text='{"choices":[{"message":{"content":"hello world"}}]}',
     )
-    with patch("src.services.models.litellm_client.requests.post", return_value=fake):
+    with patch("src.services.streaming.litellm_client.httpx.AsyncClient.post", return_value=fake):
         result = await acomplete(model="qwen2.5:3b", messages=[{"role":"user","content":"hi"}])
     assert first_text(result) == "hello world"
 
@@ -49,7 +49,7 @@ async def test_acomplete_includes_error_body(monkeypatch):
         json_body={"error": {"message": "bad"}},
         text='{"error":"bad"}',
     )
-    with patch("src.services.models.litellm_client.requests.post", return_value=fake):
+    with patch("src.services.streaming.litellm_client.httpx.AsyncClient.post", return_value=fake):
         with pytest.raises(requests.HTTPError) as ei:
             await acomplete(model="x", messages=[])
     

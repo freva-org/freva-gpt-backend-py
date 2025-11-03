@@ -10,10 +10,10 @@ def test_append_and_read_thread(tmp_path: Path, monkeypatch):
 
     tid = "T123"
     # write prompt (no auto end)
-    ts.append_thread(tid, [SVPrompt(payload='[{"role":"system","content":"s"}]')], ensure_end=False)
+    ts.append_thread(tid, [SVPrompt(payload='[{"role":"system","content":"s"}]')])
     # write user + assistant + explicit end (no auto end)
-    ts.append_thread(tid, [SVUser(text="hi")], ensure_end=False)
-    ts.append_thread(tid, [SVAssistant(text="hello"), SVStreamEnd(message="Done")], ensure_end=False)
+    ts.append_thread(tid, [SVUser(text="hi")])
+    ts.append_thread(tid, [SVAssistant(text="hello"), SVStreamEnd(message="Done")])
 
     # File exists with lines
     f = tmp_path / f"{tid}.txt"
@@ -23,6 +23,6 @@ def test_append_and_read_thread(tmp_path: Path, monkeypatch):
 
     # Read back as class variants
     conv = ts.read_thread(tid)
-    kinds = [v.variant for v in conv]
+    kinds = [v.get("variant") for v in conv]
     # Prompt, User, Assistant, StreamEnd (no unexpected extra StreamEnd)
     assert kinds == ["Prompt", "User", "Assistant", "StreamEnd"]

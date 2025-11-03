@@ -9,7 +9,7 @@ from src.services.streaming.stream_variants import (
 
 def test_cleanup_inserts_codeoutput_and_end():
     conv = [SVUser(text="hi"), SVCode(code="print(1)", call_id="call_1")]
-    out = cleanup_conversation(conv)  # default: append_stream_end=True
+    out = cleanup_conversation(conv, append_stream_end=True)  # default: append_stream_end=True
     # Expect: User, Code, (inserted) CodeOutput, StreamEnd
     assert isinstance(out[-1], SVStreamEnd)
     kinds = [v.variant for v in out]
@@ -46,6 +46,6 @@ def test_ccrm_conversion_basic():
 def test_wire_roundtrip():
     original = SVCode(code="x=1", call_id="cid")
     wire = from_sv_to_json(original)
-    assert wire == {"variant": "Code", "content": [{"code": "x=1"}, "cid"]}
+    assert wire == {"variant": "Code", "content": [json.dumps({"code": "x=1"}, ensure_ascii=False), "cid"]}
     back = from_json_to_sv(wire)
     assert back == original  # pydantic models are comparable

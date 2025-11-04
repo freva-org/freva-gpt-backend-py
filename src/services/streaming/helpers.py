@@ -10,10 +10,12 @@ from ansi2html import Ansi2HTMLConverter
 
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_variants import (
+    SVUser,
     SVCode,
     SVCodeOutput,
     SVImage,
     StreamVariant,
+    help_convert_sv_ccrm
 )
 
 log = logging.getLogger(__name__)
@@ -85,11 +87,10 @@ class FinalSummary:
 
 def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
     if tool_name == "code_interpreter":
-        for r in code_interpreter_aftermath(out_txt, call_id):
-            yield r
+        yield from code_interpreter_aftermath(out_txt, call_id)
     else:
         log.warning(f"Please implement output processing function for the tool {tool_name}")
-        return [], [], False
+        yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Code-interpreter helpers
@@ -114,11 +115,11 @@ def code_interpreter_aftermath(result_txt: str, id: str):
         if out or out_error:
             comb_out = out + out_error
             codeout = strip_ansi(comb_out)
-            codeout_v = SVCodeOutput(output=codeout, call_id=id)
-            yield codeout_v
-            code_block.append(codeout_v)
         else:
             codeout = "" # We must send something here, the model expects it. TODO Talk to Bianca about removing empty black box
+        codeout_v = SVCodeOutput(output=codeout, call_id=id)
+        yield codeout_v
+        code_block.append(codeout_v)
         code_msgs.append(
             {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": codeout}  
         )
@@ -130,12 +131,8 @@ def code_interpreter_aftermath(result_txt: str, id: str):
                 image_v = SVImage(b64=base64_image)
                 yield image_v
                 code_block.append(image_v)
-                code_msgs.append(
-                    {"role": "user",  
-                    "content": [{ "type": "text", "text": "Here is the image returned by the Code Interpreter." },
-                                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}",}}
-                                ]
-                                })
+                code_msgs.append(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],
+                                                      include_images=True))
 
             if "application/json" in r.keys():
                 json_v = SVCodeOutput(output=r["application/json"], call_id=f"{id}:json")

@@ -24,7 +24,7 @@ from src.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
     from_json_to_sv
 )
-from src.services.streaming.helpers import new_conversation_id, accumulate_tool_calls, finalize_tool_calls, parse_tool_result
+from src.services.streaming.helpers import new_conversation_id, accumulate_tool_calls, finalize_tool_calls, parse_tool_result, FinalSummary
 from src.services.streaming.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt
@@ -157,7 +157,6 @@ async def stream_with_tools(
             tool_task = asyncio.create_task(_run_tool_via_mcp(
                 mcp=mcp, name=name, arguments_json=args_txt, session_key=session_key
             ))
-
             try:
                 # While tool runs, emit heartbeats every few seconds
                 while not tool_task.done():
@@ -168,7 +167,6 @@ async def stream_with_tools(
                 # When done, return the final result text
                 result_text = await tool_task
                 yield result_text
-
             except Exception as e:
                 tool_task.cancel()
                 raise
@@ -195,11 +193,12 @@ async def stream_with_tools(
 
         # Parsing tool call output as StreamVariants and messages to model
         for r in parse_tool_result(result_text, tool_name=name, call_id=id):
-            if isinstance(r, (SVCodeOutput, SVCodeError, SVImage, SVCode)):
-                yield r  # Send the result to endpoint
-            else:
+            if isinstance(r, FinalSummary):
                 tool_out_v, tool_msgs, isError = r.var_block, r.tool_messages, r.is_error
-
+                break
+            else:
+                yield r  # Streaming the result to endpoint
+                
         await append_thread(thread_id, user_id, tool_out_v, database)
 
         tool_result_messages.extend(tool_msgs)
@@ -294,7 +293,7 @@ async def run_stream(
         ):  
             yield piece
             # Accumulate all the streamed assistant test and append
-            if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage, SVCode)) and accumulated:
+            if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage, SVCode, SVServerHint)) and accumulated:
                 acc_txt = "".join(accumulated)
                 accumulated = []
                 if p_type_check == SVAssistant:

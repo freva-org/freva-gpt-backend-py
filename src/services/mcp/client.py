@@ -57,7 +57,7 @@ class McpClient:
         self._session_ids: Dict[str, str] = {}
 
         # simple shared client; in prod you may prefer a pool per target
-        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(30.0))
+        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(300.0))
 
     # --- session -----------------------------------------------------------------------------
 

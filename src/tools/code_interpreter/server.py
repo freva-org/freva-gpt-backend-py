@@ -21,7 +21,7 @@ mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_ver
 _KERNEL_REGISTRY: dict[str, KernelManager] = {}
 
 # ── Config ───────────────────────────────────────────────────────────────────
-EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "30"))  # soft guard in case the kernel hangs or runs forever
+EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in case the kernel hangs or runs forever
 
 # ── Header helpers ────────────────────────────────────────────────────────────
 # Per-request header context

@@ -3,18 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import random
+
 import re
-import string
-from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, List, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from ansi2html import Ansi2HTMLConverter
 
 from src.services.mcp.mcp_manager import McpManager
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
     SVAssistant,
-    SVPrompt,
     SVCode,
     SVCodeOutput,
     SVCodeError,
@@ -27,64 +24,13 @@ from src.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
     from_json_to_sv
 )
+from src.services.streaming.helpers import new_conversation_id, accumulate_tool_calls, finalize_tool_calls, parse_tool_result
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt
 from src.services.storage.router import append_thread, read_thread
 
 log = logging.getLogger(__name__)
 
-# TODO: talk to Bianca: sending html messages instead of stripping color codes
-conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences (color codes). We parse them as html messages
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Utilities
-# ──────────────────────────────────────────────────────────────────────────────
-
-def new_conversation_id(length: int = 32) -> str:
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
-
-
-def strip_ansi(text: str) -> str:
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Tool-call accumulation helpers (OpenAI-style deltas)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
-    choices = delta.get("choices") or []
-    if not choices:
-        return
-    d = choices[0].get("delta") or {}
-    tc_list = d.get("tool_calls") or []
-    if not tc_list:
-        return
-
-    store: Dict[int, Dict[str, Any]] = agg.setdefault("by_index", {})  # type: ignore
-    for item in tc_list:
-        idx = item.get("index")
-        if idx is None:
-            continue
-        entry = store.setdefault(idx, {"type": "function", "function": {"name": "", "arguments": ""}})
-        if item.get("id"):
-            entry["id"] = item["id"]
-        f = item.get("function") or {}
-        if f.get("name"):
-            entry["function"]["name"] = f["name"]
-        if f.get("arguments"):
-            entry["function"]["arguments"] = entry["function"].get("arguments", "") + f["arguments"]
-
-def _finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    store = agg.get("by_index") or {}
-    out: List[Dict[str, Any]] = []
-    for idx in sorted(store.keys()):
-        tc = store[idx]
-        fn = tc.get("function") or {}
-        tc.setdefault("type", "function")
-        tc["function"] = {"name": fn.get("name", ""), "arguments": fn.get("arguments", "")}
-        out.append(tc)
-    return out
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP tool runner
@@ -171,7 +117,7 @@ async def stream_with_tools(
 
                 tc_list = delta.get("tool_calls") or []
                 if tc_list:
-                    _accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
+                    accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
                     tool_name = tool_agg.get("by_index")[0].get("function").get("name") if tool_agg else None
                     for tc in tc_list:
                         fn = tc.get("function") or {}
@@ -193,7 +139,7 @@ async def stream_with_tools(
         yield p
 
     # 2) Any tool calls?
-    tool_calls = _finalize_tool_calls(tool_agg)
+    tool_calls = finalize_tool_calls(tool_agg)
     if not tool_calls:
         return
 
@@ -210,44 +156,25 @@ async def stream_with_tools(
             result_text = await _run_tool_via_mcp(
                 mcp=mcp, name=name, arguments_json=args_txt, session_key=session_key
             )
-            if name =="code_interpreter":
-                # Accumulated code text
-                code = json.loads(args_txt or "{}").get("code", "")
-                code_v = SVCode(code=code, call_id=id)
-                code_block = [code_v]
-                # Code output: structured dict of displayed data, image or error   
-                result = json.loads(result_text).get("structuredContent", "")
-                # Printed/displayed output + error message if exists
-                out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
-                    (("\n" + result["result_repr"]) if result["result_repr"] else "") + \
-                    (("\n" + result["stderr"]) if result["stderr"] else "") + \
-                    (("\n" + result["error"]) if result["error"] else "")
-                if out:
-                    out = strip_ansi(out)
-                    codeout_v = SVCodeOutput(output=out, call_id=id)
-                    code_block.append(codeout_v)
-                    yield codeout_v
-                # Image/html etc., rich output
-                rich_out = result["display_data"]
-                if rich_out:
-                    for r in rich_out:
-                        if "image/png" in r.keys():
-                            image_v = SVImage(b64=r["image/png"])
-                            code_block.append(image_v)
-                            yield image_v
-                        if "application/json" in r.keys():
-                            #TODO: check this output, is having two codeoutput variant with the same id okay?
-                            json_v = SVCodeOutput(output=r["application/json"], call_id=id)
-                            code_block.append(json_v)
-                            yield json_v
-                await append_thread(thread_id, user_id, code_block, database)
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
+            
+        if name == "code_interpreter":
+            # We append accumulated code text to thread
+            code_json = json.loads(args_txt or "{}").get("code", "")
+            code_v = SVCode(code=code_json, call_id=id)
+            await append_thread(thread_id, user_id, [code_v], database)
 
-        tool_result_messages.append(
-            {"role": "tool", "tool_call_id": tc.get("id", ""), "name": name, "content": result_text}
-        )
+        # Parsing tool call output as StreamVariants and messages to model
+        tool_out_v, tool_msgs = parse_tool_result(args_txt, result_text, tool_name=name)
+        for v in tool_out_v:
+            yield v # Send the result to endpoint
+
+        await append_thread(thread_id, user_id, [tool_out_v], database)
+
+        tool_result_messages.extend(tool_msgs)
+        #TODO: what happens if there is an error?
 
     # 4) Second request with tool results
     second_messages = list(messages)
@@ -267,9 +194,6 @@ async def stream_with_tools(
 # ──────────────────────────────────────────────────────────────────────────────
 # High-level orchestrator (storage-agnostic)
 # ──────────────────────────────────────────────────────────────────────────────
-
-PersistFn = Callable[[List[StreamVariant]], Awaitable[None]]
-LoadThreadFn = Callable[[str], List[StreamVariant]]  # returns a Conversation (list of SV*)
 
 async def run_stream(
     *,

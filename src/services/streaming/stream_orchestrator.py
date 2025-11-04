@@ -25,6 +25,7 @@ from src.services.streaming.stream_variants import (
     from_json_to_sv
 )
 from src.services.streaming.helpers import new_conversation_id, accumulate_tool_calls, finalize_tool_calls, parse_tool_result
+from src.services.streaming.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt
 from src.services.storage.router import append_thread, read_thread
@@ -126,7 +127,6 @@ async def stream_with_tools(
                             tool_id = tc.get("id") or ""
                             # stream arguments chunk immediately
                             yield SVCode(code=args_chunk, call_id=tool_id)
-
                 if choice.get("finish_reason"):
                     break
         else:
@@ -137,7 +137,6 @@ async def stream_with_tools(
 
     async for p in _handle_stream(resp1):
         yield p
-
     # 2) Any tool calls?
     tool_calls = finalize_tool_calls(tool_agg)
     if not tool_calls:
@@ -152,10 +151,38 @@ async def stream_with_tools(
         name = (tc.get("function") or {}).get("name", "")
         id = tc.get("id", id)
         args_txt = (tc.get("function") or {}).get("arguments", "")
-        try:
-            result_text = await _run_tool_via_mcp(
+
+        async def run_with_heartbeat():
+            """Run the tool while periodically sending heartbeats."""
+            tool_task = asyncio.create_task(_run_tool_via_mcp(
                 mcp=mcp, name=name, arguments_json=args_txt, session_key=session_key
-            )
+            ))
+
+            try:
+                # While tool runs, emit heartbeats every few seconds
+                while not tool_task.done():
+                    hb = await heartbeat_content()
+                    yield hb
+                    await asyncio.sleep(3)  # adjust heartbeat interval (seconds)
+
+                # When done, return the final result text
+                result_text = await tool_task
+                yield result_text
+
+            except Exception as e:
+                tool_task.cancel()
+                raise
+
+        try:
+            result_text = None
+            async for item in run_with_heartbeat():
+                if isinstance(item, SVServerHint):
+                    yield item  # Stream heartbeat ServerHint variants
+                    await append_thread(thread_id, user_id, [item], database)
+                elif isinstance(item, str):
+                    # The function returns the final tool result as last value
+                    result_text = item 
+                
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
@@ -167,11 +194,13 @@ async def stream_with_tools(
             await append_thread(thread_id, user_id, [code_v], database)
 
         # Parsing tool call output as StreamVariants and messages to model
-        tool_out_v, tool_msgs = parse_tool_result(args_txt, result_text, tool_name=name)
-        for v in tool_out_v:
-            yield v # Send the result to endpoint
+        for r in parse_tool_result(result_text, tool_name=name, call_id=id):
+            if isinstance(r, (SVCodeOutput, SVCodeError, SVImage, SVCode)):
+                yield r  # Send the result to endpoint
+            else:
+                tool_out_v, tool_msgs, isError = r.var_block, r.tool_messages, r.is_error
 
-        await append_thread(thread_id, user_id, [tool_out_v], database)
+        await append_thread(thread_id, user_id, tool_out_v, database)
 
         tool_result_messages.extend(tool_msgs)
         #TODO: what happens if there is an error?
@@ -189,7 +218,6 @@ async def stream_with_tools(
 
     async for p in _handle_stream(resp2):
         yield p
-    # TODO retry is skipped here
 
 # ──────────────────────────────────────────────────────────────────────────────
 # High-level orchestrator (storage-agnostic)
@@ -267,10 +295,10 @@ async def run_stream(
             yield piece
             # Accumulate all the streamed assistant test and append
             if isinstance(piece, (SVCodeOutput, SVCodeError, SVImage, SVCode)) and accumulated:
-                final = "".join(accumulated)
+                acc_txt = "".join(accumulated)
                 accumulated = []
                 if p_type_check == SVAssistant:
-                    streamed_v.append(SVAssistant(text=final))
+                    streamed_v.append(SVAssistant(text=acc_txt))
             elif isinstance(piece, SVAssistant):
                 accumulated.append(piece.text)
                 p_type_check = SVAssistant
@@ -287,7 +315,7 @@ async def run_stream(
 
     except asyncio.CancelledError:
         final_text = "".join(accumulated)
-        assistant_v = SVAssistant(text=final)
+        assistant_v = SVAssistant(text=final_text)
         end_v = SVStreamEnd(message="Cancelled.")
         await append_thread(thread_id, user_id, [assistant_v, end_v], database)
     except Exception as e:

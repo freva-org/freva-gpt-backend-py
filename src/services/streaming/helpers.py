@@ -87,42 +87,53 @@ def code_interpreter_aftermath(result_txt: str, id: str):
     code_msgs: List[Dict] = []
 
     # Code output: structured dict of displayed data, image or error   
-    result = json.loads(result_txt).get("structuredContent", "")
-    # Printed/displayed output + error message if exists
-    out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
-        (("\n" + result["result_repr"]) if result["result_repr"] else "") 
-    out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
-        (("\n" + result["error"]) if result["error"] else "")
-    if out or out_error:
-        comb_out = out + out_error
-        out = strip_ansi(comb_out)
-        codeout_v = SVCodeOutput(output=comb_out, call_id=id)
-        code_block.append(codeout_v)
-        code_msgs.append(
-            {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": comb_out}
-        )
-        
-    # Image/html/json etc., rich output
-    rich_out = result["display_data"]
-    if rich_out:
-        for r in rich_out:
-            if "image/png" in r.keys():
-                base64_image = r["image/png"]
-                image_v = SVImage(b64=base64_image)
-                code_block.append(image_v)
-                code_msgs.append(
-                    {"role": "user",  
-                     "content": [{ "type": "text", "text": "Here is the image returned by the Code Interpreter." },
-                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}",}}
-                                 ]
-                                 })
+    result_json = json.loads(result_txt)
 
-            if "application/json" in r.keys():
-                #TODO: check this output, is having two codeoutput variant with the same id okay?
-                json_v = SVCodeOutput(output=r["application/json"], call_id=id)
-                code_block.append(json_v)
-                code_msgs.append(
-                    {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": out}
-                    )
-    isError = True if out_error else False
+    if "structuredContent" in result_json.keys():
+        # Code output: structured dict of displayed data, image or error
+        result = result_json.get("structuredContent")
+
+        # Printed/displayed output + error message if exists
+        out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
+            (("\n" + result["result_repr"]) if result["result_repr"] else "") 
+        out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
+            (("\n" + result["error"]) if result["error"] else "")
+        if out or out_error:
+            comb_out = out + out_error
+            out = strip_ansi(comb_out)
+            codeout_v = SVCodeOutput(output=comb_out, call_id=id)
+            code_block.append(codeout_v)
+            code_msgs.append(
+                {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": comb_out}
+            )
+            
+        # Image/html/json etc., rich output
+        rich_out = result["display_data"]
+        if rich_out:
+            for r in rich_out:
+                if "image/png" in r.keys():
+                    base64_image = r["image/png"]
+                    image_v = SVImage(b64=base64_image)
+                    code_block.append(image_v)
+                    code_msgs.append(
+                        {"role": "user",  
+                        "content": [{ "type": "text", "text": "Here is the image returned by the Code Interpreter." },
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}",}}
+                                    ]
+                                    })
+
+                if "application/json" in r.keys():
+                    #TODO: check this output, is having two codeoutput variant with the same id okay?
+                    json_v = SVCodeOutput(output=r["application/json"], call_id=id)
+                    code_block.append(json_v)
+                    code_msgs.append(
+                        {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": out}
+                        )
+        isError = True if out_error else False
+    else:
+        out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
+        codeout_v = SVCodeOutput(output=out, call_id=id)
+        yield codeout_v
+        code_block.append(codeout_v)
+        isError = True
     return code_block, code_msgs, isError

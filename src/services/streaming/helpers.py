@@ -4,6 +4,7 @@ import random
 import json
 import logging
 
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, List, Optional
 from ansi2html import Ansi2HTMLConverter
 
@@ -72,11 +73,23 @@ def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
         out.append(tc)
     return out
 
-def parse_tool_result(out_txt: str, name: str, id: str):
-    if name == "code_interpreter":
-        return code_interpreter_aftermath(out_txt, id)   
+# ──────────────────────────────────────────────────────────────────────────────
+# Tool result parsers
+# ──────────────────────────────────────────────────────────────────────────────
+@dataclass
+class FinalSummary:
+    var_block: list
+    tool_messages: list
+    is_error: bool
+
+
+def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
+    if tool_name == "code_interpreter":
+        for r in code_interpreter_aftermath(out_txt, call_id):
+            yield r
     else:
-        log.warning(f"Please implement output processing function for the tool {name}")
+        log.warning(f"Please implement output processing function for the tool {tool_name}")
+        return [], [], False
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Code-interpreter helpers
@@ -100,40 +113,47 @@ def code_interpreter_aftermath(result_txt: str, id: str):
             (("\n" + result["error"]) if result["error"] else "")
         if out or out_error:
             comb_out = out + out_error
-            out = strip_ansi(comb_out)
-            codeout_v = SVCodeOutput(output=comb_out, call_id=id)
+            codeout = strip_ansi(comb_out)
+            codeout_v = SVCodeOutput(output=codeout, call_id=id)
+            yield codeout_v
             code_block.append(codeout_v)
-            code_msgs.append(
-                {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": comb_out}
-            )
+        else:
+            codeout = "" # We must send something here, the model expects it. TODO Talk to Bianca about removing empty black box
+        code_msgs.append(
+            {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": codeout}  
+        )
             
         # Image/html/json etc., rich output
-        rich_out = result["display_data"]
-        if rich_out:
-            for r in rich_out:
-                if "image/png" in r.keys():
-                    base64_image = r["image/png"]
-                    image_v = SVImage(b64=base64_image)
-                    code_block.append(image_v)
-                    code_msgs.append(
-                        {"role": "user",  
-                        "content": [{ "type": "text", "text": "Here is the image returned by the Code Interpreter." },
-                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}",}}
-                                    ]
-                                    })
+        for r in result.get("display_data", []) or []:
+            if "image/png" in r.keys():
+                base64_image = r["image/png"]
+                image_v = SVImage(b64=base64_image)
+                yield image_v
+                code_block.append(image_v)
+                code_msgs.append(
+                    {"role": "user",  
+                    "content": [{ "type": "text", "text": "Here is the image returned by the Code Interpreter." },
+                                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}",}}
+                                ]
+                                })
 
-                if "application/json" in r.keys():
-                    #TODO: check this output, is having two codeoutput variant with the same id okay?
-                    json_v = SVCodeOutput(output=r["application/json"], call_id=id)
-                    code_block.append(json_v)
-                    code_msgs.append(
-                        {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": out}
-                        )
+            if "application/json" in r.keys():
+                json_v = SVCodeOutput(output=r["application/json"], call_id=f"{id}:json")
+                yield json_v
+                code_block.append(json_v)
+                code_msgs.append(
+                    {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": r["application/json"]}
+                    )
         isError = True if out_error else False
     else:
         out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
         codeout_v = SVCodeOutput(output=out, call_id=id)
         yield codeout_v
         code_block.append(codeout_v)
+        code_msgs.append(
+            {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": out}
+            )
         isError = True
-    return code_block, code_msgs, isError
+    yield FinalSummary(var_block=code_block, 
+                       tool_messages=code_msgs, 
+                       is_error=isError)

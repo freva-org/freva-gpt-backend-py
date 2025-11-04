@@ -22,4 +22,5 @@ dependencies = [
     "debugpy>=1.8.0",
     "jq>=1.10.0",
     "ansi2html>=1.9.2",
+    "psutil>=7.1.3",
 ]

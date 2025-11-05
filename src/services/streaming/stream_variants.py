@@ -172,12 +172,6 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
     pending_code_id: Optional[str] = None
 
     for v in conv:
-        # If there is a pending Code (no output yet) and the next item is not CodeOutput,
-        # insert an empty CodeOutput before appending the new item.
-        if pending_code_id is not None and not isinstance(v, SVCodeOutput):
-            out.append(SVCodeOutput(output="", call_id=pending_code_id))
-            pending_code_id = None
-
         if isinstance(v, SVCode):
             pending_code_id = v.call_id
         elif isinstance(v, SVCodeOutput):
@@ -187,12 +181,7 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
                     v.call_id, pending_code_id
                 )
             pending_code_id = None
-
         out.append(v)
-
-    if pending_code_id is not None:
-        # close dangling code with an empty output
-        out.append(SVCodeOutput(output="", call_id=pending_code_id))
 
     # Ensure ends with StreamEnd (only if requested)
     if append_stream_end:

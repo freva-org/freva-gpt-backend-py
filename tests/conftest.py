@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.services.mcp.client import McpClient
+
 # ──────────────────────────────────────────────────────────────────────────────
 # GLOBAL / COMMON
 # ──────────────────────────────────────────────────────────────────────────────
@@ -175,3 +177,15 @@ def stub_resp(respx_mock):
         200, json={"pw_name": "alice"}
     )
     return respx_mock
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MCP Clients
+# ──────────────────────────────────────────────────────────────────────────────
+
+code_url = os.getenv("CODE_SERVER_URL", "http://localhost:8051")
+headers = {"freva-config-path": "freva_evaluation.conf"}
+
+@pytest.fixture
+def mcp_client_CI():
+    mcp_client = McpClient(base_url=code_url, default_headers=headers)
+    return mcp_client

@@ -109,7 +109,7 @@ def code_interpreter_aftermath(result_txt: str, id: str):
         if out or out_error:
             codeout = out + out_error
         else:
-            codeout = "" # We must send something here, the model expects it. TODO Talk to Bianca about removing empty black box
+            codeout = "" # We must send something here, the model expects it.
         codeout_v = SVCodeOutput(output=codeout, call_id=id)
         yield codeout_v
         code_block.append(codeout_v)

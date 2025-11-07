@@ -6,7 +6,7 @@
 #   • Check token by calling <rest_url>/api/freva-nextgen/auth/v2/systemuser (path normalization identical to Rust)
 #   • ALLOW_FALLBACK_OLD_AUTH = False  (exactly as in Rust)
 #   • Error codes/messages mirror Rust (422/400/401/502/503)
-# TODO: implement "is_guest", "get_mongodb_uri"
+# TODO: implement "is_guest"
 
 from __future__ import annotations
 

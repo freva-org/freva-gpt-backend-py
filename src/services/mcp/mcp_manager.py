@@ -140,35 +140,11 @@ class McpManager:
         cli = self._client(target)
         tools: List[Dict[str, Any]] = []
 
-        # strategy 1: JSON-RPC tools/list
-        try:
-            res = cli.tools_list_rpc()
-            if res.ok and isinstance(res.result, dict):
-                items = res.result.get("tools") or res.result.get("items") or res.result
-                if isinstance(items, list):
-                    tools = items  # assume already normalized
-        except Exception:
-            pass
-
-        # strategy 2: GET /tools
-        if not tools:
-            try:
-                items = cli.tools_list_http()
-                if isinstance(items, list):
-                    tools = items
-            except Exception:
-                pass
-
-        # strategy 3: JSON-RPC tools.list
-        if not tools:
-            try:
-                res = cli.tools_list_rpc(dot_name=True)
-                if res.ok and isinstance(res.result, dict):
-                    items = res.result.get("tools") or res.result.get("items") or res.result
-                    if isinstance(items, list):
-                        tools = items
-            except Exception:
-                pass
+        res = cli.tools_list_rpc()
+        if res.ok and isinstance(res.result, dict):
+            items = res.result.get("tools") or res.result.get("items") or res.result
+            if isinstance(items, list):
+                tools = items  # assume already normalized
 
         if not tools:
             raise RuntimeError(f"No tools discovered from MCP target={target}")
@@ -185,6 +161,18 @@ class McpManager:
             self._tools_by_target[target] = normalized
             # invalidate merged cache
             self._openai_tools_cache = None
+
+    def get_server_from_tool(self, tool_name: str) -> Optional[Target]:
+        """
+        Given a tool name, return which target it belongs to ('rag' or 'code'),
+        or None if not found.
+        """
+        with self._lock:
+            for tgt in ("rag", "code"):
+                for t in self._tools_by_target[tgt]:
+                    if t.get("name") == tool_name:
+                        return tgt
+        return None
 
     # ---------- tool export to LLM ----------
 

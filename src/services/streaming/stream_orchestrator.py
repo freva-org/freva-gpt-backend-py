@@ -46,7 +46,7 @@ class StreamState:
 async def _run_tool_via_mcp(
     *,
     mcp: McpManager,
-    name: str,
+    tool_name: str,
     arguments_json: str,
     session_key: str,
 ) -> str:
@@ -55,35 +55,12 @@ async def _run_tool_via_mcp(
     except Exception:
         args = {"_raw": arguments_json}
 
-    # bespoke mapping preserved (extend as needed)
-    #TODO: standardize this call
-    if name == "get_context_from_resources":
-        res = mcp.call_tool(
-            "rag",
-            session_key=session_key,
-            name="get_context_from_resources",
-            arguments={
-                "question": args.get("question", ""),
-                "resources_to_retrieve_from": args.get("resources_to_retrieve_from", ""),
-            },
-        )
-        return json.dumps(res)
-    elif name=="code_interpreter":
-        res = mcp.call_tool(
-            "code",
-            session_key=session_key,
-            name="code_interpreter",
-            arguments={
-                "code": args.get("code", ""),
-            },
-        )
-        return json.dumps(res)
+    server_name = mcp.get_server_from_tool(tool_name)
 
-    # default fallback
     res = mcp.call_tool(
-        "default",
+        server_name,
         session_key=session_key,
-        name=name,
+        name=tool_name,
         arguments=args,
     )
     return json.dumps(res)
@@ -177,7 +154,7 @@ async def stream_with_tools(
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
             tool_task = asyncio.create_task(_run_tool_via_mcp(
-                mcp=mcp, name=name, arguments_json=args_txt, session_key=session_key
+                mcp=mcp, tool_name=name, arguments_json=args_txt, session_key=session_key
             ))
             try:
                 # While tool runs, emit heartbeats every few seconds
@@ -195,17 +172,18 @@ async def stream_with_tools(
 
         try:
             result_text = None
+            heartbeats_v: List[StreamVariant] = []
             async for item in run_with_heartbeat():
                 if isinstance(item, SVServerHint):
                     yield item  # Stream heartbeat ServerHint variants
-                    await append_thread(thread_id, user_id, [item], database)
+                    heartbeats_v.append(item)
                 elif isinstance(item, str):
                     # The function returns the final tool result as last value
                     result_text = item 
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
-            
+
         if name == "code_interpreter":
             # We append accumulated code text to thread
             code_json = json.loads(args_txt or "{}").get("code", "")
@@ -219,11 +197,13 @@ async def stream_with_tools(
             if isinstance(r, FinalSummary):
                 tool_out_v, tool_msgs, = r.var_block, r.tool_messages
                 break
-            yield r  # Streaming the result to endpoint
+            else:
+                yield r  # Streaming the result to endpoint
 
         if tool_out_v:
             await append_thread(thread_id, user_id, tool_out_v, database)
-        messages.extend(tool_msgs)
+        if tool_msgs:
+            messages.extend(tool_msgs)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -181,3 +181,8 @@ def test_indentation(mcp_client_CI):
 # def test_env_variables(mcp_client_CI):
 #     code = {"code": "import os\nprint(os.environ['EVALUATION_SYSTEM_CONFIG_FILE'])"}
 #     assert _exec_and_get_printed_value(mcp_client_CI, code) == "freva_evaluation.conf\n"
+
+def test_unsafe_code(mcp_client_CI):
+    code = {"code": "!pip install abc"}
+    result = _execute_code_via_mcp(mcp_client_CI, code)
+    assert result == {}

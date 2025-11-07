@@ -4,15 +4,18 @@ import os
 import threading
 import logging
 from typing import Optional, Dict, Any, Literal, List, Tuple
+from itertools import product
 
 from src.core.logging_setup import configure_logging
+from src.core.settings import get_settings, get_server_url_dict
 from src.services.mcp.client import McpClient, McpCallResult
 
 log = logging.getLogger(__name__)
 configure_logging()
 
-Target = Literal["rag", "code"]
+settings = get_settings()
 
+Target = Literal[*settings.AVAILABLE_MCP_SERVERS]
 
 def _to_openai_function(tool: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -48,49 +51,40 @@ class McpManager:
     def __init__(
         self,
         *,
-        rag_url: str,
-        code_url: str,
-        default_rag_headers: Optional[Dict[str, str]] = None,
-        default_code_headers: Optional[Dict[str, str]] = None,
+        servers: List, 
+        server_urls: Dict[Target, str],
+        default_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._lock = threading.RLock()
+        self._sid = None
 
-        self._rag_url = rag_url
-        self._code_url = code_url
-        self._rag_defaults = default_rag_headers or {}
-        self._code_defaults = default_code_headers or {}
+        self._servers = servers
+        self._server_urls = server_urls
+        self._default_headers =  {t:default_headers or {} for t in self._servers}
 
-        self._rag_client: Optional[McpClient] = None
-        self._code_client: Optional[McpClient] = None
+        self._clients: Optional[Dict[Target,McpClient]] = {t:None for t in self._servers}
 
         # Cache of MCP tool descriptors and OpenAI tool schemas
-        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {"rag": [], "code": []}
+        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {t:[] for t in self._servers}
         self._openai_tools_cache: Optional[List[Dict[str, Any]]] = None
         
     # ---------- lifecycle ----------
 
     def close(self):
         with self._lock:
-            if self._rag_client:
-                self._rag_client.close()
-                self._rag_client = None
-            if self._code_client:
-                self._code_client.close()
-                self._code_client = None
+            for s in self._servers:
+                if self._clients.get(s):
+                    self._clients.get(s).close()
+                    self._clients.update({s: None})
             self._sid.clear()
 
     # ---------- internal clients ----------
 
-    def _client(self, target: Target) -> McpClient:
+    def _build_client(self, target: Target) -> McpClient:
         with self._lock:
-            if target == "rag":
-                if not self._rag_client:
-                    self._rag_client = McpClient(self._rag_url, default_headers=self._rag_defaults)
-                return self._rag_client
-            else:
-                if not self._code_client:
-                    self._code_client = McpClient(self._code_url, default_headers=self._code_defaults)
-                return self._code_client
+            if not self._clients.get(target):
+                self._clients.update({target: McpClient(self._server_urls.get(target), default_headers=self._default_headers.get(target))})
+           
 
     # ---------- initialization / discovery ----------
 
@@ -100,44 +94,42 @@ class McpManager:
         the function schemas before first token is generated.
         Idempotent; safe to call multiple times.
         """
-        if headers:
-            self._rag_defaults.update(headers["rag"])
-            self._code_defaults.update(headers["code"])
-        with self._lock:
-            # create clients if needed
-            _ = self._client("rag")
-            _ = self._client("code")
+        try:
+            if headers:
+                for s in self._servers:
+                    self._default_headers[s].update(headers.get(s, {}))
+            with self._lock:
+                # create clients if needed
+                for s in self._servers:
+                    self._build_client(s)
 
-            # probe both, but tolerate failures (log + continue)
-            for tgt in ("rag", "code"):
-                try:
-                    self._discover_tools(tgt)  # populates _tools_by_target[tgt]
-                except Exception as e:
-                    log.warning("MCP tool discovery failed for %s: %s", tgt, e, exc_info=True)
+                    # probe server, but tolerate failures (log + continue)
+                    try:
+                        self._discover_tools(s)  # populates _tools_by_target[tgt]
+                    except Exception as e:
+                        log.warning("MCP tool discovery failed for %s: %s", tgt, e, exc_info=True)
 
-            # build OpenAI tool list (merged)
-            self._openai_tools_cache = []
-            for tgt in ("rag", "code"):
-                for t in self._tools_by_target[tgt]:  # type: ignore[index]
-                    self._openai_tools_cache.append(_to_openai_function(t))
+                # build OpenAI tool list (merged)
+                self._openai_tools_cache = []
+                for tgt in self._servers:
+                    for t in self._tools_by_target[tgt]:  # type: ignore[index]
+                        self._openai_tools_cache.append(_to_openai_function(t))
 
-            log.info(
-                "MCP initialized. Tools discovered: rag=%d code=%d total=%d",
-                len(self._tools_by_target["rag"]),
-                len(self._tools_by_target["code"]),
-                len(self._openai_tools_cache),
-            )
+                log.info(
+                    f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} " + \
+                    " ".join([s+':' + str(len(self._tools_by_target[s])) for s in self._servers])
+                )
+        except Exception as e:
+            # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
+            log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
+
 
     def _discover_tools(self, target: Target) -> None:
         """
-        Ask the MCP server for available tools. We try a few strategies to be resilient
-        across server implementations:
-          1) JSON-RPC method 'tools/list'
-          2) HTTP GET /tools
-          3) JSON-RPC method 'tools.list'
+        Ask the MCP server for available tools.
         Result shape is normalized to: [{"name":..., "description":..., "input_schema":{...}}, ...]
         """
-        cli = self._client(target)
+        cli = self._clients.get(target)
         tools: List[Dict[str, Any]] = []
 
         res = cli.tools_list_rpc()
@@ -164,11 +156,11 @@ class McpManager:
 
     def get_server_from_tool(self, tool_name: str) -> Optional[Target]:
         """
-        Given a tool name, return which target it belongs to ('rag' or 'code'),
+        Given a tool name, return which server it belongs to,
         or None if not found.
         """
         with self._lock:
-            for tgt in ("rag", "code"):
+            for tgt in self._servers:
                 for t in self._tools_by_target[tgt]:
                     if t.get("name") == tool_name:
                         return tgt
@@ -184,7 +176,7 @@ class McpManager:
             if self._openai_tools_cache is None:
                 # rebuild merged cache on-demand
                 merged: List[Dict[str, Any]] = []
-                for tgt in ("rag", "code"):
+                for tgt in self._servers:
                     for t in self._tools_by_target[tgt]:
                         merged.append(_to_openai_function(t))
                 self._openai_tools_cache = merged
@@ -202,16 +194,16 @@ class McpManager:
         extra_headers: Optional[Dict]=None,
     ) -> Dict[str, Any]:
         """
-        Call a tool on the chosen target. If 'target' isn't 'rag' or 'code',
-        try 'rag' first then 'code'.
+        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS, 
+        all the available servers are called as best-effort.
         """
-        if target in ("rag", "code"):
-            return self._client(target).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
-
+        if target in self._servers:
+            return self._clients.get(target).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
+        
         # fallback routing: best-effort
-        for tgt in ("rag", "code"):
+        for tgt in self._servers:
             try:
-                return self._client(tgt).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
+                return self._clients.get(tgt).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
             except Exception as e:
                 log.debug("tool %s failed on %s: %s", name, tgt, e)
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
@@ -221,22 +213,14 @@ def build_mcp_manager() -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
-    rag_url = os.getenv("RAG_SERVER_URL", "http://rag:8050")
-    code_url = os.getenv("CODE_SERVER_URL", "http://code:8051")
+    MCP_SERVER_URLs = get_server_url_dict(settings.AVAILABLE_MCP_SERVERS)
 
     # Defaults to send; per-call headers (vault/rest) are added at call time.
-    rag_defaults: Dict[str, str] = {}
-    code_defaults: Dict[str, str] = {} 
+    default_headers: Dict[str, str] = {}
 
     mgr = McpManager(
-        rag_url=rag_url,
-        code_url=code_url,
-        default_rag_headers=rag_defaults,
-        default_code_headers=code_defaults,
+        servers=settings.AVAILABLE_MCP_SERVERS,
+        server_urls=MCP_SERVER_URLs,
+        default_headers=default_headers,
     )
-    # try:
-    #     mgr.initialize()
-    # except Exception as e:
-    #     # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-    #     log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
     return mgr

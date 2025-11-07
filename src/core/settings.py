@@ -2,9 +2,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from dotenv import load_dotenv
+from typing import Dict, ClassVar
 
 load_dotenv()  # take environment variables from .env file
-
 
 @dataclass(frozen=True)
 class Settings:
@@ -13,6 +13,7 @@ class Settings:
     AUTH_KEY: str = os.getenv("AUTH_KEY", "")       
     ALLOW_GUESTS: bool = os.getenv("ALLOW_GUESTS", "false").lower() in {"1", "true", "yes"}
     LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
+    AVAILABLE_MCP_SERVERS: ClassVar[list[str]] = [s for s in os.getenv("AVAILABLE_MCP_SERVERS", "").split(",")]
     MONGODB_DATABASE_NAME: str = os.getenv("MONGODB_DATABASE_NAME", "chatbot")
     MONGODB_COLLECTION_NAME: str = os.getenv("MONGODB_COLLECTION_NAME", "threads")
     MONGODB_COLLECTION_NAME_EMB: str = os.getenv("MONGODB_COLLECTION_NAME_EMB", "embeddings")
@@ -29,3 +30,13 @@ def get_settings() -> Settings:
     if _SETTINGS is None:
         _SETTINGS = Settings()
     return _SETTINGS
+
+def get_server_url_dict(server_list):
+    url_dict: Dict[str:str] = {}
+    for s in server_list:
+        s_url = os.getenv(f"{s.upper()}_SERVER_URL", "")
+        if s_url:
+            url_dict.update({s: s_url})
+        else:
+            ValueError(f"Please set url address for MCP server {s}!")
+    return url_dict

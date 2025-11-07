@@ -124,7 +124,7 @@ def code_interpreter_aftermath(result_txt: str, id: str):
                 image_v = SVImage(b64=base64_image)
                 yield image_v
                 code_block.append(image_v)
-                code_msgs.append(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],
+                code_msgs.extend(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],
                                                       include_images=True))
 
             if "application/json" in r.keys():

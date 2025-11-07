@@ -15,12 +15,11 @@ from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
-from src.core.settings import get_settings
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
+LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
 
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
 mcp = FastMCP("rag_server", auth=None if _disable_auth else jwt_verifier)
@@ -31,6 +30,8 @@ EMBEDDING_LENGTH = 1024
 
 RESOURCE_DIRECTORY="resources"
 AVAILABLE_LIBRARIES={"stableclimgen"}
+
+CLEAR_MONGODB_EMBEDDINGS = False
 
 # ── Mongo helpers ────────────────────────────────────────────────────────────
 # Per-request header context
@@ -56,7 +57,7 @@ def get_embedding(text):
         "temperature": 0.2,
         }
     r = requests.post(
-            f"{settings.LITE_LLM_ADDRESS}/v1/embeddings",
+            f"{LITE_LLM_ADDRESS}/v1/embeddings",
             json=payload,
             timeout=60,
             )
@@ -169,7 +170,7 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
         logger.error(f"Library '{resources_to_retrieve_from}' is not supported.")
         return f"Library '{resources_to_retrieve_from}' is not supported."
 
-    if settings.CLEAR_MONGODB_EMBEDDINGS:
+    if CLEAR_MONGODB_EMBEDDINGS:
         clear_embeddings_collection(_collection())
 
     src_dir = os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from)
@@ -196,7 +197,7 @@ def debug():
     doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
     chunked_documents = doc_splitter.split()
 
-    if settings.CLEAR_MONGODB_EMBEDDINGS:
+    if CLEAR_MONGODB_EMBEDDINGS:
         clear_embeddings_collection(_collection())
 
     store_documents_in_mongodb(chunked_documents)

@@ -11,6 +11,7 @@ from jupyter_client import KernelManager
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
+from src.tools.code_interpreter.helpers import strip_ansi, code_is_likely_safe, sanitize_code
 
 logger = logging.getLogger(__name__)
 configure_logging()
@@ -100,11 +101,11 @@ def _run_cell(sid: str, code: str) -> dict:
             display_data.append(list(display_data_dict.values()))
 
         return {
-            "stdout": "".join(stdout_parts),
-            "stderr": "".join(stderr_parts),
+            "stdout": strip_ansi("".join(stdout_parts)),
+            "stderr": strip_ansi("".join(stderr_parts)),
             "result_repr": result_repr if result_repr else "",
             "display_data": display_data, 
-            "error": error if error else "",
+            "error": strip_ansi(error) if error else "",
         }
     finally:
         kc.stop_channels()
@@ -118,12 +119,17 @@ def code_interpreter(code: str) -> dict:
     sid = _current_sid()
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
-    
-    try:
-        return _run_cell(sid, code)
-    except Exception as e:
-        logger.exception("code_interpreter: unhandled execution error")
-        raise Exception(f"Execution failed: {type(e).__name__}: {e}")
+    if code_is_likely_safe(code):
+        sanitized_code = sanitize_code(code)
+        try:
+            return _run_cell(sid, sanitized_code)
+        except Exception as e:
+            logger.exception("code_interpreter: unhandled execution error")
+            raise Exception(f"Execution failed: {type(e).__name__}: {e}")
+    else:
+        logger.warning("Code is not executed due to potential safety concerns!")
+        return 
+        
 
 if __name__ == "__main__":
     # Configure Streamable HTTP transport 

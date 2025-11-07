@@ -1,4 +1,3 @@
-import re
 import string
 import random
 import json
@@ -31,11 +30,6 @@ conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a
 
 def new_conversation_id(length: int = 32) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
-
-
-def strip_ansi(text: str) -> str:
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool-call accumulation helpers (OpenAI-style deltas)
@@ -113,8 +107,7 @@ def code_interpreter_aftermath(result_txt: str, id: str):
         out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
             (("\n" + result["error"]) if result["error"] else "")
         if out or out_error:
-            comb_out = out + out_error
-            codeout = strip_ansi(comb_out)
+            codeout = out + out_error
         else:
             codeout = "" # We must send something here, the model expects it. TODO Talk to Bianca about removing empty black box
         codeout_v = SVCodeOutput(output=codeout, call_id=id)

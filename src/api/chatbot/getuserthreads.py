@@ -42,14 +42,13 @@ async def get_user_threads(request: Request):
     database = await mongodb_storage.get_database(vault_url)
 
     threads = await mongodb_storage.read_threads(user_id, database)
-    # FastAPI will jsonify dataclasses; if you need custom shape, map here.
+
     return [
         {
             "user_id": t.user_id,
             "thread_id": t.thread_id,
             "date": t.date,
             "topic": t.topic,
-            # omit heavy content for listing? Rust returns full docs; keep parity:
             "content": t.content,
         }
         for t in threads

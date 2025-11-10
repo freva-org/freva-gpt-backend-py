@@ -17,7 +17,7 @@ Differences vs Rust (documented for future parity work)
    - Class uses: SVPrompt.payload (renamed from 'json' to avoid BaseModel.json() clash)
 2) Images:
    - Wire expected: {"variant":"Image","content":{"b64":"...","mime":"image/png"}}
-   - Class uses: SVImage(b64, mime). We also tolerate legacy {"url": "..."} in from_json_to_sv (drops to blank b64).
+   - Class uses: SVImage(b64, mime). 
 3) Tool-call mapping for Code/CodeOutput:
    - Code → assistant tool_call ("code_interpreter") with args {"code": "<code>"}.
    - CodeOutput → tool message with tool_call_id and name "code_interpreter".
@@ -241,9 +241,8 @@ def _as_system(name: str, content: Union[str, dict, list]) -> OpenAIMessage:
     return {"role": ROLE_SYSTEM, "name": name, "content": content}
 
 
-def _code_tool_call_message(code: str, call_id: str) -> OpenAIMessage:
+def _tool_call_message(args: str, call_id: str, tool_name: str) -> OpenAIMessage:
     # Arguments should be a JSON string per OpenAI function-call schema.
-    arguments = json.dumps({"code": code}, ensure_ascii=False)
     return {
         "role": ROLE_ASSISTANT,
         "name": ASSISTANT_NAME,
@@ -252,16 +251,16 @@ def _code_tool_call_message(code: str, call_id: str) -> OpenAIMessage:
             {
                 "id": call_id,
                 "type": "function",
-                "function": {"name": TOOL_NAME_CODE, "arguments": arguments},
+                "function": {"name": tool_name, "arguments": args},
             }
         ],
     }
 
 
-def _code_tool_result_message(output: str, call_id: str) -> OpenAIMessage:
+def _tool_result_message(output: str, call_id: str, tool_name: str) -> OpenAIMessage:
     return {
         "role": ROLE_TOOL,
-        "name": TOOL_NAME_CODE,
+        "name": tool_name,
         "tool_call_id": call_id,
         "content": output,
     }
@@ -325,10 +324,11 @@ def help_convert_sv_ccrm(
             out.append({"role": ROLE_ASSISTANT, "name": v.name, "content": v.text})
 
         elif isinstance(v, SVCode):
-            out.append(_code_tool_call_message(v.code, v.call_id))
+            arguments = json.dumps({"code": v.code}, ensure_ascii=False)
+            out.append(_tool_call_message(arguments, v.call_id, tool_name=TOOL_NAME_CODE))
 
         elif isinstance(v, SVCodeOutput):
-            out.append(_code_tool_result_message(v.output, v.call_id))
+            out.append(_tool_result_message(v.output, v.call_id, tool_name=TOOL_NAME_CODE))
 
         elif isinstance(v, SVImage):
             if include_images:
@@ -350,7 +350,7 @@ def help_convert_sv_ccrm(
 
         elif isinstance(v, SVCodeError):
             if include_meta and v.call_id:
-                out.append(_code_tool_result_message(v.message, v.call_id))
+                out.append(_tool_result_message(v.message, v.call_id, tool_name=TOOL_NAME_CODE))
             elif include_meta:
                 out.append(_as_system("code_error", v.message))
 
@@ -405,13 +405,9 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     if v == STREAM_END:
         return SVStreamEnd(message="" if c is None else str(c))
     if v == IMAGE:
-        if isinstance(c, dict):
-            b64 = c.get("b64") or ""
-            mime = c.get("mime") or "image/png"
-            return SVImage(b64=b64, mime=mime)
-        elif isinstance(c, str):
-            # legacy string URL; map to empty b64
-            return SVImage(b64="", mime="image/png")
+        b64 = c.get("b64") or ""
+        mime = c.get("mime") or "image/png"
+        return SVImage(b64=b64, mime=mime)
 
     if v == CODE:
         code_text, call_id = "", ""
@@ -449,8 +445,6 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
-    # if kind == SERVER_HINT:
-    #     return {"variant": SERVER_HINT, "content": d["data"]}
     if kind == SERVER_HINT: # TODO: Fix this with Bianca
         # Frontend expects the content as a JSON STRING
         # e.g. {"variant":"ServerHint","content":"{\"thread_id\":\"abc\"}"}
@@ -464,7 +458,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": d["b64"]}
+        return {"variant": IMAGE, "content": {"b64": d["b64"], "mime": d["mime"]}} 
     if kind == CODE: # TODO: Fix this with Bianca
         return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:

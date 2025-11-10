@@ -3,7 +3,8 @@ from src.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-#TODO: validate parity with Rust checks
+#TODO: code-interpreter tests
+# TODO: ping to LiteLLM for liveliness (warning only)
 
 def run_startup_checks(settings: Settings) -> None:
     # AUTH_KEY is required by Rust
@@ -15,7 +16,7 @@ def run_startup_checks(settings: Settings) -> None:
     if not (settings.LITE_LLM_ADDRESS.startswith("http://") or settings.LITE_LLM_ADDRESS.startswith("https://")):
         logger.warning("LITE_LLM_ADDRESS does not look like a URL: %s", settings.LITE_LLM_ADDRESS)
 
-    # TODO: optional ping to LiteLLM for liveliness (warning only)
+    
     logger.info(
         "Startup checks passed. Port=%s GuestsAllowed=%s LiteLLM=%s Version=%s",
         settings.BACKEND_PORT,

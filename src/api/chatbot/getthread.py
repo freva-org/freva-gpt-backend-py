@@ -29,7 +29,7 @@ def _post_process(v: list[StreamVariant]) -> list[StreamVariant]:
 @router.get("/getthread", dependencies=[AuthRequired])
 async def get_thread(request: Request, thread_id: str | None = Query(None)):
     """
-    Returns the content of a thread as JSON (list of StreamVariants).
+    Returns the content of a thread as list of JSON.
     Rust parity:
     - Requires query param thread_id
     - Requires header x-freva-vault-url

@@ -38,11 +38,10 @@ app = FastAPI(
     lifespan=lifespan,  # ← eliminates on_event deprecation warnings
 )
 
-# CORS – mirror the permissive defaults Rust typically had (might need to adjust later)
-# TODO: double check with Rust settings
+# CORS – mirror the permissive defaults (might need to adjust later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # adjust if Rust restricts origins
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

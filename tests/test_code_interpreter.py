@@ -12,8 +12,6 @@ import anyio
 
 logger = logging.getLogger(__name__)
 
-# TODO runtime checks
-
 
 def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
     """

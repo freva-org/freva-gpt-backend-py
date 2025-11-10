@@ -12,7 +12,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNA
 
 from src.core.auth import AuthRequired, get_mongodb_uri
 from src.core.available_chatbots import default_chatbot
-from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json, from_json_to_sv, CODE, CODE_ERROR
+from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json, from_json_to_sv, CODE, IMAGE
 from src.services.streaming.stream_orchestrator import run_stream
 from src.services.mcp.mcp_manager import McpManager
 
@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 def _sse_data(obj: dict) -> bytes:
     if obj.get("variant") == CODE:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
+    if obj.get("variant") == IMAGE:
+        obj["content"] = json.loads(obj["content"][0])["b64"]
     payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n".encode("utf-8")
 

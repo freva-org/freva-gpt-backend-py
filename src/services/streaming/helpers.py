@@ -22,7 +22,9 @@ configure_logging()
 
 
 # TODO: talk to Bianca: sending html messages instead of stripping color codes
-conv = Ansi2HTMLConverter(inline=True) # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences (color codes). We parse them as html messages
+# Jupyter sends the stdout or stderr as a string containing ANSI escape sequences 
+# (color codes). We can send them as html messages.
+conv = Ansi2HTMLConverter(inline=True) 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Utilities

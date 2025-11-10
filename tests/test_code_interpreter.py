@@ -156,6 +156,12 @@ def test_plot_extraction_second_to_last_line(mcp_client_CI):
     assert "image/png" in rich_data[0].keys()
     assert isinstance(rich_data[0].get("image/png"), str)
 
+def test_plot_extraction_without_pltshow(mcp_client_CI):
+    code = {"code": "import matplotlib.pyplot as plt\nax = plt.plot([1, 2, 3], [4, 5, 6])\nprint('Done!')"}
+    rich_data = _exec_and_get_richoutput_value(mcp_client_CI, code)
+    assert "image/png" in rich_data[0].keys()
+    assert isinstance(rich_data[0].get("image/png"), str)
+
 def test_plot_extraction_false_positive(mcp_client_CI):
     code = {"code": "import matplotlib.pyplot as plt"}
     rich_data = _exec_and_get_richoutput_value(mcp_client_CI, code)

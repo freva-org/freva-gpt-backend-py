@@ -184,11 +184,14 @@ async def stream_with_tools(
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
 
+        # We will collect tool input and output as Stream Variants and append to thread
+        toolcall_variants : List[StreamVariant] = []
+
         if name == "code_interpreter":
             # We append accumulated code text to thread
             code_json = json.loads(args_txt or "{}").get("code", "")
             code_v = SVCode(code=code_json, call_id=id)
-            await append_thread(thread_id, user_id, [code_v], database)
+            toolcall_variants.append(code_v)
 
         tool_out_v: List[StreamVariant] = []
         tool_msgs: List[Dict[str, Any]] = []
@@ -200,8 +203,9 @@ async def stream_with_tools(
             else:
                 yield r  # Streaming the result to endpoint
 
-        if tool_out_v:
-            await append_thread(thread_id, user_id, tool_out_v, database)
+        toolcall_variants.extend(tool_out_v)
+        await append_thread(thread_id, user_id, toolcall_variants, database)
+
         if tool_msgs:
             messages.extend(tool_msgs)
 

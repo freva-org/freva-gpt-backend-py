@@ -376,7 +376,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
       {"variant":"User","content":"..."}
       {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
       {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
-      {"variant":"Image","content":{"b64":"...","mime":"image/png"}}
+      {"variant":"Image","content":"..."}
     """
     v = obj.get("variant")
     c = obj.get("content")
@@ -405,9 +405,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     if v == STREAM_END:
         return SVStreamEnd(message="" if c is None else str(c))
     if v == IMAGE:
-        b64 = c.get("b64") or ""
-        mime = c.get("mime") or "image/png"
-        return SVImage(b64=b64, mime=mime)
+        return SVImage(b64="" if c is None else str(c))
 
     if v == CODE:
         code_text, call_id = "", ""
@@ -458,7 +456,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": {"b64": d["b64"], "mime": d["mime"]}} 
+        return {"variant": IMAGE, "content": d["b64"]} 
     if kind == CODE: # TODO: Fix this with Bianca
         return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:

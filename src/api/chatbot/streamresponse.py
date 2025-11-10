@@ -32,9 +32,9 @@ def _sse_data(obj: dict) -> bytes:
     if obj.get("variant") == IMAGE:
 
         image_b64 = obj["content"]
-        log.debug("Base64 length (chars):", len(image_b64))
+        log.info(f"Base64 length (chars): {len(image_b64)}")
         decoded = base64.b64decode(image_b64)
-        log.debug("Decoded byte length:", len(decoded))
+        log.info(f"Decoded byte length: {len(decoded)}")
         
     payload = json.dumps(obj)
     return f"{payload}\n".encode("utf-8")

@@ -95,6 +95,7 @@ async def stream_with_tools(
     accumulated_asst_text: List[str] = []
 
     if hasattr(resp, "__aiter__"):
+        call_id = ""
         async for chunk in resp:  # type: ignore
             choice = (chunk.get("choices") or [{}])[0]
             delta = choice.get("delta") or {}
@@ -112,11 +113,11 @@ async def stream_with_tools(
                 tool_name = tool_agg.get("by_index")[0].get("function").get("name") if tool_agg else None
                 for tc in tc_list:
                     fn = tc.get("function") or {}
-                    args_chunk = fn.get("arguments") or ""
+                    call_id = tc.get("id", call_id)
+                    args_chunk = fn.get("arguments", "")
                     if args_chunk and tool_name=="code_interpreter":
-                        tool_id = tc.get("id") or ""
                         # stream arguments chunk immediately
-                        yield SVCode(code=args_chunk, call_id=tool_id)
+                        yield SVCode(code=args_chunk, call_id=call_id)
 
             #  end-of-message
             if choice.get("finish_reason"):

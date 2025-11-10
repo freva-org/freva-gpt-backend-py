@@ -27,7 +27,7 @@ def _sse_data(obj: dict) -> bytes:
     if obj.get("variant") == CODE:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     if obj.get("variant") == IMAGE:
-        obj["content"] = json.loads(obj["content"][0])["b64"]
+        obj["content"] = obj.get("content").get("b64")
     payload = json.dumps(obj, ensure_ascii=False)
     return f"{payload}\n".encode("utf-8")
 

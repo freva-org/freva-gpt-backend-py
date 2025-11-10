@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class StreamState:
+    user_invoked: bool = True
     tool_call: Optional[Dict[str, Any]] = None 
     finished: bool = False
 
@@ -237,17 +238,21 @@ async def run_stream(
             messages = m
         else:
             yield m
- 
-    # Append user content
-    messages.append({"role": "user", "content": user_input or ""})
-    user_v = SVUser(text=user_input or "")
-    await append_thread(thread_id, user_id, [user_v], database)
 
     STATE = StreamState()
     mgr = mcp or McpManager()
     
     # Stream model/tool output
     while not STATE.finished:
+        hint = SVServerHint(data={"thread_id": thread_id})
+        yield hint
+        await append_thread(thread_id, user_id, [hint], database)
+        if STATE.user_invoked:
+            # Append user content
+            messages.append({"role": "user", "content": user_input or ""})
+            user_v = SVUser(text=user_input or "")
+            await append_thread(thread_id, user_id, [user_v], database)
+            STATE.user_invoked = False
         try:
             async for piece in stream_with_tools(
                 thread_id=thread_id,
@@ -287,11 +292,9 @@ async def build_messages(
     # Build messages for ongoing conversation
     try:
         system_prompt = get_entire_prompt(user_id, thread_id, model)
+        
         if create_new:
             # New thread
-            hint = SVServerHint(data={"thread_id": thread_id})
-            yield hint
-            await append_thread(thread_id, user_id, [hint], database)
             # Start with the system prompt
             messages = list(system_prompt)
         else:

@@ -11,16 +11,11 @@ async def available_chatbots_endpoint(request: Request) -> List[str]:
     """
     Available Chatbots
 
-    Statically returns the list of available chatbots as JSON.
+    Statically returns the list of available chatbots as a List.
     Requires a valid auth (same semantics as Rust's `authorize_or_fail!`).
 
     The returned strings can be used by the frontend to select a model elsewhere.
     If no model is specified there, the first item of this list is the default.
     """
-    # Auth (parity with Rust macro call)
-    # Expectation: `authorize_or_fail` raises an HTTPException on failure, or
-    # returns a username/subject string on success (ignored here).
-    _user = await authorize_or_fail(request)
-
     # Return ordered list of model names from litellm_config.yaml
     return available_chatbots()

@@ -4,7 +4,7 @@ from __future__ import annotations
 """
 Model catalog loader for LiteLLM config (YAML-based).
 
-Behavior (intentionally diverging from Rust line-scan):
+Behavior:
 - Parse YAML with yaml.safe_load
 - Collect every value found under any "model_name" key (string-like), anywhere in the document
 - Preserve list order as encountered in YAML

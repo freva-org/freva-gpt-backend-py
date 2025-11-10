@@ -26,6 +26,7 @@ import random
 import string
 from typing import Optional
 
+from src.api.chatbot.streamresponse import _sse_data
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_orchestrator import run_stream, new_conversation_id
 from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir, append_thread
@@ -125,7 +126,7 @@ async def _run_turn(
             elif isinstance(variant, SVCode):
                 txt = getattr(variant, "code", "") or ""
                 if first_chunk:
-                    # Print a header once per assistant message
+                    # Print a header once per code variant
                     print("\nCode:", end=" ", flush=True)
                     first_chunk = False
                 print(txt, end="", flush=True)
@@ -133,7 +134,7 @@ async def _run_turn(
                 char_count += len(txt)
             else:
                 if PRINT_DEBUG:
-                    print("\n[debug]", json.dumps(from_sv_to_json(variant), ensure_ascii=False))
+                    print("\n[debug]", _sse_data(from_sv_to_json(variant)))
 
     except asyncio.CancelledError:
         print("\n[Cancelled]")

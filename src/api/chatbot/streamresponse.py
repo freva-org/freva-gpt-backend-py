@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import base64
 from typing import Optional, List
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from fastapi import APIRouter, Request, Query, HTTPException
 from starlette.responses import StreamingResponse
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
 
+from src.core.logging_setup import configure_logging
 from src.core.auth import AuthRequired, get_mongodb_uri
 from src.core.available_chatbots import default_chatbot
 from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json, from_json_to_sv, CODE, IMAGE
@@ -21,6 +23,7 @@ from src.services.storage import mongodb_storage
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+configure_logging()
 
 
 def _sse_data(obj: dict) -> bytes:
@@ -28,7 +31,13 @@ def _sse_data(obj: dict) -> bytes:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     if obj.get("variant") == IMAGE:
         obj["content"] = obj.get("content").get("b64")
-    payload = json.dumps(obj, ensure_ascii=False)
+
+        image_b64 = obj["content"]
+        log.debug("Base64 length (chars):", len(image_b64))
+        decoded = base64.b64decode(image_b64)
+        log.debug("Decoded byte length:", len(decoded))
+        
+    payload = json.dumps(obj)
     return f"{payload}\n".encode("utf-8")
 
 def verify_access_to_file(file_path):

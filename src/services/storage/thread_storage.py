@@ -1,6 +1,6 @@
 from __future__ import annotations
 """
-Disk-based storage of conversations (Rust: thread_storage.rs).
+Disk-based storage of conversations.
 
 Paths
 -----

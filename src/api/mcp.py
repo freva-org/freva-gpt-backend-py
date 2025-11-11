@@ -3,6 +3,9 @@ from src.tools.tool_calls import call_rag, call_code
 
 router = APIRouter()
 
+# IMPORTANT: These endpoints are not wired to app.py. 
+# Implemented for the purposes of completeness.
+
 @router.post("/mcp/rag")
 async def rag_endpoint(request: Request, question: str, resource: str, thread_id: str):
     txt = await call_rag(request, question, resource, thread_id)

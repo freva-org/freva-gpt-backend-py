@@ -15,7 +15,7 @@ class AvailableStorages(str, Enum):
     MONGODB = "MongoDB"
 
 
-# Default parity with Rust: static STORAGE = MongoDB
+# Default parity with Rust: STORAGE = MongoDB
 STORAGE: AvailableStorages = AvailableStorages.MONGODB
 
 

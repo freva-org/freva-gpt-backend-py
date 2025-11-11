@@ -13,7 +13,7 @@ Python backend for Freva-GPT assistant. The service mirrors the Rust implementat
 ## Quick Start (deployment)
 
 ### Requirements
-- ´podman´ or ´docker´
+- `podman` or `docker`
 - MongoDB reachable via vault URL
 - Credentials & headers for the Freva auth/vault services 
 
@@ -134,3 +134,4 @@ Generated artifacts that persist across runs:
 - **MCP issues**: backend logs warn but continue when tool discovery fails; LiteLLM will simply not emit tool calls. Use `settings.AVAILABLE_MCP_SERVERS` to enable/disable targets explicitly.
 - **File access**: Make sure `freva-config` headers point at mounted paths and `/work` is mounted read-only where expected.
 - **Mongo connectivity**: `_get_database()` retries without URI query params. Persistent failures return HTTP 503; check vault responses and network policies.
+

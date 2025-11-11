@@ -30,7 +30,7 @@ def _sse_data(obj: dict) -> bytes:
     if obj.get("variant") == CODE:
         obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
     if obj.get("variant") == IMAGE:
-
+        # DEBUG to verify image payload that is sent from backend
         image_b64 = obj["content"]
         log.info(f"Base64 length (chars): {len(image_b64)}")
         decoded = base64.b64decode(image_b64)

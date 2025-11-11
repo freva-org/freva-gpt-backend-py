@@ -20,3 +20,4 @@ async def stop_post(
 
 
 #TODO:stubs
+# TODO conversation registry: Idea -> keep it together with MCP manager registry

@@ -56,7 +56,8 @@ class McpManager:
         default_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._lock = threading.RLock()
-        self._sid = None
+        self._sid: Dict = {}
+        # TODO: session_id, client registry
 
         self._servers = servers
         self._server_urls = server_urls

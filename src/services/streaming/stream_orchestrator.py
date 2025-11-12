@@ -26,7 +26,7 @@ from src.services.streaming.stream_variants import (
     from_json_to_sv
 )
 from src.services.streaming.helpers import new_conversation_id, accumulate_tool_calls, finalize_tool_calls, parse_tool_result, FinalSummary
-from src.services.streaming.heartbeat import heartbeat_content
+from src.core.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
 from src.core.prompting import get_entire_prompt
 from src.services.storage.router import append_thread, read_thread

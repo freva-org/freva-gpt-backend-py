@@ -1,10 +1,8 @@
-import string
-import random
 import json
 import logging
 
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 from ansi2html import Ansi2HTMLConverter
 
 from src.core.logging_setup import configure_logging
@@ -25,13 +23,6 @@ configure_logging()
 # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences 
 # (color codes). We can send them as html messages.
 conv = Ansi2HTMLConverter(inline=True) 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Utilities
-# ──────────────────────────────────────────────────────────────────────────────
-
-def new_conversation_id(length: int = 32) -> str:
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool-call accumulation helpers (OpenAI-style deltas)
@@ -83,16 +74,13 @@ class FinalSummary:
 
 def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
     if tool_name == "code_interpreter":
-        yield from code_interpreter_aftermath(out_txt, call_id)
+        yield from parse_code_interpreter_result(out_txt, call_id)
     else:
         log.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Code-interpreter helpers
-# ──────────────────────────────────────────────────────────────────────────────
 
-def code_interpreter_aftermath(result_txt: str, id: str):
+def parse_code_interpreter_result(result_txt: str, id: str):
     code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 

@@ -21,7 +21,7 @@ class Settings:
     VERSION: str = os.getenv("VERSION", "0.1.0")      
 
 
-# Simple singleton-style accessor (mirrors Rust OnceCell)
+# Simple singleton-style accessor
 _SETTINGS: Settings | None = None
 
 

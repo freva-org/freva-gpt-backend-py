@@ -14,18 +14,8 @@ What this module does
 
 Differences from Rust (documented for future parity)
 ----------------------------------------------------
-1) We expose toggles via help_convert_sv_ccrm:
-   - include_images=False (Rust also dropped images in prompting; same effective behavior)
-   - include_meta=True (Rust generally drops ServerHint/Errors/StreamEnd; we INCLUDE them)
-     → Change this to False later to match Rust exactly.
-2) GPT-5: placeholder — we do NOT use GPT-5-specific prompt files yet; we log a warning
+1) GPT-5: placeholder — we do NOT use GPT-5-specific prompt files yet; we log a warning
    and fall back to the baseline prompt set.
-
-Dependencies
-------------
-• src/core/stream_variants.parse_examples_jsonl, help_convert_sv_ccrm
-• src/services/storage/thread_storage.recursively_create_dir_at_rw_dir
-• src/core/available_chatbots.model_is_gpt_5
 """
 
 import json

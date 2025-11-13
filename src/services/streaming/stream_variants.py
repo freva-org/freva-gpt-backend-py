@@ -8,21 +8,7 @@ What this module provides
 • Class-based StreamVariant models (discriminator: `variant`)
 • Conversation utilities: cleanup_conversation(), normalize_conv_for_prompt()
 • Conversion to OpenAI Chat messages: help_convert_sv_ccrm(...)
-• Wire <-> class conversion helpers: from_json_to_sv(), from_sv_to_json(), parse_examples_jsonl()
-
-Differences vs Rust (documented for future parity work)
--------------------------------------------------------
-1) SVPrompt field name:
-   - Wire uses: {"variant":"Prompt","content":"<json string>"}
-   - Class uses: SVPrompt.payload (renamed from 'json' to avoid BaseModel.json() clash)
-2) Images:
-   - Wire expected: {"variant":"Image","content":{"b64":"...","mime":"image/png"}}
-   - Class uses: SVImage(b64, mime). 
-3) Tool-call mapping for Code/CodeOutput:
-   - Code → assistant tool_call ("code_interpreter") with args {"code": "<code>"}.
-   - CodeOutput → tool message with tool_call_id and name "code_interpreter".
-4) Meta inclusion toggle:
-   - help_convert_sv_ccrm(..., include_meta=False) ≈ Rust prompting behavior (drops meta).
+• Json <-> class conversion helpers: from_json_to_sv(), from_sv_to_json(), parse_examples_jsonl()
 
 Notes
 -----
@@ -44,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Constants / Conventions
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Variant names (runtime constants; do NOT use these inside Literal[...] types)
+# Variant names (runtime constants)
 PROMPT = "Prompt"
 USER = "User"
 ASSISTANT = "Assistant"
@@ -428,12 +414,12 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
             output, call_id = c[0], c[1]
             return SVCodeOutput(output=str(output), call_id=str(call_id))
 
-    raise ValueError(f"unsupported wire variant: {obj!r}")
+    raise ValueError(f"unsupported variant: {obj!r}")
 
 
 def from_sv_to_json(v: StreamVariant) -> dict:
     """
-    Convert Pydantic class back to json/dict (parity with Rust).
+    Convert Pydantic class back to json/dict.
     """
     d = v.model_dump()
     kind = d["variant"]
@@ -443,7 +429,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
-    if kind == SERVER_HINT: # TODO: Fix this with Bianca
+    if kind == SERVER_HINT: # TODO: Frontend
         # Frontend expects the content as a JSON STRING
         # e.g. {"variant":"ServerHint","content":"{\"thread_id\":\"abc\"}"}
         return {"variant": SERVER_HINT, "content": json.dumps(d["data"], ensure_ascii=False)}
@@ -457,7 +443,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
         return {"variant": IMAGE, "content": d["b64"]} 
-    if kind == CODE: # TODO: Fix this with Bianca
+    if kind == CODE: # TODO: Frontend
         return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:
         return {"variant": CODE_OUTPUT, "content": [d["output"], d["call_id"]]}

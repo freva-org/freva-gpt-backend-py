@@ -35,6 +35,7 @@ def _sse_data(obj: dict) -> bytes:
         log.info(f"Base64 length (chars): {len(image_b64)}")
         decoded = base64.b64decode(image_b64)
         log.info(f"Decoded byte length: {len(decoded)}")
+        # TODO Chunk image payload
         
     payload = json.dumps(obj)
     return f"{payload}\n".encode("utf-8")
@@ -123,6 +124,9 @@ async def streamresponse(
 
     return StreamingResponse(
         event_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        media_type="application/x-ndjson",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-transform", 
+            },
     )

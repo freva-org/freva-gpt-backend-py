@@ -1,10 +1,10 @@
 # Rust → Python mapping:
 #   - src/auth.rs  → authorize_or_fail_fn(..), get_username_from_token(..)
 # Ported semantics:
-#   • Require AUTH_KEY in env (validated again here; Rust uses OnceCell and would 500 if missing)
+#   • Require AUTH_KEY in env (validated again here; 500 if missing)
 #   • Prefer Authorization: Bearer <token> (or x-freva-user-token) + x-freva-rest-url
-#   • Check token by calling <rest_url>/api/freva-nextgen/auth/v2/systemuser (path normalization identical to Rust)
-#   • ALLOW_FALLBACK_OLD_AUTH = False  (exactly as in Rust)
+#   • Check token by calling <rest_url>/api/freva-nextgen/auth/v2/systemuser
+#   • ALLOW_FALLBACK_OLD_AUTH = False 
 #   • Error codes/messages mirror Rust (422/400/401/502/503)
 # TODO: implement "is_guest"
 
@@ -80,7 +80,7 @@ async def authorize_or_fail(request: Request) -> Optional[str]:
       - else 422/400/401/502/503 same as Rust
     """
     settings = get_settings()
-    # Rust would 500 if AUTH_KEY OnceCell not initialized
+    # 500 if AUTH_KEY not initialized
     if not settings.AUTH_KEY:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -99,7 +99,7 @@ async def authorize_or_fail(request: Request) -> Optional[str]:
         try:
             token = _bearer_token_from_header(header_val)
         except HTTPException as e:
-            # Return 422 for non-Bearer
+            # Raise exception for non-Bearer
             raise e
 
         rest_url = headers.get("x-freva-rest-url")
@@ -165,7 +165,7 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
     try:
         resp = await _client().get(url, headers={"Authorization": f"Bearer {token}"})
     except Exception as e:
-        # Rust: ServiceUnavailable on request error to vault/rest
+        # ServiceUnavailable on request error to vault/rest
         log.error("Error sending request to systemuser endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -179,7 +179,7 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
             detail="Token check failed, the token is likely not valid (anymore).",
         )
 
-    # 2xx: parse JSON and extract username/detail
+    # parse JSON and extract username/detail
     text = resp.text
     log.debug("Token check success status=%s body=%s", resp.status_code, text[:500])
     try:
@@ -215,21 +215,21 @@ async def get_mongodb_uri(vault_url: str) -> str:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(vault_url)
     except Exception:
-        # Rust -> 503 ServiceUnavailable
+        # 503 ServiceUnavailable
         raise HTTPException(status_code=503, detail="Error sending request to vault.")
     if not r.is_success:
-        # Rust -> 502 BadGateway
+        # 502 BadGateway
         raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
 
     # 2) Parse JSON and extract key
     try:
         data = r.json()
     except Exception:
-        # Rust -> 502 BadGateway
+        # 502 BadGateway
         raise HTTPException(status_code=502, detail="Vault response was malformed.")
 
     uri = data.get("mongodb.url") or data.get("mongo.url")
     if not uri:
-        # Rust -> 502 BadGateway
+        # 502 BadGateway
         raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
     return uri.strip()

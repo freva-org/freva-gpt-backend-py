@@ -19,7 +19,7 @@ from src.core.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-# ==== Config from settings.py (singleton) ====
+# ==== Config from settings.py ====
 _settings = get_settings()
 MONGODB_DATABASE_NAME = _settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = _settings.MONGODB_COLLECTION_NAME

@@ -134,7 +134,8 @@ async def _run_turn(
                 char_count += len(txt)
             else:
                 if PRINT_DEBUG:
-                    print("\n[debug]", _sse_data(from_sv_to_json(variant)))
+                    for data in _sse_data(from_sv_to_json(variant)):
+                        print("\n[debug]", data)
 
     except asyncio.CancelledError:
         print("\n[Cancelled]")

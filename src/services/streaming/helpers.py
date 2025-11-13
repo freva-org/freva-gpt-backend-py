@@ -33,6 +33,10 @@ conv = Ansi2HTMLConverter(inline=True)
 def new_conversation_id(length: int = 32) -> str:
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
+def chunks(s: str, n: int):
+    for i in range(0, len(s), n):
+        yield s[i:i+n]
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool-call accumulation helpers (OpenAI-style deltas)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -120,10 +124,11 @@ def code_interpreter_aftermath(result_txt: str, id: str):
         )
             
         # Image/html/json etc., rich output
-        for r in result.get("display_data", []) or []:
+        for i, r in enumerate(result.get("display_data", []) or []):
             if "image/png" in r.keys():
                 base64_image = r["image/png"]
-                image_v = SVImage(b64=base64_image)
+                image_id = id + f"_{i}"
+                image_v = SVImage(b64=base64_image, id=image_id)
                 yield image_v
                 code_block.append(image_v)
                 code_msgs.extend(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],

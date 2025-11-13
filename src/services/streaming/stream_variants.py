@@ -96,6 +96,7 @@ class SVCodeOutput(_SVBase):
 class SVImage(_SVBase):
     variant: Literal["Image"] = Field(default=IMAGE)
     b64: str
+    id: str
     mime: str = Field(default="image/png")
 
 
@@ -391,7 +392,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     if v == STREAM_END:
         return SVStreamEnd(message="" if c is None else str(c))
     if v == IMAGE:
-        return SVImage(b64="" if c is None else str(c))
+        return SVImage(b64="" if c is None else str(c), id=obj.get("id"))
 
     if v == CODE:
         code_text, call_id = "", ""
@@ -442,7 +443,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": d["b64"]} 
+        return {"variant": IMAGE, "content": d["b64"], "id":d["id"]} 
     if kind == CODE: # TODO: Frontend
         return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
     if kind == CODE_OUTPUT:

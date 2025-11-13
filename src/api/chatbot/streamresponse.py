@@ -16,6 +16,7 @@ from src.core.auth import AuthRequired, get_mongodb_uri
 from src.core.available_chatbots import default_chatbot
 from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json, from_json_to_sv, CODE, IMAGE
 from src.services.streaming.stream_orchestrator import run_stream
+from src.services.streaming.helpers import chunks
 from src.services.mcp.mcp_manager import McpManager
 
 from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
@@ -26,19 +27,22 @@ log = logging.getLogger(__name__)
 configure_logging()
 
 
-def _sse_data(obj: dict) -> bytes:
-    if obj.get("variant") == CODE:
-        obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
+def _sse_data(obj: dict):
     if obj.get("variant") == IMAGE:
-        # DEBUG to verify image payload that is sent from backend
-        image_b64 = obj["content"]
-        log.info(f"Base64 length (chars): {len(image_b64)}")
-        decoded = base64.b64decode(image_b64)
-        log.info(f"Decoded byte length: {len(decoded)}")
         # TODO Chunk image payload
-        
-    payload = json.dumps(obj)
-    return f"{payload}\n".encode("utf-8")
+        image_b64 = obj.get("content")
+        id = obj.get("id")
+        CHUNK_SIZE = 32_768  # 32 KiB per JSON line is proxy/browser-friendly
+
+        for frag in chunks(image_b64, CHUNK_SIZE):
+            payload = json.dumps({"variant":"Image", "content":frag, "id":id})
+            yield f"{payload}\n".encode("utf-8")
+    else:
+        if obj.get("variant") == CODE:
+            obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
+        payload = json.dumps(obj)
+        yield f"{payload}\n".encode("utf-8")
+
 
 def verify_access_to_file(file_path):
     try:
@@ -120,7 +124,8 @@ async def streamresponse(
             database=database,
             mcp=mcp_mgr,          # reuses the app's global MCP manager
         ):
-            yield _sse_data(from_sv_to_json(variant))
+            for data in _sse_data(from_sv_to_json(variant)):
+                yield data
 
     return StreamingResponse(
         event_stream(),

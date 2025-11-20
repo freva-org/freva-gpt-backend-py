@@ -60,29 +60,34 @@ async def new_thread_id() -> str:
             if candidate not in Registry:
                 return candidate
 
+async def check_thread_exists(thread_id: str) -> bool:
+    """
+    Check if a thread_id exists in the registry.
+    """
+    async with RegistryLock:
+        return thread_id in Registry.keys()
+    
+
 async def initialize_conversation(
     thread_id: str, 
     user_id: str,
     request: Request,
     messages: Optional[List[Dict[str, Any]]] = [],
 ) -> ActiveConversation:
-    now = datetime.now(timezone.utc)
-                
-    async with RegistryLock:
-        conv = Registry.get(thread_id)
-        if conv is None:
-            log.debug("Initializing the conversation and saving it to Registry...")
-            mcp_headers = await get_mcp_headers_from_req(request, thread_id)
-            conv = ActiveConversation(
-                thread_id=thread_id,
-                user_id=user_id,
-                state=ConversationState.STREAMING,
-                mcp_manager=build_mcp_manager(headers=mcp_headers),
-                messages=messages,
-                last_activity=now,
-            )
-            Registry[thread_id] = conv
-        return conv
+    now = datetime.now(timezone.utc)      
+    if not await check_thread_exists(thread_id):
+        log.debug("Initializing the conversation and saving it to Registry...")
+        mcp_headers = await get_mcp_headers_from_req(request, thread_id)
+        conv = ActiveConversation(
+            thread_id=thread_id,
+            user_id=user_id,
+            state=ConversationState.STREAMING,
+            mcp_manager=build_mcp_manager(headers=mcp_headers),
+            messages=messages,
+            last_activity=now,
+        )
+        Registry[thread_id] = conv
+        
 
 
 async def add_to_conversation(
@@ -215,7 +220,8 @@ async def cleanup_idle(
                 to_evict.append(Registry.pop(thread_id))
 
     # Persist outside the lock to avoid blocking other requests.
-    for conv in to_evict:
-        await save_conversation(conv, database)
+    if database:
+        for conv in to_evict:
+            await save_conversation(conv, database)
 
     return evicted_ids

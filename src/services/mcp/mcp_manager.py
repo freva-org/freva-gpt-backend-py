@@ -56,8 +56,6 @@ class McpManager:
         default_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._lock = threading.RLock()
-        self._sid: Dict = {}
-        # TODO: session_id, client registry
 
         self._servers = servers
         self._server_urls = server_urls
@@ -77,7 +75,6 @@ class McpManager:
                 if self._clients.get(s):
                     self._clients.get(s).close()
                     self._clients.update({s: None})
-            self._sid.clear()
 
     # ---------- internal clients ----------
 
@@ -108,7 +105,7 @@ class McpManager:
                     try:
                         self._discover_tools(s)  # populates _tools_by_target[tgt]
                     except Exception as e:
-                        log.warning("MCP tool discovery failed for %s: %s", tgt, e, exc_info=True)
+                        log.warning("MCP tool discovery failed for %s: %s", s, e, exc_info=True)
 
                 # build OpenAI tool list (merged)
                 self._openai_tools_cache = []
@@ -189,7 +186,6 @@ class McpManager:
         self,
         target: Target | str,
         *,
-        session_key: str,
         name: str,
         arguments: Dict[str, Any],
         extra_headers: Optional[Dict]=None,
@@ -199,18 +195,18 @@ class McpManager:
         all the available servers are called as best-effort.
         """
         if target in self._servers:
-            return self._clients.get(target).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
+            return self._clients.get(target).call_tool(name=name, args=arguments, extra_headers=extra_headers)
         
         # fallback routing: best-effort
         for tgt in self._servers:
             try:
-                return self._clients.get(tgt).call_tool(name=name, args=arguments, session_key=session_key, extra_headers=extra_headers)
+                return self._clients.get(tgt).call_tool(name=name, args=arguments, extra_headers=extra_headers)
             except Exception as e:
                 log.debug("tool %s failed on %s: %s", name, tgt, e)
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
 
 
-def build_mcp_manager() -> McpManager:
+def build_mcp_manager(headers: dict) -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -224,4 +220,10 @@ def build_mcp_manager() -> McpManager:
         server_urls=MCP_SERVER_URLs,
         default_headers=default_headers,
     )
-    return mgr
+
+    try:
+        mgr.initialize(headers)
+        return mgr
+    except Exception as e:
+        # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
+        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)

@@ -45,8 +45,7 @@ def drop_none(d: dict) -> None:
 
 class McpClient:
     """
-    Minimal JSON-RPC over HTTP client with SSE support (FastMCP style). Also includes
-    discovery helpers for listing tools (tries multiple strategies).
+    Minimal JSON-RPC over HTTP client with SSE support (FastMCP style).
     """
 
     def __init__(self, base_url: str, *, default_headers: Optional[Dict[str, str]] = None) -> None:
@@ -56,13 +55,10 @@ class McpClient:
         self._lock = threading.RLock()
         self._session_ids: Dict[str, str] = {}
 
-        # simple shared client; in prod you may prefer a pool per target
+        # simple shared client
         self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(300.0))
 
     # --- session -----------------------------------------------------------------------------
-
-    def set_session_id(self, sid: Optional[str]) -> None:
-        self._session_id = sid
 
     def _ensure_session(self, logical_key: str) -> str:
         lk = logical_key or "__anon__"
@@ -182,16 +178,12 @@ class McpClient:
         *,
         name: str,
         args: Dict[str, Any],
-        session_key: str,
         extra_headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Call a tool via JSON-RPC method 'tools/call' or fallbacks.
         Sets session id based on session_key to keep continuity.
         """
-        # Session continuity
-        self._ensure_session(session_key or "__anon__")
-
         # Strategy 1: JSON-RPC tools/call
         rpc_id = str(uuid.uuid4())
         body = {

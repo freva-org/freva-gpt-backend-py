@@ -14,6 +14,7 @@ from src.services.streaming.stream_variants import (
     StreamVariant,
     help_convert_sv_ccrm
 )
+from src.core.auth import get_mongodb_uri
 
 log = logging.getLogger(__name__)
 configure_logging()
@@ -23,6 +24,44 @@ configure_logging()
 # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences 
 # (color codes). We can send them as html messages.
 conv = Ansi2HTMLConverter(inline=True) 
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MCP helpers 
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _verify_access_to_file(file_path):
+    try:
+        with open(file_path) as f:
+            s = f.read()
+    except:
+        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
+                    "Note that if it is freva-config path, any usage of the freva library will fail.")
+        
+
+async def get_mcp_headers_from_req(request, thread_id):
+    vault_url = request.headers.get("x-freva-vault-url")
+    mongodb_uri = await get_mongodb_uri(vault_url)
+    auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")
+    
+    freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
+    if not freva_cfg_path:
+        log.warning("The User requested a stream without a freva_config path being set. Thread ID: {}", thread_id)
+    freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
+    _verify_access_to_file(freva_cfg_path)
+    
+    headers = {
+        "rag": {
+            "mongodb-uri":  mongodb_uri,
+            "Authorization": auth_header,
+            },
+        "code": {
+            "Authorization": auth_header,
+            "freva-config-path": freva_cfg_path,
+            },
+            }
+    return headers
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool-call accumulation helpers (OpenAI-style deltas)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
 
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +11,7 @@ from src.core.logging_setup import configure_logging
 from src.core.runtime_checks import run_startup_checks
 from src.core.auth import close_http_client
 from src.services.mcp.mcp_manager import build_mcp_manager
+from src.services.streaming.active_conversations import cleanup_idle
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
@@ -20,12 +22,28 @@ async def lifespan(app: FastAPI):
     # Startup (was @app.on_event("startup"))
     configure_logging()
     run_startup_checks(get_settings())
-    app.state.mcp = build_mcp_manager()
+
+    async def periodic_cleanup_task():
+        while True:
+            try:
+                await asyncio.sleep(60 * 60)  # check every hour
+                evicted = await cleanup_idle()
+                if evicted:
+                    print("Evicted idle > 1 day:", evicted)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                # Don’t crash the task; log and continue
+                print("Daily cleanup failed:", e)
+                
+    # Launch background task
+    app.state.cleanup_task = asyncio.create_task(periodic_cleanup_task())
+
     try:
         yield
     finally:
         # Shutdown (was @app.on_event("shutdown"))
-        app.state.mcp.close()
+        app.state.daily_cleanup.cancel()
         await close_http_client()
 
 

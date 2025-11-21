@@ -29,17 +29,14 @@ configure_logging()
 
 def _sse_data(obj: dict):
     if obj.get("variant") == IMAGE:
-        # TODO Chunk image payload
         image_b64 = obj.get("content")
         id = obj.get("id")
-        CHUNK_SIZE = 32_768  # 32 KiB per JSON line is proxy/browser-friendly
+        CHUNK_SIZE = 16_384  # 16 KiB per JSON line
 
         for frag in chunks(image_b64, CHUNK_SIZE):
             payload = json.dumps({"variant":"Image", "content":frag, "id":id})
             yield f"{payload}\n".encode("utf-8")
     else:
-        if obj.get("variant") == CODE:
-            obj["content"] = [json.loads(obj["content"][0])["code"], obj["content"][1]]
         payload = json.dumps(obj)
         yield f"{payload}\n".encode("utf-8")
 

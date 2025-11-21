@@ -361,8 +361,8 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     Json examples:
       {"variant":"Assistant","content":"..."}
       {"variant":"User","content":"..."}
-      {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
-      {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
+      {"variant":"Code","content":"...", "call_id": "call_ABC"}
+      {"variant":"CodeOutput","content":"...", "call_id": "call_ABC"}
       {"variant":"Image","content":"..."}
     """
     v = obj.get("variant")
@@ -375,14 +375,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     if v == PROMPT:
         return SVPrompt(payload="" if c is None else str(c))
     if v == SERVER_HINT:
-        # return SVServerHint(data=c if isinstance(c, dict) else {})
-        data = c
-        if isinstance(c, str):
-            try:
-                data = json.loads(c)
-            except Exception:
-                data = {"raw": c}
-        return SVServerHint(data=data or {})
+        return SVServerHint(data=c if isinstance(c, dict) else json.loads(c))
     if v == SERVER_ERROR:
         return SVServerError(message="" if c is None else str(c))
     if v == CODE_ERROR:
@@ -396,24 +389,24 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
 
     if v == CODE:
         code_text, call_id = "", ""
-        if isinstance(c, list) and len(c) >= 2:
+        if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
             payload, call_id = c[0], c[1]
             if isinstance(payload, dict):
                 code_text = payload.get("code") or payload.get("python") or payload.get("text") or ""
-            elif isinstance(payload, str):
-                try:
-                    d = json.loads(payload)
-                    code_text = d.get("code") or d.get("python") or d.get("text") or payload
-                except Exception:
-                    code_text = payload
             else:
                 code_text = str(payload)
-            return SVCode(code=code_text, call_id=str(call_id))
+        else:
+            code_text = str(c)
+            call_id = obj.get("call_id")
+        return SVCode(code=code_text, call_id=str(call_id))
 
     if v == CODE_OUTPUT:
-        if isinstance(c, list) and len(c) >= 2:
+        if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
             output, call_id = c[0], c[1]
-            return SVCodeOutput(output=str(output), call_id=str(call_id))
+        else:
+            output = c
+            call_id = obj.get("call_id")
+        return SVCodeOutput(output=str(output), call_id=str(call_id))
 
     raise ValueError(f"unsupported variant: {obj!r}")
 
@@ -430,10 +423,8 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
-    if kind == SERVER_HINT: # TODO: Frontend
-        # Frontend expects the content as a JSON STRING
-        # e.g. {"variant":"ServerHint","content":"{\"thread_id\":\"abc\"}"}
-        return {"variant": SERVER_HINT, "content": json.dumps(d["data"], ensure_ascii=False)}
+    if kind == SERVER_HINT: 
+        return {"variant": SERVER_HINT, "content": d["data"]}
     if kind == SERVER_ERROR:
         return {"variant": SERVER_ERROR, "content": d["message"]}
     if kind == CODE_ERROR:
@@ -444,10 +435,10 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
         return {"variant": IMAGE, "content": d["b64"], "id":d["id"]} 
-    if kind == CODE: # TODO: Frontend
-        return {"variant": CODE, "content": [json.dumps({"code": d["code"]}, ensure_ascii=False), d["call_id"]]}
+    if kind == CODE: 
+        return {"variant": CODE, "content": d["code"], "call_id": d["call_id"]}
     if kind == CODE_OUTPUT:
-        return {"variant": CODE_OUTPUT, "content": [d["output"], d["call_id"]]}
+        return {"variant": CODE_OUTPUT, "content": d["output"], "call_id": d["call_id"]}
     return d
 
 

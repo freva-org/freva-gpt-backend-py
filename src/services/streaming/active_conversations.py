@@ -71,18 +71,27 @@ async def check_thread_exists(thread_id: str) -> bool:
 async def initialize_conversation(
     thread_id: str, 
     user_id: str,
-    request: Request,
     messages: Optional[List[Dict[str, Any]]] = [],
+    request: Optional[Request] = None,
+    mcp_headers: Optional[Dict[str, Any]] = None,
 ) -> ActiveConversation:
     now = datetime.now(timezone.utc)      
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
-        mcp_headers = await get_mcp_headers_from_req(request, thread_id)
+
+        if request:
+            mcp_headers = await get_mcp_headers_from_req(request, thread_id)
+            mcp_mgr = build_mcp_manager(headers=mcp_headers)
+        elif mcp_headers:
+            mcp_mgr = build_mcp_manager(headers=mcp_headers)
+        else:
+            log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
+        
         conv = ActiveConversation(
             thread_id=thread_id,
             user_id=user_id,
             state=ConversationState.STREAMING,
-            mcp_manager=build_mcp_manager(headers=mcp_headers),
+            mcp_manager= mcp_mgr,
             messages=messages,
             last_activity=now,
         )

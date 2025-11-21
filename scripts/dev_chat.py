@@ -53,7 +53,7 @@ USER_ID = "dev_user"
 PRINT_DEBUG = True   # Print non-Assistant stream variants (ServerHint, etc.)
 SHOW_STATS  = True    # Show per-turn simple stats
 
-THREAD_ID = 'pil1GI9Q3XSWjWp0gPoIblYhuq6zXe8J'  # It can be set to a prev thread_id to continue the conversation
+THREAD_ID = None  # It can be set to a prev thread_id to continue the conversation
 
 # ──────────────────────────────────────────────────────────────────────────────
 

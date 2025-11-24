@@ -1,5 +1,3 @@
-import string
-import random
 import json
 import logging
 
@@ -16,6 +14,7 @@ from src.services.streaming.stream_variants import (
     StreamVariant,
     help_convert_sv_ccrm
 )
+from src.core.auth import get_mongodb_uri
 
 log = logging.getLogger(__name__)
 configure_logging()
@@ -26,12 +25,43 @@ configure_logging()
 # (color codes). We can send them as html messages.
 conv = Ansi2HTMLConverter(inline=True) 
 
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Utilities
+# MCP helpers 
 # ──────────────────────────────────────────────────────────────────────────────
 
-def new_conversation_id(length: int = 32) -> str:
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
+def _verify_access_to_file(file_path):
+    try:
+        with open(file_path) as f:
+            s = f.read()
+    except:
+        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
+                    "Note that if it is freva-config path, any usage of the freva library will fail.")
+        
+
+async def get_mcp_headers_from_req(request, thread_id):
+    vault_url = request.headers.get("x-freva-vault-url")
+    mongodb_uri = await get_mongodb_uri(vault_url)
+    auth_header = request.headers.get("Authorization") or request.headers.get("x-freva-user-token")
+    
+    freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
+    if not freva_cfg_path:
+        log.warning("The User requested a stream without a freva_config path being set. Thread ID: {}", thread_id)
+    freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
+    _verify_access_to_file(freva_cfg_path)
+    
+    headers = {
+        "rag": {
+            "mongodb-uri":  mongodb_uri,
+            "Authorization": auth_header,
+            },
+        "code": {
+            "Authorization": auth_header,
+            "freva-config-path": freva_cfg_path,
+            },
+            }
+    return headers
+
 
 def chunks(s: str, n: int):
     for i in range(0, len(s), n):
@@ -87,16 +117,13 @@ class FinalSummary:
 
 def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
     if tool_name == "code_interpreter":
-        yield from code_interpreter_aftermath(out_txt, call_id)
+        yield from parse_code_interpreter_result(out_txt, call_id)
     else:
         log.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Code-interpreter helpers
-# ──────────────────────────────────────────────────────────────────────────────
 
-def code_interpreter_aftermath(result_txt: str, id: str):
+def parse_code_interpreter_result(result_txt: str, id: str):
     code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 

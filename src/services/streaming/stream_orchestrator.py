@@ -117,7 +117,7 @@ async def stream_with_tools(
                     args_chunk = fn.get("arguments", "")
                     if args_chunk and tool_name=="code_interpreter":
                         # stream arguments chunk immediately
-                        yield SVCode(code=args_chunk, call_id=call_id)
+                        yield SVCode(code=args_chunk, id=call_id)
 
             #  end-of-message
             if choice.get("finish_reason"):
@@ -192,7 +192,7 @@ async def stream_with_tools(
         if name == "code_interpreter":
             # We append accumulated code text to thread
             code_json = json.loads(args_txt or "{}").get("code", "")
-            code_v = SVCode(code=code_json, call_id=id)
+            code_v = SVCode(code=code_json, id=id)
             toolcall_variants.append(code_v)
 
         tool_out_v: List[StreamVariant] = []

@@ -84,13 +84,13 @@ class SVAssistant(_SVBase):
 class SVCode(_SVBase):
     variant: Literal["Code"] = Field(default=CODE)
     code: str
-    call_id: str
+    id: str
 
 
 class SVCodeOutput(_SVBase):
     variant: Literal["CodeOutput"] = Field(default=CODE_OUTPUT)
     output: str
-    call_id: str
+    id: str
 
 
 class SVImage(_SVBase):
@@ -162,16 +162,16 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
         # If there is a pending Code (no output yet) and the next item is not CodeOutput,
         # insert an empty CodeOutput before appending the new item.
         if pending_code_id is not None and not isinstance(v, SVCodeOutput):
-            out.append(SVCodeOutput(output="", call_id=pending_code_id))
+            out.append(SVCodeOutput(output="", id=pending_code_id))
             pending_code_id = None
 
         if isinstance(v, SVCode):
-            pending_code_id = v.call_id
+            pending_code_id = v.id
         elif isinstance(v, SVCodeOutput):
-            if pending_code_id is not None and v.call_id != pending_code_id:
+            if pending_code_id is not None and v.id != pending_code_id:
                 logger.warning(
-                    "CodeOutput.call_id=%s does not match pending Code.call_id=%s.",
-                    v.call_id, pending_code_id
+                    "CodeOutput.id=%s does not match pending Code.id=%s.",
+                    v.id, pending_code_id
                 )
             pending_code_id = None
 
@@ -179,7 +179,7 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
 
     if pending_code_id is not None:
         # close dangling code with an empty output
-        out.append(SVCodeOutput(output="", call_id=pending_code_id))
+        out.append(SVCodeOutput(output="", id=pending_code_id))
 
     # Ensure ends with StreamEnd (only if requested)
     if append_stream_end:
@@ -312,10 +312,10 @@ def help_convert_sv_ccrm(
 
         elif isinstance(v, SVCode):
             arguments = json.dumps({"code": v.code}, ensure_ascii=False)
-            out.append(_tool_call_message(arguments, v.call_id, tool_name=TOOL_NAME_CODE))
+            out.append(_tool_call_message(arguments, v.id, tool_name=TOOL_NAME_CODE))
 
         elif isinstance(v, SVCodeOutput):
-            out.append(_tool_result_message(v.output, v.call_id, tool_name=TOOL_NAME_CODE))
+            out.append(_tool_result_message(v.output, v.id, tool_name=TOOL_NAME_CODE))
 
         elif isinstance(v, SVImage):
             if include_images:
@@ -336,8 +336,8 @@ def help_convert_sv_ccrm(
                 out.append(_as_system("openai_error", v.message))
 
         elif isinstance(v, SVCodeError):
-            if include_meta and v.call_id:
-                out.append(_tool_result_message(v.message, v.call_id, tool_name=TOOL_NAME_CODE))
+            if include_meta and v.id:
+                out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
             elif include_meta:
                 out.append(_as_system("code_error", v.message))
 
@@ -361,8 +361,8 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     Json examples:
       {"variant":"Assistant","content":"..."}
       {"variant":"User","content":"..."}
-      {"variant":"Code","content":"...", "call_id": "call_ABC"}
-      {"variant":"CodeOutput","content":"...", "call_id": "call_ABC"}
+      {"variant":"Code","content":"...", "id": "call_ABC"}
+      {"variant":"CodeOutput","content":"...", "id": "call_ABC"}
       {"variant":"Image","content":"..."}
     """
     v = obj.get("variant")
@@ -388,25 +388,25 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
         return SVImage(b64="" if c is None else str(c), id=obj.get("id"))
 
     if v == CODE:
-        code_text, call_id = "", ""
+        code_text, id = "", ""
         if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
-            payload, call_id = c[0], c[1]
+            payload, id = c[0], c[1]
             if isinstance(payload, dict):
                 code_text = payload.get("code") or payload.get("python") or payload.get("text") or ""
             else:
                 code_text = str(payload)
         else:
             code_text = str(c)
-            call_id = obj.get("call_id")
-        return SVCode(code=code_text, call_id=str(call_id))
+            id = obj.get("id")
+        return SVCode(code=code_text, id=str(id))
 
     if v == CODE_OUTPUT:
         if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
-            output, call_id = c[0], c[1]
+            output, id = c[0], c[1]
         else:
             output = c
-            call_id = obj.get("call_id")
-        return SVCodeOutput(output=str(output), call_id=str(call_id))
+            id = obj.get("id")
+        return SVCodeOutput(output=str(output), id=str(id))
 
     raise ValueError(f"unsupported variant: {obj!r}")
 
@@ -436,9 +436,9 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == IMAGE:
         return {"variant": IMAGE, "content": d["b64"], "id":d["id"]} 
     if kind == CODE: 
-        return {"variant": CODE, "content": d["code"], "call_id": d["call_id"]}
+        return {"variant": CODE, "content": d["code"], "id": d["id"]}
     if kind == CODE_OUTPUT:
-        return {"variant": CODE_OUTPUT, "content": d["output"], "call_id": d["call_id"]}
+        return {"variant": CODE_OUTPUT, "content": d["output"], "id": d["id"]}
     return d
 
 

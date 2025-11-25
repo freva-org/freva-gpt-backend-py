@@ -143,12 +143,10 @@ def parse_code_interpreter_result(result_txt: str, id: str):
             codeout = out + out_error
         else:
             codeout = "" # We must send something here, the model expects it.
-        codeout_v = SVCodeOutput(output=codeout, call_id=id)
+        codeout_v = SVCodeOutput(output=codeout, id=id)
         yield codeout_v
         code_block.append(codeout_v)
-        code_msgs.append(
-            {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": codeout}  
-        )
+        code_msgs.extend(help_convert_sv_ccrm([codeout_v]))
             
         # Image/html/json etc., rich output
         for i, r in enumerate(result.get("display_data", []) or []):
@@ -162,21 +160,17 @@ def parse_code_interpreter_result(result_txt: str, id: str):
                                                       include_images=True))
 
             if "application/json" in r.keys():
-                json_v = SVCodeOutput(output=r["application/json"], call_id=f"{id}:json")
+                json_v = SVCodeOutput(output=r["application/json"], id=f"{id}:json")
                 yield json_v
                 code_block.append(json_v)
-                code_msgs.append(
-                    {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": r["application/json"]}
-                    )
+                code_msgs.extend(help_convert_sv_ccrm([json_v]))
         isError = True if out_error else False
     else:
         out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
-        codeout_v = SVCodeOutput(output=out, call_id=id)
+        codeout_v = SVCodeOutput(output=out, id=id)
         yield codeout_v
         code_block.append(codeout_v)
-        code_msgs.append(
-            {"role": "tool", "tool_call_id": id, "name": "code_interpreter", "content": out}
-            )
+        code_msgs.extend(help_convert_sv_ccrm([codeout_v]))
         isError = True
     yield FinalSummary(var_block=code_block, 
                        tool_messages=code_msgs, 

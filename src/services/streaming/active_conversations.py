@@ -86,7 +86,7 @@ async def initialize_conversation(
             mcp_mgr = build_mcp_manager(headers=mcp_headers)
         else:
             log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
-        
+
         conv = ActiveConversation(
             thread_id=thread_id,
             user_id=user_id,
@@ -95,6 +95,7 @@ async def initialize_conversation(
             messages=messages,
             last_activity=now,
         )
+        # TODO: send tool calls to MCP server if there are variants present in messages, i.e. Code
         Registry[thread_id] = conv
         
 
@@ -172,6 +173,8 @@ async def end_conversation(
         if conv is None:
             return None
         conv.state = ConversationState.ENDED
+        # TODO interrupt MCP tool call
+        # TODO interrupt LiteLLM call
         conv.last_activity = datetime.now(timezone.utc)
         return conv
 
@@ -226,6 +229,7 @@ async def cleanup_idle(
         for thread_id, conv in list(Registry.items()):
             if now - conv.last_activity > MAX_IDLE:
                 evicted_ids.append(thread_id)
+                conv.mcp_manager.close()
                 to_evict.append(Registry.pop(thread_id))
 
     # Persist outside the lock to avoid blocking other requests.

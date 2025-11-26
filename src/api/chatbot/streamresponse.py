@@ -18,18 +18,17 @@ from src.core.prompting import get_entire_prompt
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 
-from src.services.streaming.stream_variants import SVStreamEnd, SVServerError, from_sv_to_json, CODE, IMAGE
+from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
-    Registry, RegistryLock,
     ConversationState, get_conversation_state, 
-    save_conversation, end_conversation, add_to_conversation,
-    new_thread_id, initialize_conversation, check_thread_exists,
+    end_and_save_conversation, add_to_conversation,
+    new_thread_id, check_thread_exists,
 )
 
-
 router = APIRouter()
+
 log = logging.getLogger(__name__)
 configure_logging()
 
@@ -118,10 +117,11 @@ async def streamresponse(
                 state = await get_conversation_state(thread_id)
                 if state == ConversationState.STOPPING:
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
-                    yield end_v
+                    yield _sse_data(from_sv_to_json(end_v))
                     await add_to_conversation(thread_id, [end_v])
-                    await end_conversation(thread_id=thread_id)
-        await save_conversation(thread_id, Storage)
+                    await end_and_save_conversation(thread_id, Storage)
+                    return
+        await end_and_save_conversation(thread_id, Storage)
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",

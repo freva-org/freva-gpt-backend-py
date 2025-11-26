@@ -28,9 +28,9 @@ from src.core.available_chatbots import model_supports_images
 from src.services.streaming.active_conversations import (
     ConversationState, get_conversation_state, 
     get_conv_mcpmanager, get_conv_messages,
-    add_to_conversation, end_conversation,
-    initialize_conversation
-    )
+    add_to_conversation, initialize_conversation,
+    register_tool_task, unregister_tool_task,   
+)
 
 log = logging.getLogger(__name__)
 
@@ -58,11 +58,18 @@ async def _run_tool_via_mcp(
 
     server_name = mcp.get_server_from_tool(tool_name)
 
-    res = mcp.call_tool(
-        server_name,
-        name=tool_name,
-        arguments=args,
+    # Run the blocking MCP call in a thread so cancellation of the coroutine
+    # doesn’t block the event loop.
+    loop = asyncio.get_running_loop()
+    res = await loop.run_in_executor(
+        None,
+        lambda: mcp.call_tool(
+            server_name,
+            name=tool_name,
+            arguments=args,
+        ),
     )
+
     return json.dumps(res)
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -162,6 +169,9 @@ async def stream_with_tools(
             tool_task = asyncio.create_task(_run_tool_via_mcp(
                 mcp=mcp, tool_name=name, arguments_json=args_txt,
             ))
+
+            await register_tool_task(thread_id, tool_task)
+
             try:
                 # While tool runs, emit heartbeats every few seconds
                 while not tool_task.done():
@@ -172,9 +182,19 @@ async def stream_with_tools(
                 # When done, return the final result text
                 result_text = await tool_task
                 yield result_text
+            
+            except asyncio.CancelledError:
+                # /stop or connection close has cancelled this task
+                tool_task.cancel()
+                raise
+
             except Exception as e:
                 tool_task.cancel()
                 raise
+
+            finally:
+                # Ensure the task is removed from the registry when it finishes
+                await unregister_tool_task(thread_id, tool_task)
 
         try:
             result_text = None
@@ -237,11 +257,13 @@ async def run_stream(
     user_v = SVUser(text=user_input or "")
     await add_to_conversation(thread_id, [hint, user_v])
 
-    conv_state = await get_conversation_state(thread_id)
     stream_state = StreamState()
     
     # Stream model/tool output
-    while conv_state == ConversationState.STREAMING and not stream_state.finished:
+    while not stream_state.finished:
+        conv_state = await get_conversation_state(thread_id)
+        if conv_state != ConversationState.STREAMING:
+            break
         try:
             async for piece in stream_with_tools(
                 thread_id=thread_id,
@@ -260,7 +282,6 @@ async def run_stream(
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Stream ended with an error.")
             await add_to_conversation(thread_id, [err_v, end_v])
-            await end_conversation(thread_id)
             stream_state.finished = True
             yield err_v
             yield end_v

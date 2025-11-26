@@ -34,6 +34,7 @@ class ActiveConversation:
     user_id: str
     state: ConversationState
     mcp_manager: McpManager
+    tool_tasks: set[asyncio.Task] = field(default_factory=set)
     messages: List[StreamVariant] = field(default_factory=list)
     last_activity: datetime = field(default_factory=datetime.utcnow)
 
@@ -58,6 +59,7 @@ async def new_thread_id() -> str:
             if candidate not in Registry:
                 return candidate
 
+
 async def check_thread_exists(thread_id: str) -> bool:
     """
     Check if a thread_id exists in the registry.
@@ -80,7 +82,7 @@ async def initialize_conversation(
             mcp_mgr = await get_mcp_manager(authenticator=auth)
         else:
             log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
-        
+
         conv = ActiveConversation(
             thread_id=thread_id,
             user_id=user_id,
@@ -89,9 +91,14 @@ async def initialize_conversation(
             messages=messages,
             last_activity=now,
         )
+        # TODO: send tool calls to MCP server if there are variants present in messages, i.e. Code
         Registry[thread_id] = conv
+    else:
+        async with RegistryLock:
+            conv = Registry.get(thread_id)
+            conv.state = ConversationState.STREAMING
+            conv.last_activity = datetime.now(timezone.utc)
         
-
 
 async def add_to_conversation(
     thread_id: str,
@@ -129,6 +136,7 @@ async def get_conv_mcpmanager(thread_id: str) -> Optional[McpManager]:
         conv = Registry.get(thread_id)
         return conv.mcp_manager if conv is not None else None
     
+
 async def get_conv_messages(thread_id: str) -> Optional[List[StreamVariant]]: 
     """
     Return the messages of the conversation, or None if it does not exist
@@ -153,39 +161,27 @@ async def request_stop(thread_id: str) -> bool:
         conv.last_activity = datetime.now(timezone.utc)
         return True
     
-async def end_conversation(
-    thread_id: str
-) -> Optional[ActiveConversation]: 
-    """
-    Mark a conversation as ENDED but keep it in the registry.
-    Usually followed by save_conversation and remove_conversation.
-    Returns the conversation if it existed.
-    """
-    async with RegistryLock:
-        conv = Registry.get(thread_id)
-        if conv is None:
-            return None
-        conv.state = ConversationState.ENDED
-        conv.last_activity = datetime.now(timezone.utc)
-        return conv
 
-async def save_conversation(
+async def end_and_save_conversation(
     thread_id: str, 
     Storage: ThreadStorage,
 ) -> bool: 
     """
-    Save a conversation to available storage through storage.router.
+    Mark a conversation as ENDED but keep it in the registry and save to available 
+    storage through storage.router. Usually followed by remove_conversation.
     Returns True if a conversation was found and saved, False if it didn't exist.
     """
-    conv: Optional[ActiveConversation]
-
     async with RegistryLock:
         conv = Registry.get(thread_id)
-        if not conv:
+        if conv is None:
             return False
-        else:
-            await Storage.append_thread(conv.thread_id, conv.user_id, conv.messages)
-            return True
+        # End conversation
+        conv.state = ConversationState.ENDED
+        conv.last_activity = datetime.now(timezone.utc)
+        # Save conversation
+        await Storage.append_thread(conv.thread_id, conv.user_id, conv.messages)
+        return True
+
 
 async def remove_conversation(
     thread_id: str
@@ -203,12 +199,43 @@ async def remove_conversation(
         return False
     return True
 
+
+async def register_tool_task(thread_id: str, task: asyncio.Task) -> None:
+    """
+    Register a long-running tool task with a conversation so it can be cancelled
+    via /stop.
+    """
+    async with RegistryLock:
+        Registry.get(thread_id).tool_tasks.add(task)
+
+
+async def unregister_tool_task(thread_id: str, task: asyncio.Task) -> None:
+    """
+    Remove a task from the registry once it finishes.
+    """
+    async with RegistryLock:
+        tasks = list(Registry.get(thread_id).tool_tasks or ())
+        if not tasks:
+            return
+        tasks.discard(task)
+
+
+async def cancel_tool_tasks(thread_id: str) -> None:
+    """
+    Cancel all known tool tasks for this conversation.
+    """
+    async with RegistryLock:
+        tasks = list(Registry.get(thread_id).tool_tasks or ())
+    for t in tasks:
+        t.cancel()
+
+
 async def cleanup_idle(
     Storage: ThreadStorage
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.
-    Each removed conversation is persisted via `save_conversation`.
+    Each removed conversation is persisted via `end_and_save_conversation`.
     Returns a list of evicted thread_ids.
     """
     now = datetime.now(timezone.utc)
@@ -220,10 +247,11 @@ async def cleanup_idle(
         for thread_id, conv in list(Registry.items()):
             if now - conv.last_activity > MAX_IDLE:
                 evicted_ids.append(thread_id)
+                conv.mcp_manager.close()
                 to_evict.append(Registry.pop(thread_id))
 
     # Persist outside the lock to avoid blocking other requests.
     for conv in to_evict:
-        await save_conversation(conv, Storage)
+        await end_and_save_conversation(conv, Storage)
 
     return evicted_ids

@@ -33,15 +33,13 @@ from src.services.streaming.stream_variants import (
 )
 from src.services.service_factory import get_authenticator, get_thread_storage
 from src.services.streaming.active_conversations import (
-    end_conversation,
-    new_thread_id,
-    save_conversation,
+    new_thread_id, end_and_save_conversation
 )
 
 log = logging.getLogger("dev_chat")
 configure_logging()
 settings = get_settings()
-settings.DEV = True
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -153,8 +151,7 @@ async def main() -> None:
 
         # Commands
         if user_input.lower() in ("/exit", "/quit"):
-            await end_conversation(thread_id)
-            await save_conversation(thread_id, Storage)
+            await end_and_save_conversation(thread_id, Storage)
             break
         if user_input.lower() == "/id":
             print(f"Current thread_id: {thread_id}")
@@ -174,7 +171,7 @@ async def main() -> None:
             user_input=user_input,
             system_prompt=system_prompt,
         )
-        await save_conversation(thread_id, Storage)
+        await end_and_save_conversation(thread_id, Storage)
         if SHOW_STATS:
             print(f"[turn stats] chunks={t_chunks} chars={t_chars}")
 

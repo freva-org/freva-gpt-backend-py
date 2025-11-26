@@ -52,13 +52,16 @@ async def get_thread(
     Storage = await get_thread_storage(vault_url=Auth.vault_url)
 
     try:
-        await prepare_for_stream(
-            thread_id=thread_id,
+        prep_error = await prepare_for_stream(
+            thread_id=thread_id, 
             user_id=Auth.username,
             Auth=Auth,
-            Storage=Storage, 
+            Storage=Storage,
             read_history=True
         )
+        if prep_error:
+            return prep_error
+
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Thread not found")
     except Exception:

@@ -91,13 +91,16 @@ async def streamresponse(
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 
     async def event_stream():
-        await prepare_for_stream(
+        prep_error = await prepare_for_stream(
             thread_id=thread_id, 
             user_id=user_name,
             Auth=Auth,
             Storage=Storage,
             read_history=read_history
         )
+        if prep_error:
+            yield _sse_data(from_sv_to_json(prep_error))
+            return
 
         last_check = time.monotonic()
         async for variant in run_stream(

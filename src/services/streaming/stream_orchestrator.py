@@ -272,7 +272,7 @@ async def prepare_for_stream(
     Auth: Optional[Authenticator] = None, 
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
-) -> None :
+) :
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
         try:
@@ -281,15 +281,12 @@ async def prepare_for_stream(
             msg = f"Prompt/history assembly failed: {e}"
             log.exception(msg)
             err = SVServerError(message=msg)
-            end = SVStreamEnd(message="Stream ended with an error.")
-            print(err)
-            print(end)
-            await add_to_conversation(thread_id, [err, end])
-            await end_conversation(thread_id)
+            return err
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
     await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth)
+    return None
 
 
 async def get_conversation_history(

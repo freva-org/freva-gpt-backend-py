@@ -28,7 +28,7 @@ async def stop_get(
             detail="Thread ID is missing. Please provide a thread_id in the query parameters.",
         )
     
-    log.debug(f"Trying to stop conversation with id: {thread_id}")
+    log.debug(f"Initiated to stop conversation with id: {thread_id}")
 
     ok = await request_stop(thread_id)
     

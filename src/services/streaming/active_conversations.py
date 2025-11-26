@@ -98,6 +98,11 @@ async def initialize_conversation(
         )
         # TODO: send tool calls to MCP server if there are variants present in messages, i.e. Code
         Registry[thread_id] = conv
+    else:
+        async with RegistryLock:
+            conv = Registry.get(thread_id)
+            conv.state = ConversationState.STREAMING
+            conv.last_activity = datetime.now(timezone.utc)
         
 
 async def add_to_conversation(

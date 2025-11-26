@@ -22,7 +22,7 @@ from src.services.streaming.helpers import get_mcp_headers_from_req
 from src.services.streaming.active_conversations import (
     Registry, RegistryLock,
     ConversationState, get_conversation_state, 
-    save_conversation, end_conversation, add_to_conversation,
+    end_and_save_conversation, add_to_conversation,
     new_thread_id, initialize_conversation, check_thread_exists,
 )
 
@@ -99,7 +99,7 @@ async def streamresponse(
                 err = SVServerError(message=msg)
                 end = SVStreamEnd(message="Stream ended with an error.")
                 await add_to_conversation(thread_id, [err, end])
-                await end_conversation(thread_id)
+                await end_and_save_conversation(thread_id)
                 yield err
                 yield end
                 return
@@ -125,10 +125,11 @@ async def streamresponse(
                 state = await get_conversation_state(thread_id)
                 if state == ConversationState.STOPPING:
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
-                    yield end_v
+                    yield _sse_data(from_sv_to_json(end_v))
                     await add_to_conversation(thread_id, [end_v])
-                    await end_conversation(thread_id=thread_id)
-        await save_conversation(thread_id, database)
+                    await end_and_save_conversation(thread_id, database)
+                    return
+        await end_and_save_conversation(thread_id, database)
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",

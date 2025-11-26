@@ -199,6 +199,36 @@ async def remove_conversation(
     return True
 
 
+async def register_tool_task(thread_id: str, task: asyncio.Task) -> None:
+    """
+    Register a long-running tool task with a conversation so it can be cancelled
+    via /stop.
+    """
+    async with RegistryLock:
+        Registry.get(thread_id).tool_tasks.add(task)
+
+
+async def unregister_tool_task(thread_id: str, task: asyncio.Task) -> None:
+    """
+    Remove a task from the registry once it finishes.
+    """
+    async with RegistryLock:
+        tasks = list(Registry.get(thread_id).tool_tasks or ())
+        if not tasks:
+            return
+        tasks.discard(task)
+
+
+async def cancel_tool_tasks(thread_id: str) -> None:
+    """
+    Cancel all known tool tasks for this conversation.
+    """
+    async with RegistryLock:
+        tasks = list(Registry.get(thread_id).tool_tasks or ())
+    for t in tasks:
+        t.cancel()
+
+
 async def cleanup_idle(
     database:  Optional[AsyncIOMotorDatabase] = None,
 ) -> list[str]:  # thread_ids evicted

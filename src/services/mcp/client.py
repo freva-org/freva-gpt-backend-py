@@ -19,7 +19,6 @@ MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
 DISCOVERY_SESSION_KEY = "__discovery__"
 
-# ---- public dataclass you can log/inspect -------------------------------------------------------
 
 @dataclass
 class McpCallResult:
@@ -29,19 +28,11 @@ class McpCallResult:
     error: Optional[Dict[str, Any]] = None
     status_code: Optional[int] = None
 
-
-# ---- exceptions ---------------------------------------------------------------------------------
-
 class McpError(Exception): ...
 class McpUnauthorized(McpError): ...
 class McpBadRequest(McpError): ...
 class McpInvalidParams(McpError): ...
 
-def drop_none(d: dict) -> None:
-    """Remove keys from d whose value is None."""
-    return {k: v for k, v in d.items() if v is not None}
-
-# ---- client -------------------------------------------------------------------------------------
 
 class McpClient:
     """
@@ -58,7 +49,7 @@ class McpClient:
         # simple shared client
         self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(300.0))
 
-    # --- session -----------------------------------------------------------------------------
+    # ────────── session ──────────
 
     def _ensure_session(self, logical_key: str) -> str:
         lk = logical_key or "__anon__"
@@ -124,7 +115,7 @@ class McpClient:
 
         return payload, session_id
 
-    # --- headers ------------------------------------------------------------------------------
+    # ────────── headers ──────────
 
     def _headers(self, extra: Optional[Dict[str, str]] = None, *, include_session: bool = True) -> Dict[str, str]:
         h = {
@@ -139,7 +130,7 @@ class McpClient:
             h.update(extra)
         return drop_none(h)
 
-    # --- tool discovery -----------------------------------------------------------------------
+    # ────────── tool discovery ──────────
 
     def tools_list_rpc(self, *, dot_name: bool = False) -> McpCallResult:
         """
@@ -171,7 +162,7 @@ class McpClient:
             return data
         return []
 
-    # --- call tool ----------------------------------------------------------------------------
+    # ────────── call tool ──────────
 
     def call_tool(
         self,
@@ -222,7 +213,7 @@ class McpClient:
             return data
         return {"ok": True, "result": data}
 
-    # --- rpc result helper --------------------------------------------------------------------
+    # ────────── rpc result helper ──────────
 
     def _rpc_result(self, response: httpx.Response, rpc_id: str) -> McpCallResult:
         payload, session_id = self._extract_payload_and_session(response)
@@ -246,10 +237,17 @@ class McpClient:
 
         return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)
 
-    # --- convenience --------------------------------------------------------------------------
+    # ────────── convenience ──────────
 
     def close(self) -> None:
         try:
             self._http.close()
         except Exception:
             pass
+
+        
+# ──────────────────── Helper functions ──────────────────────────────
+
+def drop_none(d: dict) -> None:
+    """Remove keys from d whose value is None."""
+    return {k: v for k, v in d.items() if v is not None}

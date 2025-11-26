@@ -1,6 +1,8 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
+from typing import Optional
 
+import httpx
 import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +11,9 @@ from src.api import static, chatbot
 from src.core.settings import Settings, get_settings
 from src.core.logging_setup import configure_logging
 from src.core.runtime_checks import run_startup_checks
-from src.core.auth import close_http_client
-from src.services.mcp.mcp_manager import build_mcp_manager
 from src.services.streaming.active_conversations import cleanup_idle
 
+        
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -44,7 +45,6 @@ async def lifespan(app: FastAPI):
     finally:
         # Shutdown (was @app.on_event("shutdown"))
         app.state.daily_cleanup.cancel()
-        await close_http_client()
 
 
 app = FastAPI(

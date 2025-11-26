@@ -10,21 +10,23 @@ Headless dev/benchmark runner mirroring /chatbot/streamresponse behaviour.
 - RUNS/CONCURRENCY for benchmarks; set CONCURRENCY=1 for clean mode.
 - Uses ONE global McpManager; orchestrator ties MCP session to thread_id.
 """
-import os
 import asyncio
 import json
 import logging
-import random
-import string
 import time
 from dataclasses import dataclass
 from typing import List, Optional
 
 from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_orchestrator import run_stream, new_conversation_id
-from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json
-from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
-from src.services.mcp.mcp_manager import build_mcp_manager
+from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
+from src.services.streaming.stream_variants import from_sv_to_json
+from src.core.prompting import get_entire_prompt
+from src.services.service_factory import get_authenticator, get_thread_storage
+from src.services.streaming.active_conversations import (
+    new_thread_id,
+    save_conversation,
+    end_conversation,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -50,15 +52,6 @@ PRINT_FINAL_SUMMARY = True
 log = logging.getLogger("dev_script")
 configure_logging()
 
-# One global MCP manager reused by all runs
-mongodb_uri = os.getenv("MONGODB_URI_LOCAL")
-MCP = build_mcp_manager()
-headers = {"rag": {"mongodb-uri": mongodb_uri,
-                    },
-            "code": {},
-            }
-MCP.initialize(headers)
-
 @dataclass
 class RunResult:
     idx: int
@@ -69,17 +62,16 @@ class RunResult:
     status: str
 
 
-def _derive_thread_id(idx: int) -> str:
-    if THREAD_ID_BASE:
-        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
-        return f"{THREAD_ID_BASE}-{idx}-{suffix}" if NEW_THREAD_PER_RUN else THREAD_ID_BASE
-    return new_conversation_id() if NEW_THREAD_PER_RUN else "dev-thread"
-
-
 async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
     async with sem:
-        thread_id = _derive_thread_id(idx)
-        recursively_create_dir_at_rw_dir(USER_ID, thread_id)
+        thread_id = new_thread_id()
+
+        Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
+        Auth = get_authenticator()
+        
+        await prepare_for_stream(thread_id, USER_ID, Auth)
+
+        system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
 
         t0 = time.perf_counter()
         chunk_count = 0
@@ -92,7 +84,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
                 thread_id=(None if NEW_THREAD_PER_RUN else thread_id),
                 user_id=USER_ID,
                 user_input=PROMPT,
-                mcp=MCP,                 # ← reuse single McpManager
+                system_prompt=system_prompt,                 # ← reuse single McpManager
             ):
                 if getattr(variant, "variant", None) == "Assistant":
                     txt = getattr(variant, "text", "") or ""
@@ -101,6 +93,8 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
 
                 if PRINT_STREAM and getattr(variant, "variant", None) != "Assistant":
                     print(json.dumps(from_sv_to_json(variant), ensure_ascii=False))
+
+            await save_conversation(thread_id, Storage)
 
         except asyncio.CancelledError:
             status = "Cancelled"
@@ -127,7 +121,6 @@ async def _warmup() -> None:
 
 
 async def main() -> None:
-    recursively_create_dir_at_rw_dir(USER_ID, (THREAD_ID_BASE or "tmp"))
     await _warmup()
 
     sem = asyncio.Semaphore(CONCURRENCY)

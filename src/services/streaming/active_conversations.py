@@ -1,24 +1,22 @@
-
 import string
 import random
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Iterable, Any
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import logging
-
 import asyncio
-from motor.motor_asyncio import AsyncIOMotorDatabase
-from fastapi import Request
 
 from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json
-from src.services.mcp.mcp_manager import McpManager, build_mcp_manager
-from src.services.storage.router import append_thread
-from src.services.streaming.helpers import get_mcp_headers_from_req
+from src.services.streaming.stream_variants import StreamVariant
+from src.services.service_factory import (
+    Authenticator, ThreadStorage, McpManager,
+    get_mcp_manager
+)
 
 log = logging.getLogger(__name__)
 configure_logging()
+
 
 # Idle timeout for cleanup
 MAX_IDLE = timedelta(minutes=3)
@@ -72,18 +70,14 @@ async def initialize_conversation(
     thread_id: str, 
     user_id: str,
     messages: Optional[List[Dict[str, Any]]] = [],
-    request: Optional[Request] = None,
-    mcp_headers: Optional[Dict[str, Any]] = None,
+    auth: Optional[Authenticator] = None,
 ) -> ActiveConversation:
     now = datetime.now(timezone.utc)      
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
 
-        if request:
-            mcp_headers = await get_mcp_headers_from_req(request, thread_id)
-            mcp_mgr = build_mcp_manager(headers=mcp_headers)
-        elif mcp_headers:
-            mcp_mgr = build_mcp_manager(headers=mcp_headers)
+        if auth:
+            mcp_mgr = await get_mcp_manager(authenticator=auth)
         else:
             log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
         
@@ -177,7 +171,7 @@ async def end_conversation(
 
 async def save_conversation(
     thread_id: str, 
-    database:  Optional[AsyncIOMotorDatabase] = None,
+    Storage: ThreadStorage,
 ) -> bool: 
     """
     Save a conversation to available storage through storage.router.
@@ -190,7 +184,7 @@ async def save_conversation(
         if not conv:
             return False
         else:
-            await append_thread(conv.thread_id, conv.user_id, conv.messages, database)
+            await Storage.append_thread(conv.thread_id, conv.user_id, conv.messages)
             return True
 
 async def remove_conversation(
@@ -210,7 +204,7 @@ async def remove_conversation(
     return True
 
 async def cleanup_idle(
-    database:  Optional[AsyncIOMotorDatabase] = None,
+    Storage: ThreadStorage
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.
@@ -229,8 +223,7 @@ async def cleanup_idle(
                 to_evict.append(Registry.pop(thread_id))
 
     # Persist outside the lock to avoid blocking other requests.
-    if database:
-        for conv in to_evict:
-            await save_conversation(conv, database)
+    for conv in to_evict:
+        await save_conversation(conv, Storage)
 
     return evicted_ids

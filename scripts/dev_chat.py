@@ -17,31 +17,31 @@ Notes:
 - Printing: Assistant chunks are streamed as they arrive; non-Assistant variants
   are printed compactly when PRINT_DEBUG=True.
 """
-
-import os
 import asyncio
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from src.api.chatbot.streamresponse import _sse_data
 from src.core.logging_setup import configure_logging
-from motor.motor_asyncio import AsyncIOMotorClient
-from src.services.streaming.stream_orchestrator import run_stream, get_conversation_history
+from src.core.settings import get_settings
+from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.core.prompting import get_entire_prompt
 from src.services.streaming.stream_variants import (
     from_sv_to_json,
     SVAssistant,
     SVCode,
-    SVServerError,
-    SVStreamEnd,
 )
-
+from src.services.service_factory import get_authenticator, get_thread_storage
 from src.services.streaming.active_conversations import (
-    end_conversation, add_to_conversation,
-    new_thread_id, initialize_conversation,
-    save_conversation, remove_conversation
+    end_conversation,
+    new_thread_id,
+    save_conversation,
 )
 
+log = logging.getLogger("dev_chat")
+configure_logging()
+settings = get_settings()
+settings.DEV = True
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONFIG
@@ -56,40 +56,6 @@ SHOW_STATS  = True    # Show per-turn simple stats
 THREAD_ID = None  # It can be set to a prev thread_id to continue the conversation
 
 # ──────────────────────────────────────────────────────────────────────────────
-
-log = logging.getLogger("dev_chat")
-configure_logging()
-
-# One global MCP manager reused for the whole session
-mongodb_uri = os.getenv("MONGODB_URI_LOCAL", "")
-freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
-mcp_headers = {
-    "rag": {
-        "mongodb-uri": mongodb_uri,
-    },
-    "code": {
-        "freva-config-path": freva_cfg_path,
-    },
-}
-database = AsyncIOMotorClient(mongodb_uri) if mongodb_uri else None
-database = None
-
-
-async def _start_thread(thread_id, read_history:bool):
-    messages: List[Dict[str, Any]] = []
-    if read_history:
-        try:
-            messages = await get_conversation_history(thread_id, database)
-        except Exception as e:
-            msg = f"Prompt/history assembly failed: {e}"
-            log.exception(msg)
-            err = SVServerError(message=msg)
-            end = SVStreamEnd(message="Stream ended with an error.")
-            print(err)
-            print(end)
-            await add_to_conversation(thread_id, [err, end])
-            await end_conversation(thread_id)
-    await initialize_conversation(thread_id, USER_ID, messages=messages, mcp_headers=mcp_headers)
 
 async def _run_turn(
     *,
@@ -159,8 +125,11 @@ async def main() -> None:
     else:
         thread_id = THREAD_ID
         read_history = True
+
+    Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
+    Auth = get_authenticator()
     
-    await _start_thread(thread_id, read_history)
+    await prepare_for_stream(thread_id, USER_ID, Auth, Storage, read_history=read_history)
 
     system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
 
@@ -185,7 +154,7 @@ async def main() -> None:
         # Commands
         if user_input.lower() in ("/exit", "/quit"):
             await end_conversation(thread_id)
-            await save_conversation(thread_id, database)
+            await save_conversation(thread_id, Storage)
             break
         if user_input.lower() == "/id":
             print(f"Current thread_id: {thread_id}")
@@ -193,7 +162,7 @@ async def main() -> None:
         if user_input.lower().startswith("/new"):
             # Optional prefix: "/new"
             thread_id = new_thread_id()
-            _start_thread(thread_id, read_history=False)
+            prepare_for_stream(thread_id, Auth)
             print(f"Started new conversation. Thread: {thread_id}")
             continue
 
@@ -205,7 +174,7 @@ async def main() -> None:
             user_input=user_input,
             system_prompt=system_prompt,
         )
-        await save_conversation(thread_id, database)
+        await save_conversation(thread_id, Storage)
         if SHOW_STATS:
             print(f"[turn stats] chunks={t_chunks} chars={t_chars}")
 

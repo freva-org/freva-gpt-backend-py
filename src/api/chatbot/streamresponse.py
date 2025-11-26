@@ -8,17 +8,19 @@ import time
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Query, HTTPException
+from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
 
 from src.core.logging_setup import configure_logging
-from src.core.auth import AuthRequired
 from src.core.available_chatbots import default_chatbot
 from src.core.prompting import get_entire_prompt
+
+from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+
 from src.services.streaming.stream_variants import SVStreamEnd, SVServerError, from_sv_to_json, CODE, IMAGE
-from src.services.streaming.stream_orchestrator import run_stream, get_conversation_history
-from src.services.streaming.helpers import get_mcp_headers_from_req
+from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
+from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
     Registry, RegistryLock,
     ConversationState, get_conversation_state, 
@@ -26,7 +28,6 @@ from src.services.streaming.active_conversations import (
     new_thread_id, initialize_conversation, check_thread_exists,
 )
 
-from src.services.storage import mongodb_storage
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -52,10 +53,10 @@ def _sse_data(obj: dict):
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
 async def streamresponse(
-    request: Request,
     thread_id: Optional[str] = Query(None),
     input: Optional[str] = Query(None),
     chatbot: Optional[str] = Query(None),
+    Auth: Authenticator = Depends(auth_dependency),
 ):
     """
     Thin HTTP wrapper that delegates streaming to the orchestrator.
@@ -76,47 +77,34 @@ async def streamresponse(
 
     model_name = chatbot or default_chatbot()
 
-    user_id = getattr(request.state, "username", "anonymous")
+    user_name = Auth.username
 
-    vault_url = request.headers.get("x-freva-vault-url")
-    if not vault_url:
+    if not Auth.vault_url:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
     
-    database = await mongodb_storage.get_database(vault_url)
+    # Get thread storage
+    Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
 
-    system_prompt = get_entire_prompt(user_id, thread_id, model_name)
+    system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 
     async def event_stream():
-        messages: List[Dict[str, Any]] = []
-        if read_history:
-            try:
-                messages = await get_conversation_history(thread_id, database)
-            except Exception as e:
-                msg = f"Reading conversation history failed: {e}"
-                log.exception(msg)
-                err = SVServerError(message=msg)
-                end = SVStreamEnd(message="Stream ended with an error.")
-                await add_to_conversation(thread_id, [err, end])
-                await end_conversation(thread_id)
-                yield err
-                yield end
-                return
-
-        # Check if the conversation already exists in registry
-        # If not initialize it, and add the first messages 
-        await initialize_conversation(thread_id, user_id, request=request, messages=messages)
+        await prepare_for_stream(
+            thread_id=thread_id, 
+            user_id=user_name,
+            Auth=Auth,
+            Storage=Storage,
+            read_history=read_history
+        )
 
         last_check = time.monotonic()
         async for variant in run_stream(
             model=model_name,
             thread_id=thread_id,
-            user_id=user_id,
             user_input=user_input,
             system_prompt=system_prompt,
-            database=database,
         ):
             for data in _sse_data(from_sv_to_json(variant)):
                 yield data
@@ -130,7 +118,7 @@ async def streamresponse(
                     yield end_v
                     await add_to_conversation(thread_id, [end_v])
                     await end_conversation(thread_id=thread_id)
-        await save_conversation(thread_id, database)
+        await save_conversation(thread_id, Storage)
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",

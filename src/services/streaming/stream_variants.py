@@ -265,6 +265,28 @@ def _image_user_message(b64: str, mime: str) -> OpenAIMessage:
     }
 
 
+def mcp_tool_to_openai_function(tool: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert an MCP tool descriptor to OpenAI-style tool schema:
+    MCP (typical):
+      {"name": "search", "description": "...", "input_schema": {...}}
+    OpenAI tool:
+      {"type":"function","function":{"name":"search","description":"...","parameters":{...}}}
+    Be permissive: fall back to {} if schema missing.
+    """
+    name = tool.get("name") or ""
+    desc = tool.get("description") or ""
+    params = tool.get("input_schema") or tool.get("parameters") or {}
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": desc,
+            "parameters": params if isinstance(params, dict) else {},
+        },
+    }
+
+
 def _extend_with_prompt_json(out: List[OpenAIMessage], json_str: str) -> None:
     try:
         data = json.loads(json_str)

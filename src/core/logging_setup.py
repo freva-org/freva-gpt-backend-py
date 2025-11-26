@@ -1,11 +1,16 @@
 import os
 import logging
+from src.core.settings import get_settings
 
 _SILENCED = False
+settings = get_settings()
 
 def configure_logging() -> None:
     """Basic console logging"""
-    level = os.getenv("LOG_LEVEL", "INFO")
+    if settings.DEV:
+        level = "DEBUG"
+    else:
+        level = "INFO"
     logging.basicConfig(
         level=getattr(logging, level, logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",

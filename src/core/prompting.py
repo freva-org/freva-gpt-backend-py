@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.core.available_chatbots import model_is_gpt_5
-from src.services.storage.thread_storage import recursively_create_dir_at_rw_dir
 from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
 
 logger = logging.getLogger(__name__)
@@ -112,12 +111,6 @@ def get_entire_prompt(user_id: str, thread_id: str, model: str) -> List[Dict[str
     Build the full, ordered message list for a completion request (non-streaming).
     Order: [ System(starting), *examples, System(summary) ]
     """
-    # Best-effort parity with Rust’s directory prep
-    try:
-        recursively_create_dir_at_rw_dir(user_id, thread_id)
-    except Exception:
-        logger.debug("Could not ensure RW dir for user/thread; proceeding.", exc_info=True)
-
     assets = _load_prompts(model)
     messages: List[Dict[str, Any]] = []
     messages.append(_as_system_message(assets["starting"]))

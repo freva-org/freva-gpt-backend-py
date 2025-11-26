@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Query, HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-from src.core.auth import AuthRequired
+from src.services.service_factory import AuthRequired
 from src.core.logging_setup import configure_logging
 from src.services.streaming.active_conversations import request_stop
 

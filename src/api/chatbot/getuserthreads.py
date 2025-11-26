@@ -1,55 +1,43 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Depends
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-from src.core.auth import AuthRequired, ALLOW_FALLBACK_OLD_AUTH  # match Rust flags
-from src.services.storage import mongodb_storage 
+from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 
 router = APIRouter()
 
-def _get_user_id_from_request(request: Request) -> str | None:
-    """
-    Username is provided by AuthRequired (auth layer sets request.state.username)    
-    """
-    # 1) Preferred: identity from auth middleware
-    user_id = getattr(getattr(request, "state", None), "username", None)
-
-    # 2) Fallback: query param
-    if not user_id and ALLOW_FALLBACK_OLD_AUTH:
-        user_id = request.query_params.get("user_id")
-
-    return user_id
-
-
 @router.get("/getuserthreads", dependencies=[AuthRequired])
-async def get_user_threads(request: Request):
+async def get_user_threads(
+    auth: Authenticator = Depends(auth_dependency),
+):
     """
     Returns the latest 10 threads of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
-    user_id = _get_user_id_from_request(request)
-    if not user_id:
+    if not auth.username:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Missing user_id (auth or query).",
+            detail="Missing user_id (auth).",
         )
 
-    vault_url = request.headers.get("x-freva-vault-url")
-    if not vault_url:
-        raise HTTPException(status_code=503, detail="No vault URL provided.")
+    if not auth.vault_url:
+        raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
 
-    database = await mongodb_storage.get_database(vault_url)
+    Storage = await get_thread_storage(vault_url=auth.vault_url)
 
-    threads = await mongodb_storage.read_threads(user_id, database)
+    threads, num_threads = await Storage.list_recent_threads(auth.username, limit=20)
 
     return [
-        {
-            "user_id": t.user_id,
-            "thread_id": t.thread_id,
-            "date": t.date,
-            "topic": t.topic,
-            "content": t.content,
-        }
-        for t in threads
+        [
+            {
+                "user_id": t.user_id, 
+                "thread_id": t.thread_id,
+                "date": t.date,
+                "topic": t.topic,
+                "content": t.content,
+            }
+            for t in threads
+        ], 
+        num_threads
     ]

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import os
 import threading
 import logging
-from typing import Optional, Dict, Any, Literal, List, Tuple
-from itertools import product
+from typing import Optional, Dict, Any, Literal, List
 
 from src.core.logging_setup import configure_logging
-from src.core.settings import get_settings, get_server_url_dict
-from src.services.mcp.client import McpClient, McpCallResult
+from src.core.settings import get_settings
+from src.services.mcp.client import McpClient
+from src.services.storage.mongodb_storage import get_mongodb_uri
+from src.services.authentication.authenticator import Authenticator
+from src.services.streaming.stream_variants import mcp_tool_to_openai_function
 
 log = logging.getLogger(__name__)
 configure_logging()
@@ -16,27 +17,6 @@ configure_logging()
 settings = get_settings()
 
 Target = Literal[*settings.AVAILABLE_MCP_SERVERS]
-
-def _to_openai_function(tool: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Convert an MCP tool descriptor to OpenAI-style tool schema:
-    MCP (typical):
-      {"name": "search", "description": "...", "input_schema": {...}}
-    OpenAI tool:
-      {"type":"function","function":{"name":"search","description":"...","parameters":{...}}}
-    Be permissive: fall back to {} if schema missing.
-    """
-    name = tool.get("name") or ""
-    desc = tool.get("description") or ""
-    params = tool.get("input_schema") or tool.get("parameters") or {}
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": desc,
-            "parameters": params if isinstance(params, dict) else {},
-        },
-    }
 
 
 class McpManager:
@@ -67,7 +47,7 @@ class McpManager:
         self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {t:[] for t in self._servers}
         self._openai_tools_cache: Optional[List[Dict[str, Any]]] = None
         
-    # ---------- lifecycle ----------
+    # ────────── lifecycle ──────────
 
     def close(self):
         with self._lock:
@@ -76,7 +56,7 @@ class McpManager:
                     self._clients.get(s).close()
                     self._clients.update({s: None})
 
-    # ---------- internal clients ----------
+    # ────────── internal clients ──────────
 
     def _build_client(self, target: Target) -> McpClient:
         with self._lock:
@@ -84,7 +64,7 @@ class McpManager:
                 self._clients.update({target: McpClient(self._server_urls.get(target), default_headers=self._default_headers.get(target))})
            
 
-    # ---------- initialization / discovery ----------
+    # ────────── initialization / discovery ──────────
 
     def initialize(self, headers:Optional[dict]=None) -> None:
         """
@@ -111,7 +91,7 @@ class McpManager:
                 self._openai_tools_cache = []
                 for tgt in self._servers:
                     for t in self._tools_by_target[tgt]:  # type: ignore[index]
-                        self._openai_tools_cache.append(_to_openai_function(t))
+                        self._openai_tools_cache.append(mcp_tool_to_openai_function(t))
 
                 log.info(
                     f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} " + \
@@ -164,7 +144,7 @@ class McpManager:
                         return tgt
         return None
 
-    # ---------- tool export to LLM ----------
+    # ────────── tool export to LLM ──────────
 
     def openai_tools(self) -> List[Dict[str, Any]]:
         """
@@ -176,11 +156,11 @@ class McpManager:
                 merged: List[Dict[str, Any]] = []
                 for tgt in self._servers:
                     for t in self._tools_by_target[tgt]:
-                        merged.append(_to_openai_function(t))
+                        merged.append(mcp_tool_to_openai_function(t))
                 self._openai_tools_cache = merged
             return list(self._openai_tools_cache)
 
-    # ---------- calling tools ----------
+    # ────────── calling tools ──────────
 
     def call_tool(
         self,
@@ -206,24 +186,31 @@ class McpManager:
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
 
 
-def build_mcp_manager(headers: dict) -> McpManager:
-    """
-    Build and eagerly initialize a manager so tools are ready for prompting.
-    """
-    MCP_SERVER_URLs = get_server_url_dict(settings.AVAILABLE_MCP_SERVERS)
+# ──────────────────── Helper functions ──────────────────────────────
 
-    # Defaults to send; per-call headers (vault/rest) are added at call time.
-    default_headers: Dict[str, str] = {}
+async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
+    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
+    access_token = auth.access_token
+    freva_cfg_path = auth.freva_config_path
+    _verify_access_to_file(freva_cfg_path)
+    
+    headers = {
+        "rag": {
+            "Authorization": access_token,
+            "mongodb-uri":  mongodb_uri,
+            },
+        "code": {
+            "Authorization": access_token,
+            "freva-config-path": freva_cfg_path,
+            },
+            }
+    return headers
 
-    mgr = McpManager(
-        servers=settings.AVAILABLE_MCP_SERVERS,
-        server_urls=MCP_SERVER_URLs,
-        default_headers=default_headers,
-    )
 
+def _verify_access_to_file(file_path):
     try:
-        mgr.initialize(headers)
-        return mgr
-    except Exception as e:
-        # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        with open(file_path) as f:
+            s = f.read()
+    except:
+        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
+                    "Note that if it is freva-config path, any usage of the freva library will fail.")

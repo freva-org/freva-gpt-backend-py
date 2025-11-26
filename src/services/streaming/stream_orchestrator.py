@@ -7,11 +7,9 @@ from datetime import datetime
 
 import re
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
-from motor.motor_asyncio import AsyncIOMotorDatabase
 from dataclasses import dataclass
-from fastapi import Request
 
-from src.services.mcp.mcp_manager import McpManager
+from src.services.service_factory import Authenticator, ThreadStorage, McpManager
 
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
@@ -27,13 +25,11 @@ from src.services.streaming.helpers import accumulate_tool_calls, finalize_tool_
 from src.core.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
 
-from src.services.storage.router import read_thread
 from src.services.streaming.active_conversations import (
-    Registry, RegistryLock, 
     ConversationState, get_conversation_state, 
     get_conv_mcpmanager, get_conv_messages,
     add_to_conversation, end_conversation,
-    save_conversation,
+    initialize_conversation
     )
 
 log = logging.getLogger(__name__)
@@ -228,10 +224,8 @@ async def run_stream(
     *,
     model: str,
     thread_id: Optional[str],
-    user_id: str,
     user_input: str,
     system_prompt: List[Dict[str, Any]],
-    database: Optional[AsyncIOMotorDatabase] = None,
 ) -> AsyncGenerator[StreamVariant, None]:
     """
     Orchestrate a single turn, yielding StreamVariant objects.
@@ -266,17 +260,44 @@ async def run_stream(
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Stream ended with an error.")
             await add_to_conversation(thread_id, [err_v, end_v])
-            # TODO end conversation
+            await end_conversation(thread_id)
+            stream_state.finished = True
             yield err_v
             yield end_v
 
 
+async def prepare_for_stream(
+    thread_id, 
+    user_id,
+    Auth: Optional[Authenticator] = None, 
+    Storage: Optional[ThreadStorage] = None,
+    read_history: Optional[bool] = False, 
+) -> None :
+    messages: List[Dict[str, Any]] = []
+    if read_history and Storage:
+        try:
+            messages = await get_conversation_history(thread_id, Storage)
+        except Exception as e:
+            msg = f"Prompt/history assembly failed: {e}"
+            log.exception(msg)
+            err = SVServerError(message=msg)
+            end = SVStreamEnd(message="Stream ended with an error.")
+            print(err)
+            print(end)
+            await add_to_conversation(thread_id, [err, end])
+            await end_conversation(thread_id)
+
+    # Check if the conversation already exists in registry
+    # If not initialize it, and add the first messages 
+    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth)
+
+
 async def get_conversation_history(
     thread_id: Optional[str],
-    database: Optional[AsyncIOMotorDatabase] = None,
+    Storage: ThreadStorage,
     ):
     # Build messages for ongoing conversation
-    prior_json: List[dict] = await read_thread(thread_id, database)
+    prior_json: List[dict] = await Storage.read_thread(thread_id)
     prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]
     return prior_sv
 

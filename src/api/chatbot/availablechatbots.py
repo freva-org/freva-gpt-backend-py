@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from typing import List
 
 from src.core.available_chatbots import available_chatbots
-from src.core.auth import authorize_or_fail, AuthRequired
+from src.services.service_factory import AuthRequired
 
 router = APIRouter()
 

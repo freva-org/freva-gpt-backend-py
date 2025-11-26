@@ -37,9 +37,8 @@ from src.services.streaming.stream_variants import (
 )
 
 from src.services.streaming.active_conversations import (
-    end_conversation, add_to_conversation,
     new_thread_id, initialize_conversation,
-    save_conversation, remove_conversation
+    add_to_conversation, end_and_save_conversation
 )
 
 
@@ -88,7 +87,7 @@ async def _start_thread(thread_id, read_history:bool):
             print(err)
             print(end)
             await add_to_conversation(thread_id, [err, end])
-            await end_conversation(thread_id)
+            await end_and_save_conversation(thread_id)
     await initialize_conversation(thread_id, USER_ID, messages=messages, mcp_headers=mcp_headers)
 
 async def _run_turn(
@@ -183,8 +182,7 @@ async def main() -> None:
 
         # Commands
         if user_input.lower() in ("/exit", "/quit"):
-            await end_conversation(thread_id)
-            await save_conversation(thread_id, database)
+            await end_and_save_conversation(thread_id)
             break
         if user_input.lower() == "/id":
             print(f"Current thread_id: {thread_id}")
@@ -204,7 +202,7 @@ async def main() -> None:
             user_input=user_input,
             system_prompt=system_prompt,
         )
-        await save_conversation(thread_id, database)
+        await end_and_save_conversation(thread_id, database)
         if SHOW_STATS:
             print(f"[turn stats] chunks={t_chunks} chars={t_chars}")
 

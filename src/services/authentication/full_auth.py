@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 import warnings
 import logging
 
-from .authenticator import Authenticator, bearer_token_from_header, get_username_from_token
+from .authenticator import Authenticator
 
 log = logging.getLogger(__name__)
 

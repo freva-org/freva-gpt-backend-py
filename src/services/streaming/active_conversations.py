@@ -1,6 +1,7 @@
 
 import string
 import random
+import json
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
@@ -12,10 +13,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import Request
 
 from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_variants import StreamVariant, from_sv_to_json
+from src.services.streaming.stream_variants import StreamVariant, SVCode
 from src.services.mcp.mcp_manager import McpManager, build_mcp_manager
 from src.services.storage.router import append_thread
 from src.services.streaming.helpers import get_mcp_headers_from_req
+from src.services.streaming.stream_orchestrator import run_tool_via_mcp
 
 log = logging.getLogger(__name__)
 configure_logging()
@@ -75,7 +77,7 @@ async def initialize_conversation(
     messages: Optional[List[Dict[str, Any]]] = [],
     request: Optional[Request] = None,
     mcp_headers: Optional[Dict[str, Any]] = None,
-) -> ActiveConversation:
+) -> None:
     now = datetime.now(timezone.utc)      
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
@@ -86,7 +88,8 @@ async def initialize_conversation(
         elif mcp_headers:
             mcp_mgr = build_mcp_manager(headers=mcp_headers)
         else:
-            log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
+            log.warning(f"The conversation {thread_id} initialized without MCPManager! "
+                        "Please note that the MCP servers cannot be connected!")
 
         conv = ActiveConversation(
             thread_id=thread_id,
@@ -96,8 +99,19 @@ async def initialize_conversation(
             messages=messages,
             last_activity=now,
         )
-        # TODO: send tool calls to MCP server if there are variants present in messages, i.e. Code
+        # register conversation
         Registry[thread_id] = conv
+
+        # send tool calls to MCP server if there are Code variants present in messages
+        if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(_replay_code_history(thread_id))
+            await register_tool_task(thread_id, task)
+            task.add_done_callback(
+                # to be unregistered when done
+                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
+            )
+
     else:
         async with RegistryLock:
             conv = Registry.get(thread_id)
@@ -202,6 +216,52 @@ async def remove_conversation(
     if conv is None:
         return False
     return True
+
+
+async def _replay_code_history(thread_id: str) -> None:
+    """
+    Replays all SVCode blocks for a conversation into the code-interpreter MCP server,
+    to reconstruct the kernel state when a conversation has been reloaded from storage.
+
+    This is best-effort: failures are logged and we continue or stop depending on the error.
+    """
+    async with RegistryLock:
+        conv = Registry.get(thread_id)
+        if conv is None:
+            return
+        mcp = conv.mcp_manager
+        messages = list(conv.messages)
+
+    # Extract all code blocks in chronological order
+    code_blocks: list[str] = [
+        v.code
+        for v in messages
+        if isinstance(v, SVCode) and isinstance(v.code, str) and v.code.strip()
+    ]
+
+    if not code_blocks:
+        log.debug(f"No code blocks found in history for thread {thread_id}; nothing to replay.")
+        return
+
+    log.info(f"Replaying {len(code_blocks)} code blocks to code_interpreter for thread {thread_id}")
+
+    for code in code_blocks:
+        try:
+            # Run the blocking MCP call in a thread
+            await run_tool_via_mcp(
+                mcp=mcp,
+                tool_name="code_interpreter",
+                arguments_json=json.dumps({"code": code}),
+            )
+
+        except Exception as e:
+            log.exception(
+                "Failed while replaying code block for thread %s: %s",
+                thread_id,
+                e,
+            )
+            # break on first failure; might replace with `continue`
+            break
 
 
 async def register_tool_task(thread_id: str, task: asyncio.Task) -> None:

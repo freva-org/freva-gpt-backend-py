@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 
 import re
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
@@ -45,7 +44,7 @@ class StreamState:
 # MCP tool runner
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def _run_tool_via_mcp(
+async def run_tool_via_mcp(
     *,
     mcp: McpManager,
     tool_name: str,
@@ -166,7 +165,7 @@ async def stream_with_tools(
 
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
-            tool_task = asyncio.create_task(_run_tool_via_mcp(
+            tool_task = asyncio.create_task(run_tool_via_mcp(
                 mcp=mcp, tool_name=name, arguments_json=args_txt,
             ))
 

@@ -1,5 +1,6 @@
 import string
 import random
+import json
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
@@ -8,18 +9,15 @@ import logging
 import asyncio
 
 from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_variants import StreamVariant
+from src.services.streaming.stream_variants import StreamVariant, SVCode
 from src.services.service_factory import (
     Authenticator, ThreadStorage, McpManager,
     get_mcp_manager
 )
+from src.services.streaming.stream_orchestrator import run_tool_via_mcp
 
 log = logging.getLogger(__name__)
 configure_logging()
-
-
-# Idle timeout for cleanup
-MAX_IDLE = timedelta(minutes=3)
 
 
 class ConversationState(str, Enum):
@@ -81,7 +79,8 @@ async def initialize_conversation(
         if auth:
             mcp_mgr = await get_mcp_manager(authenticator=auth)
         else:
-            log.warning("The conversation is initialized without MCPManager! Please note that the MCP servers cannot be connected!")
+            log.warning(f"The conversation {thread_id} initialized without MCPManager! "
+                        "Please note that the MCP servers cannot be connected!")
 
         conv = ActiveConversation(
             thread_id=thread_id,
@@ -91,8 +90,19 @@ async def initialize_conversation(
             messages=messages,
             last_activity=now,
         )
-        # TODO: send tool calls to MCP server if there are variants present in messages, i.e. Code
+        # register conversation
         Registry[thread_id] = conv
+
+        # send tool calls to MCP server if there are Code variants present in messages
+        if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(_replay_code_history(thread_id))
+            await register_tool_task(thread_id, task)
+            task.add_done_callback(
+                # to be unregistered when done
+                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
+            )
+
     else:
         async with RegistryLock:
             conv = Registry.get(thread_id)
@@ -200,6 +210,52 @@ async def remove_conversation(
     return True
 
 
+async def _replay_code_history(thread_id: str) -> None:
+    """
+    Replays all SVCode blocks for a conversation into the code-interpreter MCP server,
+    to reconstruct the kernel state when a conversation has been reloaded from storage.
+
+    This is best-effort: failures are logged and we continue or stop depending on the error.
+    """
+    async with RegistryLock:
+        conv = Registry.get(thread_id)
+        if conv is None:
+            return
+        mcp = conv.mcp_manager
+        messages = list(conv.messages)
+
+    # Extract all code blocks in chronological order
+    code_blocks: list[str] = [
+        v.code
+        for v in messages
+        if isinstance(v, SVCode) and isinstance(v.code, str) and v.code.strip()
+    ]
+
+    if not code_blocks:
+        log.debug(f"No code blocks found in history for thread {thread_id}; nothing to replay.")
+        return
+
+    log.info(f"Replaying {len(code_blocks)} code blocks to code_interpreter for thread {thread_id}")
+
+    for code in code_blocks:
+        try:
+            # Run the blocking MCP call in a thread, reusing helper from stream_orchestrator 
+            await run_tool_via_mcp(
+                mcp=mcp,
+                tool_name="code_interpreter",
+                arguments_json=json.dumps({"code": code}),
+            )
+
+        except Exception as e:
+            log.exception(
+                "Failed while replaying code block for thread %s: %s",
+                thread_id,
+                e,
+            )
+            # break on first failure; might replace with `continue`
+            break
+
+
 async def register_tool_task(thread_id: str, task: asyncio.Task) -> None:
     """
     Register a long-running tool task with a conversation so it can be cancelled
@@ -231,6 +287,7 @@ async def cancel_tool_tasks(thread_id: str) -> None:
 
 
 async def cleanup_idle(
+    max_idle: timedelta,
     Storage: ThreadStorage
 ) -> list[str]:  # thread_ids evicted
     """
@@ -245,13 +302,14 @@ async def cleanup_idle(
     # Decide which ones to evict under lock and remove them.
     async with RegistryLock:
         for thread_id, conv in list(Registry.items()):
-            if now - conv.last_activity > MAX_IDLE:
+            if now - conv.last_activity > max_idle:
                 evicted_ids.append(thread_id)
                 conv.mcp_manager.close()
                 to_evict.append(Registry.pop(thread_id))
 
     # Persist outside the lock to avoid blocking other requests.
-    for conv in to_evict:
-        await end_and_save_conversation(conv, Storage)
+    if Storage:
+        for conv in to_evict:
+            await end_and_save_conversation(conv, Storage)
 
     return evicted_ids

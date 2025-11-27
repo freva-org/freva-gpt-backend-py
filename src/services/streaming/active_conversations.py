@@ -14,7 +14,7 @@ from src.services.service_factory import (
     Authenticator, ThreadStorage, McpManager,
     get_mcp_manager
 )
-from src.services.streaming.stream_orchestrator import run_tool_via_mcp
+from src.services.streaming.tool_calls import run_tool_via_mcp
 
 log = logging.getLogger(__name__)
 configure_logging()

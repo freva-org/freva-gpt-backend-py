@@ -20,7 +20,7 @@ from src.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
     from_json_to_sv
 )
-from src.services.streaming.helpers import accumulate_tool_calls, finalize_tool_calls, parse_tool_result, FinalSummary
+from src.services.streaming.tool_calls import run_tool_via_mcp, accumulate_tool_calls, finalize_tool_calls, parse_tool_result, FinalSummary
 from src.core.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
 
@@ -40,36 +40,6 @@ class StreamState:
     tool_call: Optional[Dict[str, Any]] = None 
     finished: bool = False
 
-# ──────────────────────────────────────────────────────────────────────────────
-# MCP tool runner
-# ──────────────────────────────────────────────────────────────────────────────
-
-async def run_tool_via_mcp(
-    *,
-    mcp: McpManager,
-    tool_name: str,
-    arguments_json: str,
-) -> str:
-    try:
-        args = json.loads(arguments_json or "{}")
-    except Exception:
-        args = {"_raw": arguments_json}
-
-    server_name = mcp.get_server_from_tool(tool_name)
-
-    # Run the blocking MCP call in a thread so cancellation of the coroutine
-    # doesn’t block the event loop.
-    loop = asyncio.get_running_loop()
-    res = await loop.run_in_executor(
-        None,
-        lambda: mcp.call_tool(
-            server_name,
-            name=tool_name,
-            arguments=args,
-        ),
-    )
-
-    return json.dumps(res)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Streaming with tools

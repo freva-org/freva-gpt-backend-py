@@ -2,15 +2,15 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import asyncio
+from datetime import timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api import static, chatbot
-from src.core.settings import Settings, get_settings
+from src.core.settings import get_settings
 from src.core.logging_setup import configure_logging
 from src.core.runtime_checks import run_startup_checks
 from src.core.auth import close_http_client
-from src.services.mcp.mcp_manager import build_mcp_manager
 from src.services.streaming.active_conversations import cleanup_idle
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
         while True:
             try:
                 await asyncio.sleep(60 * 60)  # check every hour
-                evicted = await cleanup_idle()
+                # Storage is not needed here, conversation must have been saved when it was last used
+                evicted = await cleanup_idle(max_idle=timedelta(days=1))
                 if evicted:
                     print("Evicted idle > 1 day:", evicted)
             except asyncio.CancelledError:

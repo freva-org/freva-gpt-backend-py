@@ -295,6 +295,7 @@ async def cancel_tool_tasks(thread_id: str) -> None:
 
 
 async def cleanup_idle(
+    max_idle: timedelta,
     database:  Optional[AsyncIOMotorDatabase] = None,
 ) -> list[str]:  # thread_ids evicted
     """
@@ -309,7 +310,7 @@ async def cleanup_idle(
     # Decide which ones to evict under lock and remove them.
     async with RegistryLock:
         for thread_id, conv in list(Registry.items()):
-            if now - conv.last_activity > MAX_IDLE:
+            if now - conv.last_activity > max_idle:
                 evicted_ids.append(thread_id)
                 conv.mcp_manager.close()
                 to_evict.append(Registry.pop(thread_id))

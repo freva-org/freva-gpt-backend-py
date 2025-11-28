@@ -40,13 +40,13 @@ async def lifespan(app: FastAPI):
                 print("Daily cleanup failed:", e)
                 
     # Launch background task
-    app.state.cleanup_task = asyncio.create_task(periodic_cleanup_task())
+    app.state.periodic_cleanup = asyncio.create_task(periodic_cleanup_task())
 
     try:
         yield
     finally:
         # Shutdown (was @app.on_event("shutdown"))
-        app.state.daily_cleanup.cancel()
+        app.state.periodic_cleanup.cancel()
 
 
 app = FastAPI(

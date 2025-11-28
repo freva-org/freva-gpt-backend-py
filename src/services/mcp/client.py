@@ -175,6 +175,9 @@ class McpClient:
         Call a tool via JSON-RPC method 'tools/call' or fallbacks.
         Sets session id based on session_key to keep continuity.
         """
+        if not self._session_id:
+            self._ensure_session("__default__")
+
         # Strategy 1: JSON-RPC tools/call
         rpc_id = str(uuid.uuid4())
         body = {

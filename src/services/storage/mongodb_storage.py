@@ -21,8 +21,15 @@ MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 class MongoThreadStorage(ThreadStorage):
     """PROD / shared implementation: store threads in MongoDB."""
-    async def __init__(self, vault_url: str) -> None:
-        self.db = await get_database(vault_url)
+    def __init__(self, vault_url: str) -> None:
+        self.vault_url = vault_url
+        self.db = None
+
+    @classmethod
+    async def create(cls, vault_url: str):
+        self = cls(vault_url)
+        self.db = await get_database(self.vault_url)
+        return self
 
     async def append_thread(
         self,

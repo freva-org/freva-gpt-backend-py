@@ -56,7 +56,7 @@ async def get_thread_storage(
         return DiskThreadStorage()
     else:
         # PROD: MongoDB storage
-        return await MongoThreadStorage(vault_url=vault_url)
+        return await MongoThreadStorage.create(vault_url=vault_url)
 
 
 async def get_mcp_manager(authenticator: Authenticator) -> McpManager:

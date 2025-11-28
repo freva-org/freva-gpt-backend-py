@@ -1,7 +1,8 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
+import os
 
 from .thread_storage import ThreadStorage, Thread, summarize_topic
 from src.services.streaming.stream_variants import Conversation, SVUser, from_sv_to_json, cleanup_conversation
@@ -13,6 +14,8 @@ THREADS_DIR = Path("./threads")
 
 class DiskThreadStorage(ThreadStorage):
     """DEV / local implementation: store threads on disk."""    
+    def __init__(self):
+        THREADS_DIR.mkdir(parents=True, exist_ok=True)
 
     async def append_thread(
         self,
@@ -20,7 +23,6 @@ class DiskThreadStorage(ThreadStorage):
         user_id: str,
         content: Conversation,
     ) -> None:
-        THREADS_DIR.mkdir(parents=True, exist_ok=True)
 
         content = cleanup_conversation(content)
         if not content:
@@ -48,6 +50,8 @@ class DiskThreadStorage(ThreadStorage):
             for line in to_write:
                 f.write(line + "\n")
 
+        await self._topic_as_meta(thread_id, content)
+
 
     async def list_recent_threads(
         self,
@@ -59,11 +63,9 @@ class DiskThreadStorage(ThreadStorage):
         for d in docs:
             thread_id = d.stem
             content = await self.read_thread(thread_id)
-            first_user_text = next((sv.text if isinstance(sv, SVUser) else getattr(sv, "content", None)
-                                for sv in content
-                                if isinstance(sv, SVUser)), None)
-            topic = await summarize_topic(first_user_text or "Untitled")
-
+            
+            topic = await self._topic_as_meta(thread_id, content)
+            
             threads.append(
                 Thread(
                     user_id=user_id,
@@ -75,11 +77,11 @@ class DiskThreadStorage(ThreadStorage):
             )
         return threads, n_threads
 
+
     async def read_thread(
         self,
         thread_id: str,
     ) -> List[Dict]:
-        # TODO check return
         path = THREADS_DIR / f"{thread_id}.txt"
         if not path.exists():
             raise FileNotFoundError("Thread not found")
@@ -95,16 +97,39 @@ class DiskThreadStorage(ThreadStorage):
             except Exception:
                 pass
         return conv
+    
+
+    async def _topic_as_meta(self, thread_id: str, content: List[Dict]) -> None:
+        """ 
+        If meta file exists, reads topic and returns else summarizes the topic, 
+        saves and returns it
+        """
+        topic_path = THREADS_DIR / f"{thread_id}.meta.json"
+        if topic_path.exists():
+            with open(topic_path) as f:
+                d = json.load(f)
+            return d.get("topic")
+        else:
+            topic = await summarize_topic(content)
+            topic_json = {"topic": topic}
+
+            with open(topic_path, "w", encoding="utf-8") as f:
+                json.dump(topic_json, f)
+            
+            return topic
+
+        
 
 
 # ──────────────────── Helper functions ──────────────────────────────
+
 
 def get_latest_files(directory: str, n: int):
     p = Path(directory)
 
     # Get only files, not directories
     try:
-        files = [f for f in p.iterdir() if f.exists() and f.is_file()]
+        files = [f for f in p.iterdir() if f.is_file() and f.suffix == ".txt"]
     except:
         files = []
 

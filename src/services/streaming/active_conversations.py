@@ -278,7 +278,7 @@ async def unregister_tool_task(thread_id: str, task: asyncio.Task) -> None:
     Remove a task from the registry once it finishes.
     """
     async with RegistryLock:
-        tasks = list(Registry.get(thread_id).tool_tasks or ())
+        tasks = Registry.get(thread_id).tool_tasks or ()
         if not tasks:
             return
         tasks.discard(task)

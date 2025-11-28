@@ -45,12 +45,14 @@ class DiskThreadStorage(ThreadStorage):
                     line = f"{var}:{c}"
                 to_write.append(line)
 
+        content_dict: List[Dict] = []
         path = THREADS_DIR / f"{thread_id}.txt"
         with open(path, "a", encoding="utf-8") as f:
             for line in to_write:
                 f.write(line + "\n")
+                content_dict.append(json.loads(line))
 
-        await self._topic_as_meta(thread_id, content)
+        await self._topic_as_meta(thread_id, content_dict)
 
 
     async def list_recent_threads(

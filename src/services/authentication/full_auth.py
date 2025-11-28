@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 import warnings
 import logging
+import httpx
 
 from .authenticator import Authenticator
 
@@ -117,15 +118,18 @@ def _normalize_systemuser_path(rest_url: str) -> str:
 
 
 async def get_username_from_token(token: str, rest_url: str) -> str:
-    """Recives a token, checks it against the URL provided in the header and returns the username."""
+    """
+    Calls the token-check endpoint at <rest_url>/api/freva-nextgen/auth/v2/systemuser
+    and returns the username (pw_name).
+    """
+
     path = _normalize_systemuser_path(rest_url)
     url = f"{rest_url}{path}"
     log.debug("Token check URL: %s", url)
-    client = httpx.AsyncClient(timeout=20.0)
 
     try:
-        resp = await client().get(url, headers={"Authorization": f"Bearer {token}"})#
-        client.aclose()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
     except Exception as e:
         # ServiceUnavailable on request error to vault/rest
         log.error("Error sending request to systemuser endpoint: %s", e)

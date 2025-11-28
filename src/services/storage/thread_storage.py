@@ -98,7 +98,10 @@ async def summarize_topic(content: List[Dict]) -> str:
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     Only the first user text is taken into account.
     """
-    topic = [sv.get("content") for sv in content if sv.get("variant") == "User"][0] 
+    topic = next(
+        (sv.get("content") for sv in content if sv.get("variant") == "User"),
+        "Untitled"
+    )
 
     prompt = (
         "Summarize this chat topic in at most ~12 words, neutral tone.\n\n"

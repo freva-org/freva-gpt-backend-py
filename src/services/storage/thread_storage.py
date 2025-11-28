@@ -83,6 +83,8 @@ def create_dir_at_rw_dir(
 
 # ==== Summarization for topic ====
 
+# TODO: update topic
+
 def _fallback_topic(raw: str | None) -> str:
     if not raw:
         return "Untitled"
@@ -90,10 +92,14 @@ def _fallback_topic(raw: str | None) -> str:
     s = " ".join(raw.split())
     return (s[:80] + "…") if len(s) > 80 else s
 
-async def summarize_topic(topic: str) -> str:
+
+async def summarize_topic(content: List[Dict]) -> str:
     """
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
+    Only the first user text is taken into account.
     """
+    topic = [sv.get("content") for sv in content if sv.get("variant") == "User"][0] 
+
     prompt = (
         "Summarize this chat topic in at most ~12 words, neutral tone.\n\n"
         f"Topic:\n{(topic or '')[:2000]}"

@@ -47,11 +47,8 @@ class MongoThreadStorage(ThreadStorage):
             topic = None
 
         # compute topic if missing
-        first_user_text = next((sv.text if isinstance(sv, SVUser) else getattr(sv, "content", None)
-                                for sv in merged_sv
-                                if isinstance(sv, SVUser)), None)
         if not topic:
-            topic = await summarize_topic(first_user_text or "Untitled")
+            topic = await summarize_topic(content or "Untitled")
 
         doc = {
             "user_id": user_id,

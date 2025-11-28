@@ -19,7 +19,8 @@ configure_logging()
 _disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
-_KERNEL_REGISTRY: dict[str, KernelManager] = {}
+_KERNEL_REGISTRY: dict[str, KernelManager] = {} 
+# TODO: remove kernel from registry when session is closed
 
 # ── Config ───────────────────────────────────────────────────────────────────
 EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in case the kernel hangs or runs forever

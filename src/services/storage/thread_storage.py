@@ -6,7 +6,7 @@ from typing import List, Dict, Tuple
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.services.streaming.stream_variants import StreamVariant, Conversation
+from src.services.streaming.stream_variants import StreamVariant, SVUser
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.core.available_chatbots import default_chatbot
 
@@ -98,10 +98,16 @@ async def summarize_topic(content: List[Dict]) -> str:
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     Only the first user text is taken into account.
     """
-    topic = next(
-        (sv.get("content") for sv in content if sv.get("variant") == "User"),
-        "Untitled"
-    )
+    if isinstance(content[0], Dict):
+        topic = next(
+            (item.get("content", "") for item in content if item.get("variant") == "user"),
+            "Untitled"
+        )
+    else:
+        topic = next(
+            (sv.text for sv in content if isinstance(sv, SVUser)),
+            "Untitled"
+        )
 
     prompt = (
         "Summarize this chat topic in at most ~12 words, neutral tone.\n\n"

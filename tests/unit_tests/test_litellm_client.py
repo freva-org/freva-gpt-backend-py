@@ -1,11 +1,10 @@
-import asyncio
-import json
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 import pytest
 import requests
 
 from src.services.streaming.litellm_client import acomplete, first_text
+
 
 class FakeResp:
     def __init__(self, status_code=200, json_body=None, text=""):
@@ -29,34 +28,45 @@ class FakeResp:
             e.response = self  # tests / client code can read e.response.text/json()
             raise e
 
+
 @pytest.mark.asyncio
 async def test_acomplete_success_roundtrip(monkeypatch):
-    # Fake requests.post JSON response
     fake = FakeResp(
         status_code=200,
         json_body={"choices": [{"message": {"content": "hello world"}}]},
         text='{"choices":[{"message":{"content":"hello world"}}]}',
     )
-    with patch("src.services.streaming.litellm_client.httpx.AsyncClient.post", return_value=fake):
-        result = await acomplete(model="qwen2.5:3b", messages=[{"role":"user","content":"hi"}])
+
+    async def fake_post(self, *args, **kwargs):
+        return fake
+
+    with patch(
+        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        new=fake_post,
+    ):
+        result = await acomplete(model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}])
+
     assert first_text(result) == "hello world"
+
 
 @pytest.mark.asyncio
 async def test_acomplete_includes_error_body(monkeypatch):
-    # Simulate proxy error with a JSON body
     fake = FakeResp(
         status_code=500,
         json_body={"error": {"message": "bad"}},
         text='{"error":"bad"}',
     )
-    with patch("src.services.streaming.litellm_client.httpx.AsyncClient.post", return_value=fake):
+
+    async def fake_post(self, *args, **kwargs):
+        return fake
+
+    with patch(
+        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        new=fake_post,
+    ):
         with pytest.raises(requests.HTTPError) as ei:
             await acomplete(model="x", messages=[])
-    
-    # Check status text
-    assert "500 Server Error" in str(ei.value)
 
-    # And ensure body is accessible from the attached response
+    assert "500 Server Error" in str(ei.value)
     assert ei.value.response is not None
     assert "bad" in (ei.value.response.text or "")
-

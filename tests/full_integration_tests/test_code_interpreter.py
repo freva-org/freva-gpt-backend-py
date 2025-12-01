@@ -1,16 +1,36 @@
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-import os
-from pathlib import Path
+import os, importlib
 from typing import Iterable, Dict, Optional, Any
 
-import anyio
+from src.services.mcp.client import McpClient
+
+import pytest
+pytestmark = pytest.mark.integration 
+# Run these tests using `pytest -m integration`
 
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(autouse=True)
+def _force_dev(monkeypatch):
+    monkeypatch.setenv("DEV", "1")
+    monkeypatch.setenv("CODE_SERVER_URL", "http://localhost:8051")
+    import src.core.settings as settings
+    importlib.reload(settings)
+    yield
+
+
+@pytest.fixture
+def mcp_client_CI():
+    base_url = os.getenv("CODE_SERVER_URL", "http://localhost:8051")
+    client = McpClient(
+        base_url=base_url,
+        default_headers={"freva-config-path": "freva_evaluation.conf"},
+    )
+    return client
 
 
 def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
@@ -24,7 +44,7 @@ def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
     
     results = mcp_c.call_tool(name="code_interpreter",
                               args=code,
-                              session_key="test-session")
+    )
     # Ensure type and shape of result
     if not isinstance(results, Dict) and "structuredContent" not in results.keys():
         raise RuntimeError("MCP client returned unknown result from code-interpreter.")
@@ -55,6 +75,11 @@ def _exec_and_get_richoutput_value(mcp_client_CI, code):
     rich_data = result.get("display_data", "")
     return rich_data
 
+
+@pytest.mark.skipif(
+    not os.getenv("CODE_SERVER_URL"),
+    reason="CODE_SERVER_URL not set or code-interpreter MCP server not running",
+)
 def test_two_plus_two(mcp_client_CI):
     code = {"code":'2+2'}
     assert _exec_and_get_evaluated_value(mcp_client_CI, code) == "4"

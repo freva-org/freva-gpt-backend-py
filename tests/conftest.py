@@ -1,10 +1,11 @@
 # tests/conftest.py
-import importlib
 import pytest
 import httpx
 
-import os, sys, importlib
+import os, sys
 from pathlib import Path
+from types import SimpleNamespace
+
 
 # Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,11 +20,15 @@ from src.services.mcp.client import McpClient
 
 @pytest.fixture
 def app():
-    # Reload singletons so env is re-read cleanly
+    # Reload settings after environment patching
     import src.core.settings as settings
+    import importlib
     importlib.reload(settings)
-    import src.core.auth as auth
-    importlib.reload(auth)
+
+    # Reload service_factory so that get_authenticator picks up new settings.DEV
+    import src.services.service_factory as sf
+    importlib.reload(sf)
+
     from src.app import app as fastapi_app
     return fastapi_app
 
@@ -38,10 +43,15 @@ def client(app):
 
 
 @pytest.fixture(autouse=True)
-def _env():
-    os.environ["AUTH_KEY"] = "test-auth-key"
-    os.environ["HOST"] = "localhost"
-    os.environ["BACKEND_PORT"] = "8502"
+def _env(monkeypatch):
+    monkeypatch.setenv("AUTH_KEY", "test-auth-key")
+    monkeypatch.setenv("HOST", "localhost")
+    monkeypatch.setenv("BACKEND_PORT", "8502")
+
+    # Decide: default test mode
+    monkeypatch.setenv("DEV", "0")  # for PROD-like auth & Mongo path
+    # or "1" if you want DevAuthenticator + DiskThreadStorage
+
     yield
 
 
@@ -55,113 +65,6 @@ def GOOD_HEADERS():
         "x-freva-config-path": "dummy.conf",
     }
 
-# ──────────────────────────────────────────────────────────────────────────────
-# DB FAKES + PATCH HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
-
-class _DummyCursor:
-    def __init__(self, docs):
-        self._docs = docs
-    def __aiter__(self):
-        async def gen():
-            for d in self._docs:
-                yield d
-        return gen()
-
-class _DummyCollection:
-    def __init__(self, docs=None, by_id=None):
-        self._docs = docs or []
-        self._by_id = by_id or {}
-    async def find_one(self, query):
-        if "_id" in query and query["_id"] in self._by_id:
-            return self._by_id[query["_id"]]
-        return next(iter(self._docs), None)
-    def find(self, query=None):
-        return _DummyCursor(self._docs)
-
-class DummyDB:
-    def __init__(self):
-        self._collections = {"threads": _DummyCollection()}
-    def get_collection(self, name):
-        return self._collections.setdefault(name, _DummyCollection())
-    async def command(self, cmd):
-        # Accept common ping shapes
-        assert isinstance(cmd, dict) and "ping" in cmd
-        return {"ok": 1}
-
-@pytest.fixture
-def dummy_db():
-    return DummyDB()
-
-@pytest.fixture
-def patch_db(monkeypatch, dummy_db, GOOD_HEADERS):
-    async def fake_get_database(vault_url: str):
-        # Assert header propagated correctly
-        assert vault_url == GOOD_HEADERS["x-freva-vault-url"]
-        return dummy_db
-
-    monkeypatch.setattr(
-        "src.services.storage.mongodb_storage.get_database",
-        fake_get_database,
-        raising=True,
-    )
-    return dummy_db
-
-@pytest.fixture
-def patch_mongo_uri(monkeypatch):
-    async def fake_mongodb_uri(vault_url: str):
-        return vault_url
-
-    monkeypatch.setattr(
-        "src.api.chatbot.streamresponse.get_mongodb_uri",
-        fake_mongodb_uri,
-        raising=True,
-    )
-    return fake_mongodb_uri
-
-@pytest.fixture
-def patch_read_thread(monkeypatch):
-    async def _fake(thread_id: str, database):
-        # default variant set; override per test if needed
-        return [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "ToolResult", "text": "also kept"},
-        ]
-    monkeypatch.setattr("src.services.storage.router.read_thread", _fake, raising=False)
-    return _fake  # return so tests can swap behavior if needed
-
-@pytest.fixture
-def patch_user_threads(monkeypatch):
-    async def fake_get_user_threads(user: str, database):
-        from src.services.storage.mongodb_storage import MongoDBThread
-        # mirror route contract: return JSON with "user" + thread ids
-        return [MongoDBThread(
-            user_id=user,
-            thread_id="thread 123",
-            date="today",
-            topic="greeting",
-            content="hi",
-        )]
-    monkeypatch.setattr("src.services.storage.mongodb_storage.read_threads", fake_get_user_threads, raising=False)
-    return fake_get_user_threads
-    
-
-@pytest.fixture
-def patch_stream(monkeypatch):
-    async def fake_run_stream(**kwargs):
-        from src.services.streaming.stream_variants import SVAssistant, SVServerHint
-        yield SVServerHint(data={"thread_id": "t-abc"})
-        yield SVAssistant(text="hello")
-        return
-
-    # IMPORTANT: patch where the route resolves it
-    monkeypatch.setattr(
-        "src.api.chatbot.streamresponse.run_stream",  # adjust module path if different
-        fake_run_stream,
-        raising=True,
-    )
-    return fake_run_stream
 
 # ──────────────────────────────────────────────────────────────────────────────
 # NETWORK STUBS
@@ -178,14 +81,186 @@ def stub_resp(respx_mock):
     )
     return respx_mock
 
+
 # ──────────────────────────────────────────────────────────────────────────────
-# MCP Clients
+# MONGODB FAKES and PATCHES
 # ──────────────────────────────────────────────────────────────────────────────
 
-code_url = os.getenv("CODE_SERVER_URL", "http://localhost:8051")
-headers = {"freva-config-path": "freva_evaluation.conf"}
+class DummyCollection:
+    def __init__(self):
+        self.storage = {}
+
+    async def find_one(self, q):
+        return self.storage.get(q.get("thread_id"))
+
+    async def find(self, q):
+        # tests only use list_recent_threads and read
+        for item in self.storage.values():
+            yield item
+
+    async def insert_one(self, doc):
+        self.storage[doc["thread_id"]] = doc
+        return None
+
+
+class DummyDB:
+    def __init__(self):
+        self._coll = DummyCollection()
+
+    def __getitem__(self, name):
+        return self._coll
+
 
 @pytest.fixture
-def mcp_client_CI():
-    mcp_client = McpClient(base_url=code_url, default_headers=headers)
-    return mcp_client
+def dummy_db():
+    return DummyDB()
+
+
+@pytest.fixture
+def patch_db(monkeypatch, dummy_db, GOOD_HEADERS):
+    async def fake_get_database(vault_url: str):
+        # Assert header propagated correctly
+        assert vault_url == GOOD_HEADERS["x-freva-vault-url"]
+        return dummy_db
+
+    monkeypatch.setattr(
+        "src.services.storage.mongodb_storage.get_database",
+        fake_get_database,
+        raising=True,
+    )
+    return dummy_db
+
+
+@pytest.fixture
+def patch_mongo_uri(monkeypatch):
+    async def fake_mongodb_uri(vault_url: str):
+        # Assert the vault_url was propagated correctly
+        assert vault_url == GOOD_HEADERS["x-freva-vault-url"]
+        # Return a dummy MongoDB URI; it will be consumed by get_database
+        return "mongodb://dummy-host/dummy-db"
+
+    import src.services.storage.mongodb_storage as mongo_storage
+
+    monkeypatch.setattr(
+        mongo_storage,
+        "get_mongodb_uri",
+        fake_mongodb_uri,
+        raising=False,
+    )
+
+    return fake_mongodb_uri
+
+
+@pytest.fixture
+def patch_read_thread(monkeypatch):
+    async def _fake(thread_id: str, database):
+        return [
+            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {"variant": "User", "text": "kept"},
+            {"variant": "Assistant", "text": "also kept"},
+        ]
+    import src.services.storage.mongodb_storage as mongo_store
+    monkeypatch.setattr(
+        mongo_store.MongoThreadStorage,
+        "read_thread",
+        _fake,
+        raising=False,
+    )
+
+    return _fake 
+
+
+@pytest.fixture
+def patch_append_thread(monkeypatch):
+    async def _fake_append(database, thread_id: str, user_id: str, messages):
+        return 
+    import src.services.storage.mongodb_storage as mongo_store
+    monkeypatch.setattr(
+        mongo_store.MongoThreadStorage,
+        "append_thread",
+        _fake_append,
+        raising=False,
+    )
+
+    return _fake_append 
+
+
+@pytest.fixture
+def patch_user_threads(monkeypatch):
+    async def fake_get_user_threads(self, user_id: str, limit: int = 20):
+        # Return objects with attributes, matching what the route expects
+        threads = [
+            SimpleNamespace(
+                user_id=user_id,
+                thread_id="t-1",
+                date="2025-01-01T00:00:00Z",
+                topic="First thread",
+                content="first content",
+            ),
+            SimpleNamespace(
+                user_id=user_id,
+                thread_id="t-2",
+                date="2025-01-02T00:00:00Z",
+                topic="Second thread",
+                content="second content",
+            ),
+        ]
+        return threads, len(threads)
+
+    import src.services.storage.mongodb_storage as mongo_store
+
+    monkeypatch.setattr(
+        mongo_store.MongoThreadStorage,
+        "list_recent_threads",
+        fake_get_user_threads,
+        raising=True,
+    )
+
+    return fake_get_user_threads
+    
+# ──────────────────────────────────────────────────────────────────────────────
+# STREAM PATCH
+# ──────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def patch_stream(monkeypatch):
+    async def fake_run_stream(**kwargs):
+        from src.services.streaming.stream_variants import SVAssistant, SVServerHint
+        yield SVServerHint(data={"thread_id": "t-abc"})
+        yield SVAssistant(text="hello")
+        return
+
+    # IMPORTANT: patch where the route resolves it
+    monkeypatch.setattr(
+        "src.api.chatbot.streamresponse.run_stream",  
+        fake_run_stream,
+        raising=True,
+    )
+    return fake_run_stream
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MCP FAKES and PATCHES
+# ──────────────────────────────────────────────────────────────────────────────
+
+class DummyMcpManager:
+    async def close(self) -> None:
+        pass
+
+    # add any methods you might accidentally call, as no-ops
+    async def ensure_connected(self) -> None:
+        pass
+
+@pytest.fixture
+def patch_mcp_manager(monkeypatch):
+    """
+    Avoid hitting the real MCP manager / MCP Mongo from tests.
+    initialize_conversation() will still run, but with a dummy manager.
+    """
+    from src.services.streaming import active_conversations as ac
+
+    async def fake_get_mcp_manager(authenticator):
+        # You can assert on authenticator if you want
+        return DummyMcpManager()
+
+    monkeypatch.setattr(ac, "get_mcp_manager", fake_get_mcp_manager, raising=True)
+    return fake_get_mcp_manager

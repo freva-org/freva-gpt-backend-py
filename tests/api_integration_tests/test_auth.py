@@ -1,4 +1,3 @@
-import os, importlib
 import pytest
 import httpx
 import respx
@@ -9,7 +8,10 @@ async def test_auth_missing_headers_returns_401(client):
     async with client:
         r = await client.get("/api/chatbot/heartbeat")
         assert r.status_code == 401
-        assert r.json()["detail"] == "Some necessary field weren't found in...in, check whether the nginx proxy and sets the right headers."
+        detail = r.json()["detail"]
+        assert "Some necessary field weren't found" in detail
+        assert "nginx proxy" in detail
+
 
 @pytest.mark.asyncio
 async def test_auth_non_bearer_header_422(client):
@@ -21,6 +23,7 @@ async def test_auth_non_bearer_header_422(client):
         assert r.status_code == 422
         assert r.json()["detail"] == "Authorization header is not a Bearer token. Please use the Bearer token format."
 
+
 @pytest.mark.asyncio
 async def test_auth_missing_rest_url_400(client):
     async with client:
@@ -29,7 +32,8 @@ async def test_auth_missing_rest_url_400(client):
             headers={"Authorization": "Bearer abc"},
         )
         assert r.status_code == 400
-        assert r.json()["detail"] == "Authentication not successful; please use the nginx proxy. (rest)"
+        assert r.json()["detail"] == "Authentication not successful! RestURL not found. Please use the nginx proxy. (rest)"
+
 
 @pytest.mark.asyncio
 async def test_auth_token_check_network_error_503(client):

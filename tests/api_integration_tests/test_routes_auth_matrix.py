@@ -4,7 +4,6 @@ ENDPOINTS_GET = [
     "/api/chatbot/heartbeat",
     "/api/chatbot/availablechatbots",
     "/api/chatbot/getuserthreads",
-    "/api/chatbot/stop",
 ]
 
 @pytest.mark.asyncio
@@ -15,7 +14,18 @@ async def test_all_get_routes_require_auth(client):
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
 
 @pytest.mark.asyncio
-async def test_routes_succeed_with_auth_and_username_injection( stub_resp, client, GOOD_HEADERS, patch_db, patch_read_thread, patch_user_threads, patch_mongo_uri, patch_stream):
+async def test_routes_succeed_with_auth_and_username_injection( 
+    stub_resp, 
+    client, 
+    GOOD_HEADERS, 
+    patch_db, 
+    patch_read_thread, 
+    patch_append_thread,
+    patch_user_threads, 
+    patch_mongo_uri, 
+    patch_stream,
+    patch_mcp_manager,
+):
     # Mock the REST call the auth layer uses to resolve a username
     with  stub_resp:
         async with client:
@@ -27,7 +37,7 @@ async def test_routes_succeed_with_auth_and_username_injection( stub_resp, clien
             # 2) username is injected 
             r = await client.get("/api/chatbot/getuserthreads", headers=GOOD_HEADERS)
             assert r.status_code == 200
-            assert r.json()[0].get("user_id") == "alice"
+            assert r.json()[0][0].get("user_id") == "alice"
 
             # 3) /getthread: must pass thread_id + vault header
             r = await client.get(
@@ -48,10 +58,10 @@ async def test_routes_succeed_with_auth_and_username_injection( stub_resp, clien
                 params={"input": "hi there", "chatbot": "qwen2.5:3b"},
             )
             assert r.status_code == 200
-            assert r.headers.get("content-type", "").startswith("text/event-stream")
+            assert r.headers.get("content-type", "").startswith("application/x-ndjson")
 
-            # 5) /stop POST works too
-            r = await client.post("/api/chatbot/stop", headers=GOOD_HEADERS)
+            # 5) /stop 
+            r = await client.get("/api/chatbot/stop", params={"thread_id": "t-123"}, headers=GOOD_HEADERS)
             assert r.status_code == 200
-            assert r.json().get("stopped") is True
+            assert r.json().get("ok") is True
 

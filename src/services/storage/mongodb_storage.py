@@ -76,7 +76,7 @@ class MongoThreadStorage(ThreadStorage):
         limit: int = 20,
     ) -> Tuple[List[Thread], int]:
         coll = self.db[MONGODB_COLLECTION_NAME]
-        n_threads = coll.find({"user_id": user_id}).count()
+        n_threads = await coll.count_documents({"user_id": user_id})
         cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [

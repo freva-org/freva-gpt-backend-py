@@ -24,7 +24,7 @@ from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
     ConversationState, get_conversation_state, 
     end_and_save_conversation, add_to_conversation,
-    new_thread_id, check_thread_exists,
+    new_thread_id, check_thread_exists, cancel_tool_tasks
 )
 
 router = APIRouter()
@@ -119,6 +119,7 @@ async def streamresponse(
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
                     yield _sse_data(from_sv_to_json(end_v))
                     await add_to_conversation(thread_id, [end_v])
+                    await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
                     return
         await end_and_save_conversation(thread_id, Storage)

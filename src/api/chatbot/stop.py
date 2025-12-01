@@ -31,8 +31,6 @@ async def stop_get(
     log.debug(f"Initiated to stop conversation with id: {thread_id}")
 
     ok = await request_stop(thread_id)
-    
-    await cancel_tool_tasks(thread_id)
 
     if ok:
         return {"ok": ok, "body": "Conversation stopped."}

@@ -281,7 +281,7 @@ async def cancel_tool_tasks(thread_id: str) -> None:
     Cancel all known tool tasks for this conversation.
     """
     async with RegistryLock:
-        tasks = list(Registry.get(thread_id).tool_tasks or ())
+        tasks = Registry.get(thread_id).tool_tasks or ()
     for t in tasks:
         t.cancel()
 

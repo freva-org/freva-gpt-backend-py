@@ -184,8 +184,7 @@ async def stream_with_tools(
 
         if name == "code_interpreter":
             # We append accumulated code text to thread
-            code_json = json.loads(args_txt or "{}").get("code", "")
-            code_v = SVCode(code=code_json, id=id)
+            code_v = SVCode(code=args_txt, id=id)
             tc_variants.append(code_v)
 
         tool_out_v: List[StreamVariant] = []

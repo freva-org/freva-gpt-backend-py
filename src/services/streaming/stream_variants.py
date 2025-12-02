@@ -333,8 +333,7 @@ def help_convert_sv_ccrm(
             out.append({"role": ROLE_ASSISTANT, "name": v.name, "content": v.text})
 
         elif isinstance(v, SVCode):
-            arguments = json.dumps({"code": v.code}, ensure_ascii=False)
-            out.append(_tool_call_message(arguments, v.id, tool_name=TOOL_NAME_CODE))
+            out.append(_tool_call_message(v.code, v.id, tool_name=TOOL_NAME_CODE))
 
         elif isinstance(v, SVCodeOutput):
             out.append(_tool_result_message(v.output, v.id, tool_name=TOOL_NAME_CODE))

@@ -35,4 +35,5 @@ async def stop_get(
     if ok:
         return {"ok": ok, "body": "Conversation stopped."}
     else:
-        raise ValueError(f"Conversation with given thread ID not found: {thread_id}")
+        return {"ok": True, "body": "Conversation with given thread-id was never registered."}
+        # raise ValueError(f"Conversation with given thread ID not found: {thread_id}")

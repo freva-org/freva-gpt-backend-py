@@ -2,6 +2,13 @@ from __future__ import annotations
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+import os
+os.environ["DEV"] = "1"
+os.environ["LITE_LLM_ADDRESS"]="http://localhost:4000"
+os.environ["RAG_SERVER_URL"]="http://localhost:8050" 
+os.environ["CODE_SERVER_URL"]="http://localhost:8051"
+os.environ["MCP_DISABLE_AUTH"]="1"
+
 """
 Interactive multi-turn dev runner mirroring /chatbot/streamresponse behaviour.
 
@@ -31,7 +38,7 @@ from src.services.streaming.stream_variants import (
     SVAssistant,
     SVCode,
 )
-from src.services.service_factory import get_authenticator, get_thread_storage
+from src.services.service_factory import auth_dependency, get_thread_storage
 from src.services.streaming.active_conversations import (
     new_thread_id, end_and_save_conversation
 )
@@ -78,7 +85,6 @@ async def _run_turn(
         async for variant in run_stream(
             model=model,
             thread_id=thread_id,     # ← fixed per conversation
-            user_id=user_id,
             user_input=user_input,
             system_prompt=system_prompt,
         ):
@@ -124,11 +130,9 @@ async def main() -> None:
         thread_id = THREAD_ID
         read_history = True
 
-    Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
-    Auth = get_authenticator()
+    Storage = await get_thread_storage(user_name=USER_ID, thread_id=thread_id)
+    Auth = await auth_dependency("")
     
-    await prepare_for_stream(thread_id, USER_ID, Auth, Storage, read_history=read_history)
-
     system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
 
     print("Interactive dev chat")
@@ -164,6 +168,14 @@ async def main() -> None:
             continue
 
         # Normal turn
+        await prepare_for_stream(
+            thread_id=thread_id, 
+            user_id=USER_ID,
+            Auth=Auth,
+            Storage=Storage,
+            read_history=read_history
+        )
+
         t_chunks, t_chars = await _run_turn(
             model=MODEL,
             thread_id=thread_id,

@@ -4,7 +4,7 @@ Python backend for Freva-GPT assistant. The service mirrors the Rust implementat
 
 ## Highlights
 - FastAPI app with strict auth parity to the production Rust service (`/api/chatbot/*`)
-- Streaming responses via LiteLLM/OpenAI-compatible SSE (`text/event-stream`) with code + image variants
+- Streaming responses via LiteLLM/OpenAI-compatible SSE (`application/x-ndjson`) with code + image variants
 - Persistent conversation threads in MongoDB and JSONL files (`threads/`), plus per-user scratch space (`rw_dir/`)
 - MCP manager that wires the backend to dedicated tool servers (`rag`, `code`)
 - Docker compose stack that includes LiteLLM, Ollama, the backend, and both MCP servers
@@ -37,29 +37,23 @@ Bind mounts expose `/work`, logs, threads, and shared `rw_dir` to other Freva se
 
 ### Requirements
 - Python `3.11.x`
-- [uv](https://github.com/astral-sh/uv) (fast dependency manager) or `pip`
 - Set `MONGODB_URI_LOCAL` for RAG server
 - LiteLLM instance that fronts OpenAI, Ollama, or Azure models and understands `litellm_config.yaml`
 
-### Install dependencies (uv)
+<!-- ### Install dependencies (uv)
 ```bash
 pip install uv           # one-time
 uv venv                  # create .venv
 source .venv/bin/activate
 uv sync                  # install lockfile deps
-```
+``` -->
 
 ### Configure environment
 Create `.env` (used by FastAPI, Docker, and MCP servers). See `.env.example` for guidance.
 
-### Start docker containers
+### Start docker containers in DEV mode
 ```bash
-docker compose up litellm rag code --build
-```
-
-### Run script to start chat flow
-```bash
-python scripts/dev_chat.py
+./dev.sh up -d --build
 ```
 
 ## Repository Layout
@@ -69,7 +63,9 @@ python scripts/dev_chat.py
 | `src/api/chatbot/*` | HTTP handlers for chat operations (`availablechatbots`, `streamresponse`, `getthread`, etc.) |
 | `src/services/streaming/` | LiteLLM client, orchestrator, stream variant definitions, heartbeat helpers |
 | `src/services/storage/` | MongoDB + disk-backed persistence (`threads/` JSONL, `rw_dir/` scratch space) |
-| `src/core/` | Settings, auth, prompt assembly, logging, startup checks, available-model parsing |
+| `src/services/mcp/` | MCP manager and MCP client |
+| `src/services/authentication/` | Authentication: DEV mode auth surpassing OIDC requirements |
+| `src/core/` | Settings, prompt assembly, logging, startup checks, available-model parsing |
 | `src/tools/` | MCP servers (code interpreter + RAG), auth helpers, header gate middleware |
 | `prompt_library/` | Baseline system prompts, summary prompts, and few-shot examples (JSONL) |
 | `resources/` | Documentation corpora used by the RAG tool (`stableclimgen` seed content) |
@@ -102,18 +98,18 @@ Generated artifacts that persist across runs:
 | `GET` | `/api/chatbot/getthread?thread_id=...` | Fetches thread contents omitting prompts + redundant StreamEnd variants | Needs `x-freva-vault-url` |
 | `GET` | `/api/chatbot/getuserthreads` | Returns latest 10 threads for authenticated user | Falls back to query `user_id` only if `ALLOW_FALLBACK_OLD_AUTH` |
 | `GET` | `/api/chatbot/streamresponse` | Starts an SSE stream of `StreamVariant` JSON payloads | Query params: `thread_id`, `input` (required), `chatbot` |
-| `GET/POST` | `/api/chatbot/stop` | Stub endpoints for halting running streams | Placeholder |
+| `GET/POST` | `/api/chatbot/stop` | Initiates stopping of an active conversation | Requires auth |
 
 ### Streaming contract
-- Response type: `text/event-stream`
+- Response type: `application/x-ndjson`
 - Each `data:` line is a JSON object with `variant` discriminators (`Assistant`, `Code`, `CodeOutput`, `CodeError`, `Image`, `ServerHint`, `StreamEnd`, etc.).
 - Code tool calls stream incremental chunks while LiteLLM emits `tool_calls`. When the MCP tool resolves, results are converted back into JSON events and appended to Mongo/disk storage.
 - Server automatically injects `thread_id` hints and records the conversation before returning the SSE chunk, ensuring replay safety.
 
 ## Persistence, Prompts, and Assets
 - **MongoDB (`mongodb_storage.py`)**: canonical record for threads. Each document stores `user_id`, `thread_id`, ISO timestamp, topic (summarized via LiteLLM), and serialized `StreamVariant` list.
-- **Disk mirrors (`thread_storage.py`)**: keep JSONL copies under `threads/{thread_id}.txt`, enabling offline replay and dev tooling.
-- **`rw_dir/` scratch**: `recursively_create_dir_at_rw_dir()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
+- **Disk mirrors (`thread_storage.py`)**: keep JSONL copies under `threads/{thread_id}.txt`, enabling offline replay and dev tooling. Topic of a thread is saved in `threads/{thread_id}.meta.json`.
+- **`rw_dir/` scratch**: `create_dir_at_rw_dir()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
 - **Prompt library**: `prompt_library/baseline` contains `starting_prompt.txt`, `summary_prompt.txt`, and `examples.jsonl`. GPT-5 models currently fall back to baseline prompts (warning logged). Customize by adding new prompt sets and updating `_resolve_baseline_dir()` / `_resolve_gpt5_dir_or_placeholder()`.
 - **Resources**: `resources/stableclimgen` seeds the RAG MCP server. Drop additional corpora per library folder and list them in `AVAILABLE_LIBRARIES` inside `src/tools/rag/server.py`.
 

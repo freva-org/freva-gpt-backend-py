@@ -20,7 +20,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
     GOOD_HEADERS, 
     patch_db, 
     patch_read_thread, 
-    patch_append_thread,
+    patch_save_thread,
     patch_user_threads, 
     patch_mongo_uri, 
     patch_stream,

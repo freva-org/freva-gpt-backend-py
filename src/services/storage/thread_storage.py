@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,11 +30,12 @@ class Thread:
 class ThreadStorage(ABC):
         
     @abstractmethod
-    async def append_thread(
+    async def save_thread(
         self,
         thread_id: str,
         user_id: str,
         content: List[StreamVariant],
+        append_to_existing: Optional[bool]
     ) -> None:
         ...
 

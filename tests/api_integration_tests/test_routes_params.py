@@ -47,7 +47,7 @@ async def test_streamresponse_accepts_params_and_headers(
     patch_mongo_uri, 
     patch_stream, 
     patch_read_thread, 
-    patch_append_thread,
+    patch_save_thread,
     patch_mcp_manager,
     GOOD_HEADERS
 ):

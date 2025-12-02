@@ -17,11 +17,12 @@ class DiskThreadStorage(ThreadStorage):
     def __init__(self):
         THREADS_DIR.mkdir(parents=True, exist_ok=True)
 
-    async def append_thread(
+    async def save_thread(
         self,
         thread_id: str,
         user_id: str,
         content: Conversation,
+        append_to_existing: Optional[bool] = False,
     ) -> None:
 
         content = cleanup_conversation(content)
@@ -46,10 +47,14 @@ class DiskThreadStorage(ThreadStorage):
                 to_write.append(line)
 
         path = THREADS_DIR / f"{thread_id}.txt"
-        with open(path, "a", encoding="utf-8") as f:
-            for line in to_write:
-                f.write(line + "\n")
-
+        if append_to_existing:
+            with open(path, "a", encoding="utf-8") as f:
+                for line in to_write:
+                    f.write(line + "\n")
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                for line in to_write:
+                    f.write(line + "\n")
         await self._topic_as_meta(thread_id, content)
 
 

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
 
 import httpx
@@ -25,17 +25,20 @@ class MongoThreadStorage(ThreadStorage):
         self.vault_url = vault_url
         self.db = None
 
+
     @classmethod
     async def create(cls, vault_url: str):
         self = cls(vault_url)
         self.db = await get_database(self.vault_url)
         return self
 
-    async def append_thread(
+
+    async def save_thread(
         self,
         thread_id: str,
         user_id: str,
         content: List[StreamVariant],
+        append_to_existing: Optional[bool] = False,
     ) -> None:
         content = cleanup_conversation(content)
         if not content:
@@ -45,8 +48,10 @@ class MongoThreadStorage(ThreadStorage):
 
         existing = await coll.find_one({"thread_id": thread_id})
         if existing:
-            existing_sv = _deserialize_sv_list(existing.get("content", []))
-            merged_sv: List[StreamVariant] = existing_sv + content
+            if append_to_existing:
+                existing_stream = existing.get("content", [])
+                existing_sv = [from_json_to_sv(v) for v in existing_stream]
+                merged_sv: List[StreamVariant] = existing_sv + content
             # topic: keep existing if present
             topic = existing.get("topic", "") or None
         else:
@@ -57,18 +62,20 @@ class MongoThreadStorage(ThreadStorage):
         if not topic:
             topic = await summarize_topic(content or "Untitled")
 
+        all_stream = [from_sv_to_json(v) for v in merged_sv]
         doc = {
             "user_id": user_id,
             "thread_id": thread_id,
             "date": datetime.now(timezone.utc),
             "topic": topic,
-            "content": _serialize_sv_list(merged_sv),  # <- store JSON-safe dicts
+            "content": all_stream, 
         }
 
         if existing:
             await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
         else:
             await coll.insert_one(doc)
+
 
     async def list_recent_threads(
         self,
@@ -102,29 +109,6 @@ class MongoThreadStorage(ThreadStorage):
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
     
-    
-# ──────────────────── Helper functions ──────────────────────────────
-
-def _serialize_sv_list(items: List[StreamVariant]) -> List[dict]:
-    out: List[dict] = []
-    for v in items:
-        try:
-            out.append(from_sv_to_json(v))
-        except Exception as e:
-            # last resort: Pydantic dump
-            log.warning("serialize fallback for %r: %s", getattr(v, "variant", type(v)), e)
-            out.append(v.model_dump())
-    return out
-
-def _deserialize_sv_list(items: List[dict]) -> List[StreamVariant]:
-    out: List[StreamVariant] = []
-    for obj in items or []:
-        try:
-            out.append(from_json_to_sv(obj))
-        except Exception as e:
-            log.warning("deserialize failure for %r: %s", obj, e)
-            # skip malformed rows rather than crashing
-    return out
 
 # ──────────────────── Connection ──────────────────────────────
 

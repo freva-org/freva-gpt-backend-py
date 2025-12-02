@@ -9,7 +9,7 @@ from src.services.streaming.stream_variants import SVPrompt, SVUser, SVAssistant
 
 
 @pytest.mark.asyncio
-async def test_append_and_read_thread(tmp_path: Path, monkeypatch):
+async def test_save_and_read_thread(tmp_path: Path, monkeypatch):
     # Redirect THREADS_DIR to tmp (dev/local storage root)
     monkeypatch.setattr(disk_storage, "THREADS_DIR", tmp_path, raising=True)
 
@@ -19,21 +19,24 @@ async def test_append_and_read_thread(tmp_path: Path, monkeypatch):
     user_id = "alice"
 
     # write prompt (no auto end)
-    await storage.append_thread(
+    await storage.save_thread(
         thread_id=tid,
         user_id=user_id,
         content=[SVPrompt(payload='[{"role":"system","content":"s"}]')],
+        append_to_existing=True,
     )
     # write user + assistant + explicit end
-    await storage.append_thread(
+    await storage.save_thread(
         thread_id=tid,
         user_id=user_id,
         content=[SVUser(text="hi")],
+        append_to_existing=True,
     )
-    await storage.append_thread(
+    await storage.save_thread(
         thread_id=tid,
         user_id=user_id,
         content=[SVAssistant(text="hello"), SVStreamEnd(message="Done")],
+        append_to_existing=True,
     )
 
     # File exists with lines

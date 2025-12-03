@@ -9,6 +9,7 @@ router = APIRouter()
 
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(
+    num_threads: int,
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
@@ -26,7 +27,7 @@ async def get_user_threads(
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
-    threads, num_threads = await Storage.list_recent_threads(auth.username, limit=20)
+    threads, total_num_threads = await Storage.list_recent_threads(auth.username, limit=num_threads)
 
     return [
         [
@@ -39,5 +40,5 @@ async def get_user_threads(
             }
             for t in threads
         ], 
-        num_threads
+        total_num_threads
     ]

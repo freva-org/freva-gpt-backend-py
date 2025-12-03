@@ -35,6 +35,9 @@ class ThreadStorage(ABC):
         thread_id: str,
         user_id: str,
         content: List[StreamVariant],
+        root_thread_id: Optional[str],
+        parent_thread_id: Optional[str],
+        fork_from_index: Optional[int],
         append_to_existing: Optional[bool]
     ) -> None:
         ...

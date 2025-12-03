@@ -22,6 +22,9 @@ class DiskThreadStorage(ThreadStorage):
         thread_id: str,
         user_id: str,
         content: Conversation,
+        root_thread_id: Optional[str] = None,
+        parent_thread_id: Optional[str] = None,
+        fork_from_index: Optional[int] = None,
         append_to_existing: Optional[bool] = False,
     ) -> None:
 
@@ -55,7 +58,15 @@ class DiskThreadStorage(ThreadStorage):
             with open(path, "w", encoding="utf-8") as f:
                 for line in to_write:
                     f.write(line + "\n")
-        await self._topic_as_meta(thread_id, content)
+
+        topic = await self._get_topic(thread_id, content)
+        meta_json = {
+            "topic": topic,
+            "root_thread_id": thread_id or root_thread_id,
+            "parent_thread_id": thread_id or parent_thread_id,
+            "fork_from_index": 0 or fork_from_index,
+        }
+        self._save_meta(thread_id, meta=meta_json)
 
 
     async def list_recent_threads(
@@ -69,7 +80,7 @@ class DiskThreadStorage(ThreadStorage):
             thread_id = d.stem
             content = await self.read_thread(thread_id)
             
-            topic = await self._topic_as_meta(thread_id, content)
+            topic = await self._get_topic(thread_id, content)
             
             threads.append(
                 Thread(
@@ -109,11 +120,25 @@ class DiskThreadStorage(ThreadStorage):
         thread_id: str,
         topic: str
     ) -> bool:
-        topic_path = THREADS_DIR / f"{thread_id}.meta.json"
-        topic_json = {"topic": topic}
         try:
-            with open(topic_path, "w", encoding="utf-8") as f:
-                json.dump(topic_json, f)
+            # Meta already exists. Read meta
+            meta_json = self._read_meta(thread_id)
+            # Update topic
+            meta_json.update({"topic": topic})
+            # Save updated meta
+            self._save_meta(thread_id, meta_json)
+            return True
+        except ValueError:
+            # self._read_meta returned ValueError. Meta doesn't exist. 
+            # Create meta
+            meta_json = {
+                "topic": topic,
+                "root_thread_id": thread_id,
+                "parent_thread_id": thread_id,
+                "fork_from_index": 0,
+            }
+            # Save meta
+            self._save_meta(thread_id, meta_json)
             return True
         except:
             return False
@@ -135,24 +160,33 @@ class DiskThreadStorage(ThreadStorage):
             return False
     
 
-    async def _topic_as_meta(self, thread_id: str, content: List[Dict]) -> None:
+    async def _get_topic(self, thread_id: str, content: List[Dict]) -> None:
         """ 
         If meta file exists, reads topic and returns else summarizes the topic, 
         saves and returns it
         """
+        try:
+            d = self._read_meta(thread_id)
+            return d.get("topic")
+        except:
+            topic = await summarize_topic(content)
+            return topic
+        
+
+    def _save_meta(self, thread_id: str, meta: Dict) -> None:
+        topic_path = THREADS_DIR / f"{thread_id}.meta.json"
+        with open(topic_path, "w", encoding="utf-8") as f:
+                json.dump(meta, f)
+
+
+    def _read_meta(self, thread_id: str) -> None:
         topic_path = THREADS_DIR / f"{thread_id}.meta.json"
         if topic_path.exists():
             with open(topic_path) as f:
                 d = json.load(f)
             return d.get("topic")
         else:
-            topic = await summarize_topic(content)
-            topic_json = {"topic": topic}
-
-            with open(topic_path, "w", encoding="utf-8") as f:
-                json.dump(topic_json, f)
-            
-            return topic
+            raise ValueError(f"Meta file not found: {thread_id}")
 
 
 # ──────────────────── Helper functions ──────────────────────────────

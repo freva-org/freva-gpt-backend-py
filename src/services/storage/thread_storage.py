@@ -39,7 +39,6 @@ class ThreadStorage(ABC):
     ) -> None:
         ...
 
-
     @abstractmethod
     async def list_recent_threads(
         self,
@@ -53,6 +52,21 @@ class ThreadStorage(ABC):
         self,
         thread_id: str,
     ) -> List[Dict]:
+        ...
+
+    @abstractmethod
+    async def update_thread_topic(
+        self,
+        thread_id: str,
+        topic: str
+    ) -> bool:
+        ...
+
+    @abstractmethod
+    async def delete_thread(
+        self,
+        thread_id: str,
+    ) -> bool:
         ...
 
 

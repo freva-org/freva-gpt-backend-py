@@ -104,6 +104,37 @@ class DiskThreadStorage(ThreadStorage):
         return conv
     
 
+    async def update_thread_topic(
+        self,
+        thread_id: str,
+        topic: str
+    ) -> bool:
+        topic_path = THREADS_DIR / f"{thread_id}.meta.json"
+        topic_json = {"topic": topic}
+        try:
+            with open(topic_path, "w", encoding="utf-8") as f:
+                json.dump(topic_json, f)
+            return True
+        except:
+            return False
+        
+    
+    async def delete_thread(
+        self,
+        thread_id: str,
+    ) -> bool:
+        thread_path = THREADS_DIR / f"{thread_id}.txt"
+        topic_path = THREADS_DIR / f"{thread_id}.meta.json"
+        try:
+            if os.path.exists(thread_path):
+                os.remove(thread_path)
+            if os.path.exists(topic_path):
+                os.remove(topic_path)
+            return True 
+        except:
+            return False
+    
+
     async def _topic_as_meta(self, thread_id: str, content: List[Dict]) -> None:
         """ 
         If meta file exists, reads topic and returns else summarizes the topic, 
@@ -123,11 +154,8 @@ class DiskThreadStorage(ThreadStorage):
             
             return topic
 
-        
-
 
 # ──────────────────── Helper functions ──────────────────────────────
-
 
 def get_latest_files(directory: str, n: int):
     p = Path(directory)

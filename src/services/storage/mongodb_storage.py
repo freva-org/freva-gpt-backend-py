@@ -110,6 +110,33 @@ class MongoThreadStorage(ThreadStorage):
         return doc.get("content", [])
     
 
+    async def update_thread_topic(
+        self,
+        thread_id: str,
+        topic: str
+    ) -> bool:
+        try:
+            coll = self.db[MONGODB_COLLECTION_NAME]
+            update_op = { '$set' :  { 'topic' : topic } }
+            await coll.update_one({"thread_id": thread_id}, update_op)
+            return True
+        except:
+            return False
+        
+
+    async def delete_thread(
+        self,
+        thread_id: str,
+    ) -> bool:
+        try:
+            coll = self.db[MONGODB_COLLECTION_NAME]
+            await coll.delete_one({"thread_id": thread_id})
+            #TODO check the return
+            return True
+        except:
+            return False
+    
+
 # ──────────────────── Connection ──────────────────────────────
 
 async def get_mongodb_uri(vault_url: str) -> str:

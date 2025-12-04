@@ -7,7 +7,7 @@ from src.services.streaming.active_conversations import new_thread_id
 
 router = APIRouter()
 
-@router.post("/editthread", dependencies=[AuthRequired])
+@router.get("/editthread", dependencies=[AuthRequired])
 async def edit_thread(
     source_thread_id: str,
     fork_from_index: int,

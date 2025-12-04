@@ -288,7 +288,7 @@ async def cancel_tool_tasks(thread_id: str) -> None:
 
 async def cleanup_idle(
     max_idle: timedelta,
-    Storage: ThreadStorage
+    Storage: Optional[ThreadStorage]
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.

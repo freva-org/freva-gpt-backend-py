@@ -184,7 +184,7 @@ class DiskThreadStorage(ThreadStorage):
         if topic_path.exists():
             with open(topic_path) as f:
                 d = json.load(f)
-            return d.get("topic")
+            return d
         else:
             raise ValueError(f"Meta file not found: {thread_id}")
 

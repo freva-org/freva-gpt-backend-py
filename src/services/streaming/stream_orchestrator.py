@@ -122,7 +122,7 @@ async def stream_with_tools(
         end_v = SVStreamEnd(message="Stream ended.")
         yield end_v
         stream_state.finished = True
-        await add_to_conversation(thread_id, [end_v])
+        # await add_to_conversation(thread_id, [end_v])
         return
 
     # 3) Run tools
@@ -223,7 +223,8 @@ async def run_stream(
     yield hint
     # Append user content
     user_v = SVUser(text=user_input or "")
-    await add_to_conversation(thread_id, [hint, user_v])
+    # await add_to_conversation(thread_id, [hint, user_v])
+    await add_to_conversation(thread_id, [user_v])
 
     stream_state = StreamState()
     
@@ -244,12 +245,13 @@ async def run_stream(
 
         except asyncio.CancelledError:
             end_v = SVStreamEnd(message="Cancelled.")
-            await add_to_conversation(thread_id, [end_v])
+            # await add_to_conversation(thread_id, [end_v])
         except Exception as e:
             log.exception("stream error: %s", e)
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Stream ended with an error.")
-            await add_to_conversation(thread_id, [err_v, end_v])
+            # await add_to_conversation(thread_id, [err_v, end_v])
+            await add_to_conversation(thread_id, [err_v])
             stream_state.finished = True
             yield err_v
             yield end_v

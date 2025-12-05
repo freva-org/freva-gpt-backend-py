@@ -146,11 +146,12 @@ class DiskThreadStorage(ThreadStorage):
         try:
             # We don't check if there was feedback on the same entry before
             # We simply save any feedback on DEV mode
+            content = await self.read_thread(thread_id=thread_id)
             new_feedback: Dict = {
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "entry_index": index,
-                "response": self.read_thread(thread_id=thread_id)[index],
+                "entry": content[index],
                 "feedback": feedback,
                 }
             new_feedback_txt = json.dumps(new_feedback)

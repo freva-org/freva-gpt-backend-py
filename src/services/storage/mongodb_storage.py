@@ -149,11 +149,12 @@ class MongoThreadStorage(ThreadStorage):
             coll = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
             feedback_filter ={"thread_id": thread_id, "entry_index": index}
             existing = await coll.find_one(feedback_filter)
+            content = await self.read_thread(thread_id=thread_id)
             new_feedback: Dict = {
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "entry_index": index,
-                "response": self.read_thread(thread_id=thread_id)[index],
+                "entry": content[index],
                 "feedback": feedback,
                 }
             if existing:

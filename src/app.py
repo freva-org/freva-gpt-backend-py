@@ -14,7 +14,8 @@ from src.core.logging_setup import configure_logging
 from src.core.runtime_checks import run_startup_checks
 from src.services.streaming.active_conversations import cleanup_idle
 
-        
+settings = get_settings()
+
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -52,11 +53,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FrevaGPT Backend (Python)",
     version=get_settings().VERSION,
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
-    lifespan=lifespan,  # ← eliminates on_event deprecation warnings
+    docs_url="/docs", # exposing FasAPI docs
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,  
 )
+
 
 # CORS – mirror the permissive defaults (might need to adjust later)
 app.add_middleware(
@@ -73,6 +75,7 @@ app.add_middleware(
 
 app.include_router(static.router, prefix="/api/chatbot", tags=["static"])
 app.include_router(chatbot.router, prefix="/api/chatbot", tags=["chatbot"])
+
 
 @app.get("/healthz")
 def _healthz():

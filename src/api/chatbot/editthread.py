@@ -42,13 +42,15 @@ async def edit_thread(
     # (drop the original user message and everything after)
     base_json = orig_json[:fork_from_index]
 
+    base_sv = [from_json_to_sv(v) for v in base_json]
+
     new_id = await new_thread_id()
     root_thread_id = source_thread_id  # TODO: if there are many changes we need to track down the original root
 
     await Storage.save_thread(
         thread_id=new_id,
         user_id=user_name,
-        content=base_json,
+        content=base_sv,
         root_thread_id=root_thread_id,
         parent_thread_id=source_thread_id,
         fork_from_index= fork_from_index,

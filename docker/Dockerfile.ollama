@@ -4,6 +4,7 @@ FROM ollama/ollama:latest
 RUN nohup ollama serve > /tmp/ollama.log 2>&1 & \
     sleep 10 && \
     ollama pull qwen2.5:3b && \
+    ollama pull ministral-3:14b && \
     ollama pull mxbai-embed-large:latest
 
 # Expose Ollama port

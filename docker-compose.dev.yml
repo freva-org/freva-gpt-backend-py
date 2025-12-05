@@ -12,6 +12,7 @@ services:
     hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
     ports:
       - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
+      - "8600:${BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
       - "${DEBUG_PORT:-5678}:${DEBUG_PORT:-5678}" # Port for debugpy
     volumes: 
       -  ./rw_dir/:/app/rw_dir

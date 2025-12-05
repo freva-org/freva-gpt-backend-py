@@ -142,7 +142,7 @@ class DiskThreadStorage(ThreadStorage):
         index: int,
         feedback: str,
     ) -> bool:
-        path = THREADS_DIR / "user_feedbacks.txt"
+        path = THREADS_DIR / "userfeedback.txt"
         try:
             # We don't check if there was feedback on the same entry before
             # We simply save any feedback on DEV mode
@@ -158,6 +158,33 @@ class DiskThreadStorage(ThreadStorage):
             with open(path, "a", encoding="utf-8") as f:
                 f.write(new_feedback_txt + "\n")
             return True
+        except FileNotFoundError:
+            raise FileNotFoundError("Thread not found")
+        except:
+            return False
+        
+
+    async def delete_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+    ) -> bool:
+        path = THREADS_DIR / "userfeedback.txt"
+        try:
+            feedback_list: List = []
+            for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = raw.strip()
+                obj = json.loads(line)
+                feedback_list.append(obj)
+            # Filter out the feedback for the same thread_id and entry_index 
+            filtered_fb = [f for f in feedback_list if not (f.get("thread_id") == thread_id and
+                                                            f.get("entry_index") == index and
+                                                            f.get("user_id") == user_id)]
+            with open(path, "w", encoding="utf-8") as f:
+                for line in filtered_fb:
+                    f.write(json.dumps(line) + "\n")
+            return True            
         except:
             return False
         
@@ -189,7 +216,7 @@ def get_latest_files(directory: str, n: int):
 
     # Get only files, not directories
     try:
-        files = [f for f in p.iterdir() if f.is_file() and f.suffix == ".txt"]
+        files = [f for f in p.iterdir() if (f.is_file()) and (f.suffix == ".txt") and ("feedback" not in f)]
     except:
         files = []
 

@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
-MONGODB_COLLECTION_NAME_FEEDBACK = "userfeedbacks"
+MONGODB_COLLECTION_NAME_FEEDBACK = "userfeedback"
 
 
 class MongoThreadStorage(ThreadStorage):
@@ -163,6 +163,21 @@ class MongoThreadStorage(ThreadStorage):
             else:
                 await coll.insert_one(new_feedback)
             return True
+        except:
+            return False
+        
+
+    async def delete_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+    ) -> bool:
+        try:
+            coll = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
+            feedback_filter ={"thread_id": thread_id, "user_id": user_id, "entry_index": index}
+            await coll.delete_one(feedback_filter)
+            return True            
         except:
             return False
     

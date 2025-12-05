@@ -79,6 +79,15 @@ class ThreadStorage(ABC):
     ) -> bool:
         ...
 
+    @abstractmethod
+    async def delete_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+    ) -> bool:
+        ...
+
 
 # ──────────────────── Helper Functions ──────────────────────────────
 

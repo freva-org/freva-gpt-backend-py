@@ -69,6 +69,16 @@ class ThreadStorage(ABC):
     ) -> bool:
         ...
 
+    @abstractmethod
+    async def save_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+        feedback: str,
+    ) -> bool:
+        ...
+
 
 # ──────────────────── Helper Functions ──────────────────────────────
 

@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 settings = get_settings()
 MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
+MONGODB_COLLECTION_NAME_FEEDBACK = "userfeedbacks"
 
 
 class MongoThreadStorage(ThreadStorage):
@@ -132,6 +133,34 @@ class MongoThreadStorage(ThreadStorage):
             coll = self.db[MONGODB_COLLECTION_NAME]
             await coll.delete_one({"thread_id": thread_id})
             #TODO check the return
+            return True
+        except:
+            return False
+        
+
+    async def save_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+        feedback: str,
+    ) -> bool:
+        try:
+            coll = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
+            feedback_filter ={"thread_id": thread_id, "entry_index": index}
+            existing = await coll.find_one(feedback_filter)
+            new_feedback: Dict = {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "entry_index": index,
+                "response": self.read_thread(thread_id=thread_id)[index],
+                "feedback": feedback,
+                }
+            if existing:
+                # Check if there was already feedback on this entry, if so update the existing one
+                await coll.update_one(feedback_filter, {"$set": new_feedback}, upsert=True)
+            else:
+                await coll.insert_one(new_feedback)
             return True
         except:
             return False

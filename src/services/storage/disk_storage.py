@@ -135,6 +135,32 @@ class DiskThreadStorage(ThreadStorage):
             return False
     
 
+    async def save_feedback(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+        feedback: str,
+    ) -> bool:
+        path = THREADS_DIR / "user_feedbacks.txt"
+        try:
+            # We don't check if there was feedback on the same entry before
+            # We simply save any feedback on DEV mode
+            new_feedback: Dict = {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "entry_index": index,
+                "response": self.read_thread(thread_id=thread_id)[index],
+                "feedback": feedback,
+                }
+            new_feedback_txt = json.dumps(new_feedback)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(new_feedback_txt + "\n")
+            return True
+        except:
+            return False
+        
+    
     async def _topic_as_meta(self, thread_id: str, content: List[Dict]) -> None:
         """ 
         If meta file exists, reads topic and returns else summarizes the topic, 

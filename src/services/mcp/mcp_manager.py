@@ -194,13 +194,15 @@ async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
     freva_cfg_path = auth.freva_config_path
     _verify_access_to_file(freva_cfg_path)
     
+    auth_header = f"Bearer {access_token}" if access_token else None
+    
     headers = {
         "rag": {
-            "Authorization": access_token,
+            "Authorization": auth_header,
             "mongodb-uri":  mongodb_uri,
             },
         "code": {
-            "Authorization": access_token,
+            "Authorization": auth_header,
             "freva-config-path": freva_cfg_path,
             },
             }

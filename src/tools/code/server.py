@@ -11,7 +11,7 @@ from jupyter_client import KernelManager
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
-from src.tools.code_interpreter.helpers import strip_ansi, code_is_likely_safe, sanitize_code
+from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_code
 
 logger = logging.getLogger(__name__)
 configure_logging()

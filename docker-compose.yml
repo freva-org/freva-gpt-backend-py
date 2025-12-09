@@ -4,7 +4,7 @@ services:
     image: localhost/freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/freva-gpt-backend/Dockerfile
     env_file: .env
     hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
     ports:
@@ -37,10 +37,10 @@ services:
       - freva-gpt
   code:
     platform: linux/amd64
-    image: localhost/code-interpreter-server-${INSTANCE_NAME}
+    image: localhost/code-server-${INSTANCE_NAME}
     build:
       context: .
-      dockerfile: docker/code-interpreter-server/Dockerfile
+      dockerfile: docker/code-server/Dockerfile
     env_file: .env
     environment:
       MCP_HOST: 0.0.0.0
@@ -68,7 +68,7 @@ services:
     image: ollama
     build:
       context: .
-      dockerfile: docker/Dockerfile.ollama
+      dockerfile: docker/ollama/Dockerfile
     hostname: ollama-instance-${INSTANCE_NAME}
     networks:
       - freva-gpt

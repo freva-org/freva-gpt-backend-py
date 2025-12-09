@@ -34,7 +34,7 @@ WORKDIR /app
 
 RUN pip install uv
 
-COPY docker/code-interpreter-server/pyproject.toml /app/pyproject.toml
+COPY docker/code-server/pyproject.toml /app/pyproject.toml
 
 # Export from pyproject and install into the current interpreter (Conda)
 # --system is required when mutating a non-venv interpreter
@@ -61,4 +61,4 @@ EXPOSE 8051
 COPY src /app/src
 
 # Launch CI server
-CMD ["python","-m","src.tools.code_interpreter.server"]
+CMD ["python","-m","src.tools.code.server"]

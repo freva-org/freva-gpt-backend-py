@@ -188,7 +188,7 @@ class McpManager:
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
+async def get_mcp_headers(auth: Authenticator, rw_dir: str) -> Dict[str, str]:
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
     access_token = auth.access_token
     freva_cfg_path = auth.freva_config_path
@@ -204,6 +204,7 @@ async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
         "code": {
             "Authorization": auth_header,
             "freva-config-path": freva_cfg_path,
+            "working-dir": str(rw_dir),
             },
             }
     return headers

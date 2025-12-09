@@ -1,3 +1,4 @@
+from pathlib import Path
 import logging
 from typing import Optional, Dict
 from fastapi import Depends, Request
@@ -20,6 +21,7 @@ configure_logging()
 
 settings = get_settings()
 
+RW_DIR_ROOT = Path("./rw_dir")
 
 def get_authenticator() -> Authenticator:
     if settings.DEV:
@@ -59,7 +61,7 @@ async def get_thread_storage(
         return await MongoThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
+async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -74,7 +76,9 @@ async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
         default_headers=default_headers,
     )
 
-    extra_headers = await get_mcp_headers(authenticator)
+    rw_dir = RW_DIR_ROOT / thread_id
+
+    extra_headers = await get_mcp_headers(authenticator, rw_dir)
 
     try:
         mgr.initialize(extra_headers)

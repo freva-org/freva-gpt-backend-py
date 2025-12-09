@@ -77,7 +77,7 @@ async def initialize_conversation(
         log.debug("Initializing the conversation and saving it to Registry...")
 
         if auth:
-            mcp_mgr = await get_mcp_manager(authenticator=auth)
+            mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
         else:
             log.warning(f"The conversation {thread_id} initialized without MCPManager! "
                         "Please note that the MCP servers cannot be connected!")

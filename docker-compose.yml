@@ -16,8 +16,8 @@ services:
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/threads:/app/threads
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/target:/app/target
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/python_pickles:/app/python_pickles
-      - /scratch/b/b380001/freva-gpt/rw_dir/:/app/rw_dir # All instances share the rw_dir for accessing the data the LLM generated.
-    networks: 
+      - /scratch/b/b380001/freva-gpt/rw_dir:/app/rw_dir:rw
+    networks:
       - freva-gpt
   rag:
     platform: linux/amd64
@@ -29,11 +29,11 @@ services:
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8050
-    ports: 
+    ports:
       - "8050:8050"
-    volumes: 
+    volumes:
       - ./resources:/app/resources:ro
-    networks: 
+    networks:
       - freva-gpt
   code:
     platform: linux/amd64
@@ -45,23 +45,24 @@ services:
     environment:
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8051
-    ports: 
+    ports:
       - "8051:8051"
     volumes:
       - /work:/work:ro
-    networks: 
+      - /scratch/b/b380001/freva-gpt/rw_dir:/app/rw_dir:rw
+    networks:
       - freva-gpt
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${INSTANCE_NAME}
-    volumes: 
+    volumes:
       - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
     command: "--config=/app/config.yaml"
-    env_file: .env 
-    ports: 
+    env_file: .env
+    ports:
       - "4000:4000" # Expose LiteLLM port to the host machine for direct access if needed, e.g. local dev
-    networks: 
+    networks:
       - freva-gpt
   ollama: # Ollama is only for the backend and not accessible from the outside. Port 11434 is not exposed.
     image: ollama
@@ -69,7 +70,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.ollama
     hostname: ollama-instance-${INSTANCE_NAME}
-    networks: 
+    networks:
       - freva-gpt
     deploy:
       resources:
@@ -84,4 +85,3 @@ networks:
     driver: bridge
 # The subnet is not set to avoid conflicts with other potentially running networks on the same machine.
 # Note: Named networks by default aren't shared between different docker-compose projects, even if they have the same name, as long as they are in separate directories.
-

@@ -218,8 +218,8 @@ if __name__ == "__main__":
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
         mcp.http_app(),
-        ctx=mongo_uri_ctx,
-        header_name=MONGODB_URI_HDR,
+        ctx_list=[mongo_uri_ctx],
+        header_name_list=[MONGODB_URI_HDR],
         logger=logger,       
         mcp_path=path,  
     )

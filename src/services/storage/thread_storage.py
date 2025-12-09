@@ -80,7 +80,8 @@ def create_dir_at_rw_dir(
     Create rw_dir/{user_id}/{thread_id}. On failure (e.g., non-alphanumeric user_id),
     retry with a sanitized user_id (keep only [A-Za-z0-9]). Logs but never raises.
     """
-    rw_dir = RW_DIR_ROOT / user_id / thread_id
+    rw_dir = RW_DIR_ROOT / thread_id
+    # rw_dir = RW_DIR_ROOT / user_id / thread_id
     try:
         rw_dir.mkdir(parents=True, exist_ok=True)
         log.debug("rw_dir created or exists: %s", rw_dir)
@@ -88,13 +89,13 @@ def create_dir_at_rw_dir(
     except Exception as e:
         log.debug("Failed to create rw_dir=%s, err=%s -- retrying with sanitized user_id", rw_dir, e)
 
-    sanitized_user = "".join(c for c in user_id if c.isalnum()) or "user"
-    sanitized = RW_DIR_ROOT / sanitized_user / thread_id
-    try:
-        sanitized.mkdir(parents=True, exist_ok=True)
-        log.debug("Sanitized rw_dir created or exists: %s", sanitized)
-    except Exception as e:
-        log.error("Failed to create sanitized rw_dir=%s, err=%s", sanitized, e)
+    # sanitized_user = "".join(c for c in user_id if c.isalnum()) or "user"
+    # sanitized = RW_DIR_ROOT / sanitized_user / thread_id
+    # try:
+    #     sanitized.mkdir(parents=True, exist_ok=True)
+    #     log.debug("Sanitized rw_dir created or exists: %s", sanitized)
+    # except Exception as e:
+    #     log.error("Failed to create sanitized rw_dir=%s, err=%s", sanitized, e)
 
 # ==== Summarization for topic ====
 

@@ -171,7 +171,7 @@ def patch_read_thread(monkeypatch):
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
-    async def _fake_append(database, thread_id: str, user_id: str, messages):
+    async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
         return 
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
@@ -257,7 +257,7 @@ def patch_mcp_manager(monkeypatch):
     """
     from src.services.streaming import active_conversations as ac
 
-    async def fake_get_mcp_manager(authenticator):
+    async def fake_get_mcp_manager(authenticator, thread_id):
         # You can assert on authenticator if you want
         return DummyMcpManager()
 

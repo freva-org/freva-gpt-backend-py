@@ -44,11 +44,11 @@ def client(app):
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("HOST", "localhost")
-    monkeypatch.setenv("BACKEND_PORT", "8502")
+    monkeypatch.setenv("FREVAGPT_HOST", "localhost")
+    monkeypatch.setenv("FREVAGPT_BACKEND_PORT", "8502")
 
     # Decide: default test mode
-    monkeypatch.setenv("DEV", "0")  # for PROD-like auth & Mongo path
+    monkeypatch.setenv("FREVAGPT_DEV", "0")  # for PROD-like auth & Mongo path
     # or "1" if you want DevAuthenticator + DiskThreadStorage
 
     yield

@@ -13,9 +13,8 @@ def run_startup_checks(settings: Settings) -> None:
         logger.warning("LITE_LLM_ADDRESS does not look like a URL: %s", settings.LITE_LLM_ADDRESS)
 
     logger.info(
-        "Startup checks passed. Port=%s GuestsAllowed=%s LiteLLM=%s Version=%s",
+        "Startup checks passed. Port=%s LiteLLM=%s Version=%s",
         settings.BACKEND_PORT,
-        settings.ALLOW_GUESTS,
         settings.LITE_LLM_ADDRESS,
         settings.VERSION,
     )

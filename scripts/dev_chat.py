@@ -3,11 +3,11 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import os
-os.environ["DEV"] = "1"
-os.environ["LITE_LLM_ADDRESS"]="http://localhost:4000"
-os.environ["RAG_SERVER_URL"]="http://localhost:8050" 
-os.environ["CODE_SERVER_URL"]="http://localhost:8051"
-os.environ["MCP_DISABLE_AUTH"]="1"
+os.environ["FREVAGPT_DEV"] = "1"
+os.environ["FREVAGPT_LITE_LLM_ADDRESS"]="http://localhost:4000"
+os.environ["FREVAGPT_RAG_SERVER_URL"]="http://localhost:8050" 
+os.environ["FREVAGPT_CODE_SERVER_URL"]="http://localhost:8051"
+os.environ["FREVAGPT_MCP_DISABLE_AUTH"]="1"
 
 """
 Interactive multi-turn dev runner mirroring /chatbot/streamresponse behaviour.

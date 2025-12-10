@@ -16,7 +16,7 @@ from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_cod
 logger = logging.getLogger(__name__)
 configure_logging()
 
-_disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
+_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
 _KERNEL_REGISTRY: dict[str, KernelManager] = {} 

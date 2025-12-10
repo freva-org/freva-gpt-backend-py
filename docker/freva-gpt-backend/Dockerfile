@@ -67,11 +67,11 @@ COPY tests /app/tests
 
 # ENTRYPOINT ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8502", "--proxy-headers"]
 ENTRYPOINT ["/bin/sh", "-c", "\
-  if [ \"${DEBUG,,}\" = \"true\" ] || [ \"${DEBUG}\" = \"1\" ]; then \
-    echo \"[backend] DEBUG on → waiting for debugger on ${DEBUG_PORT:-5678}\"; \
-    exec python -m debugpy --listen 0.0.0.0:${DEBUG_PORT:-5678} --wait-for-client \
-         -m uvicorn src.app:app --host 0.0.0.0 --port ${BACKEND_PORT:-8502} --proxy-headers; \
+  if [ \"${FREVAGPT_DEBUG,,}\" = \"true\" ] || [ \"${FREVAGPT_DEBUG}\" = \"1\" ]; then \
+    echo \"[backend] DEBUG on → waiting for debugger on ${FREVAGPT_DEBUG_PORT:-5678}\"; \
+    exec python -m debugpy --listen 0.0.0.0:${FREVAGPT_DEBUG_PORT:-5678} --wait-for-client \
+         -m uvicorn src.app:app --host 0.0.0.0 --port ${FREVAGPT_BACKEND_PORT:-8502} --proxy-headers; \
   else \
     echo \"[backend] DEBUG off → starting plain uvicorn\"; \
-    exec uvicorn src.app:app --host 0.0.0.0 --port ${BACKEND_PORT:-8502} --proxy-headers; \
+    exec uvicorn src.app:app --host 0.0.0.0 --port ${FREVAGPT_BACKEND_PORT:-8502} --proxy-headers; \
   fi"]

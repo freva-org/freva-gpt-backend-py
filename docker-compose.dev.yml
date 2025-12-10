@@ -1,19 +1,19 @@
 services:
   freva-gpt-backend:
     platform: linux/amd64 # We need this, otherwise it defaults to arm64 base image and has mismatch for miniforge installer when built on mac
-    image: localhost/freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
+    image: localhost/freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
       dockerfile: docker/freva-gpt-backend/Dockerfile
     env_file: .env
     environment:
-      DEV: ${DEV}
-      DEBUG: ${DEBUG:-0}
-    hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
+      FREVAGPT_DEV: ${FREVAGPT_DEV}
+      FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
+    hostname: freva-gpt-backend-instance-${FREVAGPT_INSTANCE_NAME}
     ports:
-      - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
-      - "8600:${BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
-      - "${DEBUG_PORT:-5678}:${DEBUG_PORT:-5678}" # Port for debugpy
+      - "${FREVAGPT_TARGET_PORT:-8502}:${FREVAGPT_BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
+      - "8600:${FREVAGPT_BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
+      - "${FREVAGPT_DEBUG_PORT:-5678}:${FREVAGPT_DEBUG_PORT:-5678}" # Port for debugpy
     volumes: 
       -  ./cache/:/app/cache
       -  ./threads/:/app/threads
@@ -21,17 +21,17 @@ services:
       - freva-gpt
   rag:
     platform: linux/amd64
-    image: localhost/rag-server-${INSTANCE_NAME}
+    image: localhost/rag-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/rag-server/Dockerfile
     env_file: .env
     environment:
-      DEV: ${DEV}
-      DEBUG: ${DEBUG:-0}
-      MCP_DISABLE_AUTH: ${MCP_DISABLE_AUTH}
-      MCP_HOST: 0.0.0.0
-      MCP_PORT: 8050
+      FREVAGPT_DEV: ${FREVAGPT_DEV}
+      FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
+      FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
+      FREVAGPT_MCP_HOST: 0.0.0.0
+      FREVAGPT_MCP_PORT: 8050
     ports: 
       - "8050:8050"
     volumes: 
@@ -40,17 +40,17 @@ services:
       - freva-gpt
   code:
     platform: linux/amd64
-    image: localhost/code-server-${INSTANCE_NAME}
+    image: localhost/code-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/code-server/Dockerfile
     env_file: .env
     environment:
-      DEV: ${DEV}
-      DEBUG: ${DEBUG:-0}
-      MCP_DISABLE_AUTH: ${MCP_DISABLE_AUTH}
-      MCP_HOST: 0.0.0.0
-      MCP_PORT: 8051
+      FREVAGPT_DEV: ${FREVAGPT_DEV}
+      FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
+      FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
+      FREVAGPT_MCP_HOST: 0.0.0.0
+      FREVAGPT_MCP_PORT: 8051
     ports: 
       - "8051:8051"
     volumes:
@@ -60,7 +60,7 @@ services:
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
-    hostname: litellm-instance-${INSTANCE_NAME}
+    hostname: litellm-instance-${FREVAGPT_INSTANCE_NAME}
     volumes: 
       - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
     command: "--config=/app/config.yaml"
@@ -74,7 +74,7 @@ services:
     build:
       context: .
       dockerfile: docker/ollama/Dockerfile.dev
-    hostname: ollama-instance-${INSTANCE_NAME}
+    hostname: ollama-instance-${FREVAGPT_INSTANCE_NAME}
     networks: 
       - freva-gpt
 

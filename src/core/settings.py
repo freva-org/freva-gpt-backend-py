@@ -8,18 +8,17 @@ load_dotenv()  # take environment variables from .env file
 
 @dataclass(frozen=True)
 class Settings:
-    VERSION: str = os.getenv("VERSION", "0.1.0")      
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    BACKEND_PORT: int = int(os.getenv("BACKEND_PORT", "8502"))
-    ALLOW_GUESTS: bool = os.getenv("ALLOW_GUESTS", "false").lower() in {"1", "true", "yes"}
-    LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
-    AVAILABLE_MCP_SERVERS: ClassVar[list[str]] = [s for s in os.getenv("AVAILABLE_MCP_SERVERS", "").split(",")]
-    MONGODB_URI_LOCAL: str = os.getenv("MONGODB_URI_LOCAL", "mongodb://mongodb-dev")
-    MONGODB_DATABASE_NAME: str = os.getenv("MONGODB_DATABASE_NAME", "chatbot")
-    MONGODB_COLLECTION_NAME: str = os.getenv("MONGODB_COLLECTION_NAME", "threads")
-    MONGODB_COLLECTION_NAME_EMB: str = os.getenv("MONGODB_COLLECTION_NAME_EMB", "embeddings")
-    CLEAR_MONGODB_EMBEDDINGS: bool = os.getenv("CLEAR_MONGODB_EMBEDDINGS", "").lower() in {"1","true","yes"}
-    DEV: bool = os.getenv("DEV", "").lower() in {"1","true","yes"}
+    VERSION: str = os.getenv("FREVAGPT_VERSION", "0.1.0")      
+    HOST: str = os.getenv("FREVAGPT_HOST", "0.0.0.0")
+    BACKEND_PORT: int = int(os.getenv("FREVAGPT_BACKEND_PORT", "8502"))
+    LITE_LLM_ADDRESS: str = os.getenv("FREVAGPT_LITE_LLM_ADDRESS", "http://litellm:4000")
+    AVAILABLE_MCP_SERVERS: ClassVar[list[str]] = [s for s in os.getenv("FREVAGPT_AVAILABLE_MCP_SERVERS", "").split(",")]
+    MONGODB_URI_LOCAL: str = os.getenv("FREVAGPT_MONGODB_URI_LOCAL", "mongodb://mongodb-dev")
+    MONGODB_DATABASE_NAME: str = os.getenv("FREVAGPT_MONGODB_DATABASE_NAME", "chatbot")
+    MONGODB_COLLECTION_NAME: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME", "threads")
+    MONGODB_COLLECTION_NAME_EMB: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME_EMB", "embeddings")
+    CLEAR_MONGODB_EMBEDDINGS: bool = os.getenv("FREVAGPT_CLEAR_MONGODB_EMBEDDINGS", "").lower() in {"1","true","yes"}
+    DEV: bool = os.getenv("FREVAGPT_DEV", "").lower() in {"1","true","yes"}
 
 
 # Simple singleton-style accessor
@@ -35,7 +34,7 @@ def get_settings() -> Settings:
 def get_server_url_dict(server_list):
     url_dict: Dict[str:str] = {}
     for s in server_list:
-        s_url = os.getenv(f"{s.upper()}_SERVER_URL", "")
+        s_url = os.getenv(f"FREVAGPT_{s.upper()}_SERVER_URL", "")
         if s_url:
             url_dict.update({s: s_url})
         else:

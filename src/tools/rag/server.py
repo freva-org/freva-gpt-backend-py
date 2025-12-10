@@ -19,9 +19,9 @@ from src.core.logging_setup import configure_logging
 configure_logging()
 logger = logging.getLogger(__name__)
 
-LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
+LITE_LLM_ADDRESS: str = os.getenv("FREVAGPT_LITE_LLM_ADDRESS", "http://litellm:4000")
 
-_disable_auth = os.getenv("MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
+_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
 mcp = FastMCP("rag_server", auth=None if _disable_auth else jwt_verifier)
 
 # ── Config ───────────────────────────────────────────────────────────────────

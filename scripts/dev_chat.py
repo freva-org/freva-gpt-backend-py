@@ -188,7 +188,7 @@ async def main() -> None:
             print(f"[turn stats] chunks={t_chunks} chars={t_chars}")
 
     # At this point the thread file has been incrementally written by the orchestrator.
-    # We just print where it lives. (Same path used by recursively_create_dir_at_rw_dir)
+    # We just print where it lives. (Same path used by recursively_create_dir_at_cache)
     print("\nConversation ended.")
     print(f"Thread saved under the user/thread directory created for: user={USER_ID}, thread_id={thread_id}")
 

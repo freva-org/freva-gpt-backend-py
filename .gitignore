@@ -16,4 +16,4 @@ wheels/
 .python-version
 
 threads/
-rw_dir/
+cache/

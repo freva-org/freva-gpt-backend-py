@@ -15,7 +15,7 @@ services:
       - "8600:${BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
       - "${DEBUG_PORT:-5678}:${DEBUG_PORT:-5678}" # Port for debugpy
     volumes: 
-      -  ./rw_dir/:/app/rw_dir
+      -  ./cache/:/app/cache
       -  ./threads/:/app/threads
     networks: 
       - freva-gpt
@@ -54,7 +54,7 @@ services:
     ports: 
       - "8051:8051"
     volumes:
-      - ./rw_dir/:/app/rw_dir
+      - ./cache/:/app/cache
     networks: 
       - freva-gpt
   litellm:

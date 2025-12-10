@@ -16,7 +16,7 @@ services:
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/threads:/app/threads
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/target:/app/target
       - /container/da/freva-gpt-backend-links/${INSTANCE_NAME}/python_pickles:/app/python_pickles
-      - /scratch/b/b380001/freva-gpt/rw_dir:/app/rw_dir:rw
+      - /scratch/b/b380001/freva-gpt/cache:/app/cache:rw
     networks:
       - freva-gpt
   rag:
@@ -49,7 +49,7 @@ services:
       - "8051:8051"
     volumes:
       - /work:/work:ro
-      - /scratch/b/b380001/freva-gpt/rw_dir:/app/rw_dir:rw
+      - /scratch/b/b380001/freva-gpt/cache:/app/cache:rw
     networks:
       - freva-gpt
   litellm:

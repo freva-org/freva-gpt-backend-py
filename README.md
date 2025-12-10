@@ -5,7 +5,7 @@ Python backend for Freva-GPT assistant. The service mirrors the Rust implementat
 ## Highlights
 - FastAPI app with strict auth parity to the production Rust service (`/api/chatbot/*`)
 - Streaming responses via LiteLLM/OpenAI-compatible SSE (`application/x-ndjson`) with code + image variants
-- Persistent conversation threads in MongoDB and JSONL files (`threads/`), plus per-user scratch space (`rw_dir/`)
+- Persistent conversation threads in MongoDB and JSONL files (`threads/`), plus per-user scratch space (`cache/`)
 - MCP manager that wires the backend to dedicated tool servers (`rag`, `code`)
 - Docker compose stack that includes LiteLLM, Ollama, the backend, and both MCP servers
 - Comprehensive pytest suite covering auth, prompting, storage, litellm client helpers, and route matrices
@@ -31,7 +31,7 @@ Services that start:
 - `litellm`: LiteLLM proxy that reads `litellm_config.yaml`
 - `ollama`: Optional local model runner for LiteLLM backends
 
-Bind mounts expose `/work`, logs, threads, and shared `rw_dir` to other Freva services. Provide GPU access to Ollama via Docker device reservations when needed.
+Bind mounts expose `/work`, logs, threads, and shared `cache` to other Freva services. Provide GPU access to Ollama via Docker device reservations when needed.
 
 ## Quick Start (local dev)
 
@@ -62,7 +62,7 @@ Create `.env` (used by FastAPI, Docker, and MCP servers). See `.env.example` for
 | `src/app.py` | FastAPI entrypoint, CORS policy, router registration, app lifespan hooks |
 | `src/api/chatbot/*` | HTTP handlers for chat operations (`availablechatbots`, `streamresponse`, `getthread`, etc.) |
 | `src/services/streaming/` | LiteLLM client, orchestrator, stream variant definitions, heartbeat helpers |
-| `src/services/storage/` | MongoDB + disk-backed persistence (`threads/` JSONL, `rw_dir/` scratch space) |
+| `src/services/storage/` | MongoDB + disk-backed persistence (`threads/` JSONL, `cache/` scratch space) |
 | `src/services/mcp/` | MCP manager and MCP client |
 | `src/services/authentication/` | Authentication: DEV mode auth surpassing OIDC requirements |
 | `src/core/` | Settings, prompt assembly, logging, startup checks, available-model parsing |
@@ -76,7 +76,7 @@ Create `.env` (used by FastAPI, Docker, and MCP servers). See `.env.example` for
 
 Generated artifacts that persist across runs:
 - `threads/` (JSONL transcript per thread id)
-- `rw_dir/{user_id}/{thread_id}` (LLM-created files, plots, etc.)
+- `cache/{user_id}/{thread_id}` (LLM-created files, plots, etc.)
 - `logs/` (when mounted in Docker)
 
 ## Architecture at a Glance
@@ -109,7 +109,7 @@ Generated artifacts that persist across runs:
 ## Persistence, Prompts, and Assets
 - **MongoDB (`mongodb_storage.py`)**: canonical record for threads. Each document stores `user_id`, `thread_id`, ISO timestamp, topic (summarized via LiteLLM), and serialized `StreamVariant` list.
 - **Disk mirrors (`thread_storage.py`)**: keep JSONL copies under `threads/{thread_id}.txt`, enabling offline replay and dev tooling. Topic of a thread is saved in `threads/{thread_id}.meta.json`.
-- **`rw_dir/` scratch**: `create_dir_at_rw_dir()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
+- **`cache/` scratch**: `create_dir_at_cache()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
 - **Prompt library**: `prompt_library/baseline` contains `starting_prompt.txt`, `summary_prompt.txt`, and `examples.jsonl`. GPT-5 models currently fall back to baseline prompts (warning logged). Customize by adding new prompt sets and updating `_resolve_baseline_dir()` / `_resolve_gpt5_dir_or_placeholder()`.
 - **Resources**: `resources/stableclimgen` seeds the RAG MCP server. Drop additional corpora per library folder and list them in `AVAILABLE_LIBRARIES` inside `src/tools/rag/server.py`.
 

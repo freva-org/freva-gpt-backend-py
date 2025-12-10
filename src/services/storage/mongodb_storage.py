@@ -146,9 +146,9 @@ class MongoThreadStorage(ThreadStorage):
         feedback: str,
     ) -> bool:
         try:
-            coll = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
+            coll_feedback = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
             feedback_filter ={"thread_id": thread_id, "entry_index": index}
-            existing = await coll.find_one(feedback_filter)
+            existing = await coll_feedback.find_one(feedback_filter)
             content = await self.read_thread(thread_id=thread_id)
             new_feedback: Dict = {
                 "thread_id": thread_id,
@@ -159,13 +159,17 @@ class MongoThreadStorage(ThreadStorage):
                 }
             if existing:
                 # Check if there was already feedback on this entry, if so update the existing one
-                await coll.update_one(feedback_filter, {"$set": new_feedback}, upsert=True)
+                await coll_feedback.update_one(feedback_filter, {"$set": new_feedback}, upsert=True)
             else:
-                await coll.insert_one(new_feedback)
+                await coll_feedback.insert_one(new_feedback)
+
+            # Save feedback in the thread history
+            await self._save_feedback_to_thread(thread_id, user_id, index, feedback)
+
             return True
         except:
             return False
-        
+ 
 
     async def delete_feedback(
         self,
@@ -177,9 +181,31 @@ class MongoThreadStorage(ThreadStorage):
             coll = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
             feedback_filter ={"thread_id": thread_id, "user_id": user_id, "entry_index": index}
             await coll.delete_one(feedback_filter)
+
+            # Save feedback in the thread history
+            await self._save_feedback_to_thread(thread_id, user_id, index, feedback="remove")
+
             return True            
         except:
             return False
+        
+
+    async def _save_feedback_to_thread(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+        feedback: str,
+    ):
+        content_json = await self.read_thread(thread_id)
+        if feedback == "remove":
+            content_json[index].pop("feedback", None)
+        else:
+            content_json[index].update({"feedback": feedback})
+
+        content_sv = [from_json_to_sv(l) for l in content_json]
+        await self.save_thread(thread_id, user_id, content_sv)
+        
     
 
 # ──────────────────── Connection ──────────────────────────────

@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple, Optional
 import os
 
 from .thread_storage import ThreadStorage, Thread, summarize_topic
-from src.services.streaming.stream_variants import Conversation, SVUser, from_sv_to_json, cleanup_conversation
+from src.services.streaming.stream_variants import Conversation, SVUser, from_sv_to_json, cleanup_conversation, from_json_to_sv
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +157,10 @@ class DiskThreadStorage(ThreadStorage):
             new_feedback_txt = json.dumps(new_feedback)
             with open(path, "a", encoding="utf-8") as f:
                 f.write(new_feedback_txt + "\n")
+
+            # Save feedback in the thread history
+            await self._save_feedback_to_thread(thread_id, user_id, index, feedback)
+
             return True
         except FileNotFoundError:
             raise FileNotFoundError("Thread not found")
@@ -184,6 +188,9 @@ class DiskThreadStorage(ThreadStorage):
             with open(path, "w", encoding="utf-8") as f:
                 for line in filtered_fb:
                     f.write(json.dumps(line) + "\n")
+            
+            # Save feedback in the thread history
+            await self._save_feedback_to_thread(thread_id, user_id, index, feedback="remove")
             return True            
         except:
             return False
@@ -207,6 +214,23 @@ class DiskThreadStorage(ThreadStorage):
                 json.dump(topic_json, f)
             
             return topic
+        
+    
+    async def _save_feedback_to_thread(
+        self,
+        thread_id: str,
+        user_id: str,
+        index: int,
+        feedback: str,
+    ):
+        content_json = await self.read_thread(thread_id)
+        if feedback == "remove":
+            content_json[index].pop("feedback", None)
+        else:
+            content_json[index].update({"feedback": feedback})
+
+        content_sv = [from_json_to_sv(l) for l in content_json]
+        await self.save_thread(thread_id, user_id, content_sv)
 
 
 # ──────────────────── Helper functions ──────────────────────────────
@@ -216,7 +240,7 @@ def get_latest_files(directory: str, n: int):
 
     # Get only files, not directories
     try:
-        files = [f for f in p.iterdir() if (f.is_file()) and (f.suffix == ".txt") and ("feedback" not in f)]
+        files = [f for f in p.iterdir() if (f.is_file()) and (f.suffix == ".txt") and ("feedback" not in str(f))]
     except:
         files = []
 

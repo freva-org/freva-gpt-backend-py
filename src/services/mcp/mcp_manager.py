@@ -188,20 +188,23 @@ class McpManager:
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
+async def get_mcp_headers(auth: Authenticator, cache: str) -> Dict[str, str]:
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
     access_token = auth.access_token
     freva_cfg_path = auth.freva_config_path
     _verify_access_to_file(freva_cfg_path)
     
+    auth_header = f"Bearer {access_token}" if access_token else None
+    
     headers = {
         "rag": {
-            "Authorization": access_token,
+            "Authorization": auth_header,
             "mongodb-uri":  mongodb_uri,
             },
         "code": {
-            "Authorization": access_token,
+            "Authorization": auth_header,
             "freva-config-path": freva_cfg_path,
+            "working-dir": str(cache),
             },
             }
     return headers

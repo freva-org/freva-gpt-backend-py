@@ -11,28 +11,18 @@ log = logging.getLogger(__name__)
 class FullAuthenticator(Authenticator):
     """
     Checks the Authorization header (Bearer token) or x-freva-user-token + x-f
-    The user might send both an auth_key in the query string and an Authorization header.
-    The header takes priority, but a warning is emitted if they don't match.
-    No fallback logic to the previous auth system.
+    The user must send an Authorization header. No fallback logic to the 
+    previous auth system.
     Returns:
       - self (Authenticator instance)
     Errors:
-      - 500 if AUTH_KEY unset
-      - else 422/400/401/502/503 same as Rust
+      - 422/400/401/502/503
     """
     async def run(self) -> "FullAuthenticator":
         settings = self.settings
         request = self.request
 
-        # 500 if AUTH_KEY not initialized
-        if not settings.AUTH_KEY:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No auth key found in the environment; Authorization failed.",
-            )
-
         q = request.query_params
-        maybe_key = q.get("auth_key")
         headers = request.headers
 
         # Checking Authorization header OR x-freva-user-token
@@ -70,12 +60,6 @@ class FullAuthenticator(Authenticator):
             try:
                 username = await get_username_from_token(token, rest_url)
                 self.username = username
-                if maybe_key:
-                    if maybe_key != settings.AUTH_KEY:
-                        # Might raise 401 here later, but for now only warning
-                        warnings.warn("The authentication keys given in query parameters and environment do not match!")
-                else:
-                    warnings.warn("No key provided in the request. Please set the auth_key in the query parameters.")
                 return self
             except HTTPException as err:
                 raise err

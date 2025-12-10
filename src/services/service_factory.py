@@ -1,3 +1,4 @@
+from pathlib import Path
 import logging
 from typing import Optional, Dict
 from fastapi import Depends, Request
@@ -11,7 +12,7 @@ from .authentication.full_auth import FullAuthenticator
 
 from .mcp.mcp_manager import McpManager, get_mcp_headers
 
-from .storage.thread_storage import ThreadStorage, create_dir_at_rw_dir
+from .storage.thread_storage import ThreadStorage, create_dir_at_cache
 from .storage.mongodb_storage import MongoThreadStorage
 from .storage.disk_storage import DiskThreadStorage
 
@@ -20,6 +21,7 @@ configure_logging()
 
 settings = get_settings()
 
+CACHE_ROOT = Path("./cache")
 
 def get_authenticator() -> Authenticator:
     if settings.DEV:
@@ -50,7 +52,7 @@ async def get_thread_storage(
     thread_id: Optional[str] = None,
 ) -> ThreadStorage:
     if user_name and thread_id:
-        create_dir_at_rw_dir(user_name, thread_id)
+        create_dir_at_cache(user_name, thread_id)
     if settings.DEV:
         # DEV mode: disk storage (no MongoDB dependency)
         return DiskThreadStorage()
@@ -59,7 +61,7 @@ async def get_thread_storage(
         return await MongoThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
+async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -74,7 +76,9 @@ async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
         default_headers=default_headers,
     )
 
-    extra_headers = await get_mcp_headers(authenticator)
+    cache = CACHE_ROOT / thread_id
+
+    extra_headers = await get_mcp_headers(authenticator, cache)
 
     try:
         mgr.initialize(extra_headers)

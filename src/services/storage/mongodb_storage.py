@@ -63,7 +63,7 @@ class MongoThreadStorage(ThreadStorage):
         if not topic:
             topic = await summarize_topic(content or "Untitled")
 
-        all_stream = [from_sv_to_json(v) for v in merged_sv]
+        all_stream = [from_sv_to_json(v) for v in merged_sv] if merged_sv else []
         doc = {
             "user_id": user_id,
             "thread_id": thread_id,

@@ -44,12 +44,11 @@ def client(app):
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("AUTH_KEY", "test-auth-key")
-    monkeypatch.setenv("HOST", "localhost")
-    monkeypatch.setenv("BACKEND_PORT", "8502")
+    monkeypatch.setenv("FREVAGPT_HOST", "localhost")
+    monkeypatch.setenv("FREVAGPT_BACKEND_PORT", "8502")
 
     # Decide: default test mode
-    monkeypatch.setenv("DEV", "0")  # for PROD-like auth & Mongo path
+    monkeypatch.setenv("FREVAGPT_DEV", "0")  # for PROD-like auth & Mongo path
     # or "1" if you want DevAuthenticator + DiskThreadStorage
 
     yield
@@ -172,7 +171,7 @@ def patch_read_thread(monkeypatch):
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
-    async def _fake_append(database, thread_id: str, user_id: str, messages):
+    async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
         return 
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
@@ -258,7 +257,7 @@ def patch_mcp_manager(monkeypatch):
     """
     from src.services.streaming import active_conversations as ac
 
-    async def fake_get_mcp_manager(authenticator):
+    async def fake_get_mcp_manager(authenticator, thread_id):
         # You can assert on authenticator if you want
         return DummyMcpManager()
 

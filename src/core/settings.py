@@ -11,7 +11,6 @@ class Settings:
     VERSION: str = os.getenv("VERSION", "0.1.0")      
     HOST: str = os.getenv("HOST", "0.0.0.0")
     BACKEND_PORT: int = int(os.getenv("BACKEND_PORT", "8502"))
-    AUTH_KEY: str = os.getenv("AUTH_KEY", "")       
     ALLOW_GUESTS: bool = os.getenv("ALLOW_GUESTS", "false").lower() in {"1", "true", "yes"}
     LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
     AVAILABLE_MCP_SERVERS: ClassVar[list[str]] = [s for s in os.getenv("AVAILABLE_MCP_SERVERS", "").split(",")]

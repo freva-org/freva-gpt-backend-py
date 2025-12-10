@@ -7,10 +7,6 @@ logger = logging.getLogger(__name__)
 # TODO: ping to LiteLLM for liveliness (warning only)
 
 def run_startup_checks(settings: Settings) -> None:
-    # AUTH_KEY is required
-    if not settings.AUTH_KEY:
-        # In Rust this would be a hard error; raise to fail fast at startup.
-        raise RuntimeError("Missing AUTH_KEY environment variable (required).")
 
     # LITE_LLM_ADDRESS sanity note
     if not (settings.LITE_LLM_ADDRESS.startswith("http://") or settings.LITE_LLM_ADDRESS.startswith("https://")):

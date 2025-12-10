@@ -44,7 +44,6 @@ def client(app):
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("AUTH_KEY", "test-auth-key")
     monkeypatch.setenv("HOST", "localhost")
     monkeypatch.setenv("BACKEND_PORT", "8502")
 

@@ -125,7 +125,7 @@ Generated artifacts that persist across runs:
 - **Check kernel env**: `python scripts/check_kernel_env.py` verifies the code interpreter container has the expected libraries and env vars.
 
 ## Troubleshooting
-- **Auth failures**: verify `AUTH_KEY` is set and headers include both `Authorization` and `x-freva-rest-url`. Inspect FastAPI logs for the exact HTTP status.
+- **Auth failures**: verify headers include both `Authorization` and `x-freva-rest-url`. Inspect FastAPI logs for the exact HTTP status.
 - **Missing models**: ensure `litellm_config.yaml` is readable and contains `model_name` keys. `available_chatbots()` aborts the process if it cannot find any entries.
 - **MCP issues**: backend logs warn but continue when tool discovery fails; LiteLLM will simply not emit tool calls. Use `settings.AVAILABLE_MCP_SERVERS` to enable/disable targets explicitly.
 - **File access**: Make sure `freva-config` headers point at mounted paths and `/work` is mounted read-only where expected.

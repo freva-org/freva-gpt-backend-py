@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _force_dev(monkeypatch):
-    monkeypatch.setenv("DEV", "1")
-    monkeypatch.setenv("CODE_SERVER_URL", "http://localhost:8051")
+    monkeypatch.setenv("FREVAGPT_DEV", "1")
+    monkeypatch.setenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
     import src.core.settings as settings
     importlib.reload(settings)
     yield
@@ -25,7 +25,7 @@ def _force_dev(monkeypatch):
 
 @pytest.fixture
 def mcp_client_CI():
-    base_url = os.getenv("CODE_SERVER_URL", "http://localhost:8051")
+    base_url = os.getenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
     client = McpClient(
         base_url=base_url,
         default_headers={"freva-config-path": "freva_evaluation.conf"},
@@ -77,8 +77,8 @@ def _exec_and_get_richoutput_value(mcp_client_CI, code):
 
 
 @pytest.mark.skipif(
-    not os.getenv("CODE_SERVER_URL"),
-    reason="CODE_SERVER_URL not set or code-interpreter MCP server not running",
+    not os.getenv("FREVAGPT_CODE_SERVER_URL"),
+    reason="FREVAGPT_CODE_SERVER_URL not set or code-interpreter MCP server not running",
 )
 def test_two_plus_two(mcp_client_CI):
     code = {"code":'2+2'}

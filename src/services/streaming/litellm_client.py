@@ -20,7 +20,7 @@ def _completions_url() -> str:
     return f"{s.LITE_LLM_ADDRESS.rstrip('/')}/v1/chat/completions"
 
 # Optional bearer to satisfy proxies that require it.
-AUTH_TOKEN = os.getenv("OPENAI_API_KEY", "")
+AUTH_TOKEN = os.getenv("FREVAGPT_OPENAI_API_KEY", "")
 
 def _passthrough_params(params: Dict[str, Any] | None) -> Dict[str, Any]:
     # Tiny wrapper to allow future param sanitization

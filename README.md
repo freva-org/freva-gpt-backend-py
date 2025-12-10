@@ -5,7 +5,7 @@ Python backend for Freva-GPT assistant. The service mirrors the Rust implementat
 ## Highlights
 - FastAPI app with strict auth parity to the production Rust service (`/api/chatbot/*`)
 - Streaming responses via LiteLLM/OpenAI-compatible SSE (`application/x-ndjson`) with code + image variants
-- Persistent conversation threads in MongoDB and JSONL files (`threads/`), plus per-user scratch space (`rw_dir/`)
+- Persistent conversation threads in MongoDB and JSONL files (`threads/`), plus per-user scratch space (`cache/`)
 - MCP manager that wires the backend to dedicated tool servers (`rag`, `code`)
 - Docker compose stack that includes LiteLLM, Ollama, the backend, and both MCP servers
 - Comprehensive pytest suite covering auth, prompting, storage, litellm client helpers, and route matrices
@@ -31,13 +31,13 @@ Services that start:
 - `litellm`: LiteLLM proxy that reads `litellm_config.yaml`
 - `ollama`: Optional local model runner for LiteLLM backends
 
-Bind mounts expose `/work`, logs, threads, and shared `rw_dir` to other Freva services. Provide GPU access to Ollama via Docker device reservations when needed.
+Bind mounts expose `/work`, logs, threads, and shared `cache` to other Freva services. Provide GPU access to Ollama via Docker device reservations when needed.
 
 ## Quick Start (local dev)
 
 ### Requirements
 - Python `3.11.x`
-- Set `MONGODB_URI_LOCAL` for RAG server
+- Set `FREVAGPT_MONGODB_URI_LOCAL` for RAG server
 - LiteLLM instance that fronts OpenAI, Ollama, or Azure models and understands `litellm_config.yaml`
 
 <!-- ### Install dependencies (uv)
@@ -62,7 +62,7 @@ Create `.env` (used by FastAPI, Docker, and MCP servers). See `.env.example` for
 | `src/app.py` | FastAPI entrypoint, CORS policy, router registration, app lifespan hooks |
 | `src/api/chatbot/*` | HTTP handlers for chat operations (`availablechatbots`, `streamresponse`, `getthread`, etc.) |
 | `src/services/streaming/` | LiteLLM client, orchestrator, stream variant definitions, heartbeat helpers |
-| `src/services/storage/` | MongoDB + disk-backed persistence (`threads/` JSONL, `rw_dir/` scratch space) |
+| `src/services/storage/` | MongoDB + disk-backed persistence (`threads/` JSONL, `cache/` scratch space) |
 | `src/services/mcp/` | MCP manager and MCP client |
 | `src/services/authentication/` | Authentication: DEV mode auth surpassing OIDC requirements |
 | `src/core/` | Settings, prompt assembly, logging, startup checks, available-model parsing |
@@ -76,14 +76,14 @@ Create `.env` (used by FastAPI, Docker, and MCP servers). See `.env.example` for
 
 Generated artifacts that persist across runs:
 - `threads/` (JSONL transcript per thread id)
-- `rw_dir/{user_id}/{thread_id}` (LLM-created files, plots, etc.)
+- `cache/{user_id}/{thread_id}` (LLM-created files, plots, etc.)
 - `logs/` (when mounted in Docker)
 
 ## Architecture at a Glance
 1. **FastAPI layer** enforces auth via `AuthRequired` (Bearer tokens validated against `x-freva-rest-url`), injects usernames, and validates per-request headers (`x-freva-vault-url`, `freva-config`, etc.).
-2. **LiteLLM proxy** (`LITE_LLM_ADDRESS`) provides OpenAI-compatible chat + embeddings endpoints; completions stream into `StreamVariant` classes that normalize assistant text, code blocks, tool hints, images, and server hints.
+2. **LiteLLM proxy** (`FREVAGPT_LITE_LLM_ADDRESS`) provides OpenAI-compatible chat + embeddings endpoints; completions stream into `StreamVariant` classes that normalize assistant text, code blocks, tool hints, images, and server hints.
 3. **Persistence** uses both MongoDB (main storage) and optional disk mirrors. The `x-freva-vault-url` header resolves the Mongo URI at runtime so each tenant can point at its own database.
-4. **MCP Manager** (`src/services/mcp/mcp_manager.py`) connects to tool servers listed in `AVAILABLE_MCP_SERVERS` (e.g., `["rag", "code"]`), discovers tools, exposes OpenAI function schemas to LiteLLM, and routes tool invocations with per-thread session ids.
+4. **MCP Manager** (`src/services/mcp/mcp_manager.py`) connects to tool servers listed in `FREVAGPT_AVAILABLE_MCP_SERVERS` (e.g., `["rag", "code"]`), discovers tools, exposes OpenAI function schemas to LiteLLM, and routes tool invocations with per-thread session ids.
 5. **RAG + Code MCP servers** run as separate ASGI apps (dockerized) with optional JWT auth. Requests flow through `header_gate` so required headers (`mongodb-uri`, `freva-config-path`) become ContextVars before code executes.
 6. **Prompting** loads baseline templates + few-shot examples per model and replays thread history (minus prompts, meta) to LiteLLM, matching the Rust semantics.
 
@@ -109,23 +109,23 @@ Generated artifacts that persist across runs:
 ## Persistence, Prompts, and Assets
 - **MongoDB (`mongodb_storage.py`)**: canonical record for threads. Each document stores `user_id`, `thread_id`, ISO timestamp, topic (summarized via LiteLLM), and serialized `StreamVariant` list.
 - **Disk mirrors (`thread_storage.py`)**: keep JSONL copies under `threads/{thread_id}.txt`, enabling offline replay and dev tooling. Topic of a thread is saved in `threads/{thread_id}.meta.json`.
-- **`rw_dir/` scratch**: `create_dir_at_rw_dir()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
+- **`cache/` scratch**: `create_dir_at_cache()` ensures each user/thread has a writable directory for generated files (plots, CSVs). Entries are sanitized if user IDs contain unsupported characters.
 - **Prompt library**: `prompt_library/baseline` contains `starting_prompt.txt`, `summary_prompt.txt`, and `examples.jsonl`. GPT-5 models currently fall back to baseline prompts (warning logged). Customize by adding new prompt sets and updating `_resolve_baseline_dir()` / `_resolve_gpt5_dir_or_placeholder()`.
-- **Resources**: `resources/stableclimgen` seeds the RAG MCP server. Drop additional corpora per library folder and list them in `AVAILABLE_LIBRARIES` inside `src/tools/rag/server.py`.
+- **Resources**: `resources/stableclimgen` seeds the RAG MCP server. Drop additional corpora per library folder and list them in `FREVAGPT_AVAILABLE_LIBRARIES` inside `src/tools/rag/server.py`.
 
 ## MCP Tooling
-- **RAG server** (`src/tools/rag/server.py`): indexes documentation with custom loaders + splitters, stores embeddings in MongoDB (`embeddings`), and surfaces a single tool `get_context_from_resources`. LiteLLM requests embed queries through the same proxy (`LITE_LLM_ADDRESS`).
+- **RAG server** (`src/tools/rag/server.py`): indexes documentation with custom loaders + splitters, stores embeddings in MongoDB (`embeddings`), and surfaces a single tool `get_context_from_resources`. LiteLLM requests embed queries through the same proxy (`FREVAGPT_LITE_LLM_ADDRESS`).
 - **Code interpreter** (`src/tools/code_interpreter/server.py`): spins up per-session Jupyter kernels, sanitizes input, enforces configurable timeouts, and injects Freva config via environment variables. Outputs include stdout/stderr, display data, and structured errors.
 - **Header gate** (`src/tools/header_gate.py`): wraps each MCP ASGI app so critical headers become ContextVars and requests fail fast when missing/invalid (e.g., missing Mongo URI yields SSE-friendly JSON-RPC errors).
 - **Manager** (`src/services/mcp/mcp_manager.py`): caches clients, discovers tool schemas, exports OpenAI function definitions, and pins MCP session ids to thread ids for deterministic tool contexts.
 
 ## Development Workflow
 - **Run tests**: `uv run pytest` (or `uv run pytest tests/test_auth.py -k bearer` for focused cases). Tests cover auth flows, prompt assembly, storage, stream variant conversions, and route parameter validation.
-- **Interactive chat**: `uv run python scripts/dev_chat.py` starts a REPL that exercises the same orchestrator logic, persisting outputs to disk and optionally pointing at local MCP servers (configure `MONGODB_URI_LOCAL` & `freva_config_path` env vars).
+- **Interactive chat**: `uv run python scripts/dev_chat.py` starts a REPL that exercises the same orchestrator logic, persisting outputs to disk and optionally pointing at local MCP servers (configure `FREVAGPT_MONGODB_URI_LOCAL` & `freva_config_path` env vars).
 - **Check kernel env**: `python scripts/check_kernel_env.py` verifies the code interpreter container has the expected libraries and env vars.
 
 ## Troubleshooting
-- **Auth failures**: verify `AUTH_KEY` is set and headers include both `Authorization` and `x-freva-rest-url`. Inspect FastAPI logs for the exact HTTP status.
+- **Auth failures**: verify headers include both `Authorization` and `x-freva-rest-url`. Inspect FastAPI logs for the exact HTTP status.
 - **Missing models**: ensure `litellm_config.yaml` is readable and contains `model_name` keys. `available_chatbots()` aborts the process if it cannot find any entries.
 - **MCP issues**: backend logs warn but continue when tool discovery fails; LiteLLM will simply not emit tool calls. Use `settings.AVAILABLE_MCP_SERVERS` to enable/disable targets explicitly.
 - **File access**: Make sure `freva-config` headers point at mounted paths and `/work` is mounted read-only where expected.

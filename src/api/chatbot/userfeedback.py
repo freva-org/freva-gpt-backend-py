@@ -30,12 +30,15 @@ async def user_feedback(
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
+    # Load the thread content
     try:
-        # Load the thread content
         content_json = await Storage.read_thread(thread_id=thread_id)
-    except:
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Thread not found")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error reading thread file.")
     
+    # Check if index within bounds
     if feedback_at_index < 0 or feedback_at_index >= len(content_json):
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -49,7 +52,7 @@ async def user_feedback(
         else:
             return {"ok": ok, "body": f"Failed to save user feedback: {thread_id}"}
     else:
-        # TODO: Should we delete feedback when user deletes thread?
+        # TODO: delete feedback when user deletes thread?
 
         if "feedback" not in content_json[feedback_at_index].keys():
             return {"ok": False, "body": f"Feedback not found at index {feedback_at_index}: {thread_id}"}

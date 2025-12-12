@@ -142,6 +142,7 @@ class MongoThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
         feedback: str,
     ) -> bool:
@@ -149,12 +150,11 @@ class MongoThreadStorage(ThreadStorage):
             coll_feedback = self.db[MONGODB_COLLECTION_NAME_FEEDBACK]
             feedback_filter ={"thread_id": thread_id, "entry_index": index}
             existing = await coll_feedback.find_one(feedback_filter)
-            content = await self.read_thread(thread_id=thread_id)
             new_feedback: Dict = {
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "entry_index": index,
-                "entry": content[index],
+                "entry": content_json[index],
                 "feedback": feedback,
                 }
             if existing:
@@ -164,7 +164,7 @@ class MongoThreadStorage(ThreadStorage):
                 await coll_feedback.insert_one(new_feedback)
 
             # Save feedback in the thread history
-            await self._save_feedback_to_thread(thread_id, user_id, index, feedback)
+            await self._save_feedback_to_thread(thread_id, user_id, content_json, index, feedback)
 
             return True
         except:
@@ -175,6 +175,7 @@ class MongoThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
     ) -> bool:
         try:
@@ -183,7 +184,7 @@ class MongoThreadStorage(ThreadStorage):
             await coll.delete_one(feedback_filter)
 
             # Save feedback in the thread history
-            await self._save_feedback_to_thread(thread_id, user_id, index, feedback="remove")
+            await self._save_feedback_to_thread(thread_id, user_id, content_json, index, feedback="remove")
 
             return True            
         except:
@@ -194,12 +195,12 @@ class MongoThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
         feedback: str,
     ):
-        content_json = await self.read_thread(thread_id)
         if feedback == "remove":
-            content_json[index].pop("feedback", None)
+            content_json[index].pop("feedback")
         else:
             content_json[index].update({"feedback": feedback})
 

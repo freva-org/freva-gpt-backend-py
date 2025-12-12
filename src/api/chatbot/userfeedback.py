@@ -19,8 +19,6 @@ async def user_feedback(
     Updates the thread topic with user-given str of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
-    # TODO: save the feedbacks in the history and return them in /getuserthreads
-
     if not thread_id:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -32,16 +30,32 @@ async def user_feedback(
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
+    try:
+        # Load the thread content
+        content_json = await Storage.read_thread(thread_id=thread_id)
+    except:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    if feedback_at_index < 0 or feedback_at_index >= len(content_json):
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="feedback_at_index outside content range! Please review query parameters!",
+        )
+
     if feedback != "remove":
-        ok = await Storage.save_feedback(thread_id, auth.username, feedback_at_index, feedback)
+        ok = await Storage.save_feedback(thread_id, auth.username, content_json, feedback_at_index, feedback)
         if ok:
             return {"ok": ok, "body": "Successfully saved user feedback."}
         else:
             return {"ok": ok, "body": f"Failed to save user feedback: {thread_id}"}
     else:
         # TODO: Should we delete feedback when user deletes thread?
-        ok = await Storage.delete_feedback(thread_id, auth.username, feedback_at_index)
-        if ok:
-            return {"ok": ok, "body": "Successfully removed user feedback."}
+
+        if "feedback" not in content_json[feedback_at_index].keys():
+            return {"ok": False, "body": f"Feedback not found at index {feedback_at_index}: {thread_id}"}
         else:
-            return {"ok": ok, "body": f"Failed to delete user feedback: {thread_id}"}
+            ok = await Storage.delete_feedback(thread_id, auth.username, content_json, feedback_at_index)
+            if ok:
+                return {"ok": ok, "body": "Successfully removed user feedback."}
+            else:
+                return {"ok": False, "body": f"Failed to delete user feedback: {thread_id}"}

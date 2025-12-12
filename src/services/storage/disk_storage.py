@@ -139,6 +139,7 @@ class DiskThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
         feedback: str,
     ) -> bool:
@@ -146,12 +147,11 @@ class DiskThreadStorage(ThreadStorage):
         try:
             # We don't check if there was feedback on the same entry before
             # We simply save any feedback on DEV mode
-            content = await self.read_thread(thread_id=thread_id)
             new_feedback: Dict = {
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "entry_index": index,
-                "entry": content[index],
+                "entry": content_json[index],
                 "feedback": feedback,
                 }
             new_feedback_txt = json.dumps(new_feedback)
@@ -159,7 +159,7 @@ class DiskThreadStorage(ThreadStorage):
                 f.write(new_feedback_txt + "\n")
 
             # Save feedback in the thread history
-            await self._save_feedback_to_thread(thread_id, user_id, index, feedback)
+            await self._save_feedback_to_thread(thread_id, user_id, content_json, index, feedback)
 
             return True
         except FileNotFoundError:
@@ -172,6 +172,7 @@ class DiskThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
     ) -> bool:
         path = THREADS_DIR / "userfeedback.txt"
@@ -190,7 +191,7 @@ class DiskThreadStorage(ThreadStorage):
                     f.write(json.dumps(line) + "\n")
             
             # Save feedback in the thread history
-            await self._save_feedback_to_thread(thread_id, user_id, index, feedback="remove")
+            await self._save_feedback_to_thread(thread_id, user_id, content_json, index, feedback='remove')
             return True            
         except:
             return False
@@ -220,10 +221,10 @@ class DiskThreadStorage(ThreadStorage):
         self,
         thread_id: str,
         user_id: str,
+        content_json: List[Dict],
         index: int,
         feedback: str,
     ):
-        content_json = await self.read_thread(thread_id)
         if feedback == "remove":
             content_json[index].pop("feedback", None)
         else:

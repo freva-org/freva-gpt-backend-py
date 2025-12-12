@@ -30,8 +30,14 @@ async def edit_thread(
     Storage = await get_thread_storage(vault_url=Auth.vault_url)
 
     # Load original content
-    orig_json = await Storage.read_thread(thread_id=source_thread_id)
+    try:
+        orig_json = await Storage.read_thread(thread_id=source_thread_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error reading thread file.")
 
+    # Check index within bounds
     if fork_from_index < 0 or fork_from_index >= len(orig_json):
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,

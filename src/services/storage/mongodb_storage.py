@@ -1,4 +1,3 @@
-import logging
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
 
@@ -9,8 +8,9 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from src.core.settings import get_settings
 from src.services.streaming.stream_variants import SVUser, StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
 from .thread_storage import ThreadStorage, Thread, summarize_topic
+from src.core.logging_setup import configure_logging
 
-log = logging.getLogger(__name__)
+DEFAULT_LOGGER = configure_logging(__name__)
 
 # ──────────────────── Config from settings.py ────────────────────────────
 
@@ -40,6 +40,7 @@ class MongoThreadStorage(ThreadStorage):
         content: List[StreamVariant],
         append_to_existing: Optional[bool] = False,
     ) -> None:
+        logger = configure_logging(__name__, thread_id=thread_id, user_id=user_id)
         content = cleanup_conversation(content)
         if not content:
             return
@@ -75,6 +76,7 @@ class MongoThreadStorage(ThreadStorage):
             await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
         else:
             await coll.insert_one(doc)
+        logger.info("Saved thread to MongoDB", extra={"thread_id": thread_id, "user_id": user_id, "append": append_to_existing})
 
 
     async def list_recent_threads(
@@ -82,11 +84,12 @@ class MongoThreadStorage(ThreadStorage):
         user_id: str,
         limit: int = 20,
     ) -> Tuple[List[Thread], int]:
+        logger = configure_logging(__name__, user_id=user_id)
         coll = self.db[MONGODB_COLLECTION_NAME]
         n_threads = await coll.count_documents({"user_id": user_id})
         cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).limit(limit)
         docs = await cursor.to_list(length=limit)
-        return [
+        threads = [
             Thread(
                 user_id=d["user_id"],
                 thread_id=d["thread_id"],
@@ -95,7 +98,9 @@ class MongoThreadStorage(ThreadStorage):
                 content=d.get("content", []),
             )
             for d in docs
-        ], n_threads
+        ]
+        logger.info("Listed recent threads from MongoDB", extra={"user_id": user_id, "returned": len(threads), "limit": limit})
+        return threads, n_threads
 
 
     async def read_thread(
@@ -103,9 +108,11 @@ class MongoThreadStorage(ThreadStorage):
         thread_id: str,
     ) -> List[Dict]:
         #TODO check the return
+        logger = configure_logging(__name__, thread_id=thread_id)
         coll = self.db[MONGODB_COLLECTION_NAME]
         doc = await coll.find_one({"thread_id": thread_id})
         if not doc:
+            logger.warning("Thread not found in MongoDB", extra={"thread_id": thread_id})
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
     
@@ -116,11 +123,15 @@ class MongoThreadStorage(ThreadStorage):
         topic: str
     ) -> bool:
         try:
+            logger = configure_logging(__name__, thread_id=thread_id)
             coll = self.db[MONGODB_COLLECTION_NAME]
             update_op = { '$set' :  { 'topic' : topic } }
             await coll.update_one({"thread_id": thread_id}, update_op)
+            logger.info("Updated topic in MongoDB", extra={"thread_id": thread_id})
             return True
         except:
+            logger = configure_logging(__name__, thread_id=thread_id)
+            logger.exception("Failed to update topic in MongoDB", extra={"thread_id": thread_id})
             return False
         
 
@@ -129,11 +140,15 @@ class MongoThreadStorage(ThreadStorage):
         thread_id: str,
     ) -> bool:
         try:
+            logger = configure_logging(__name__, thread_id=thread_id)
             coll = self.db[MONGODB_COLLECTION_NAME]
             await coll.delete_one({"thread_id": thread_id})
             #TODO check the return
+            logger.info("Deleted thread in MongoDB", extra={"thread_id": thread_id})
             return True
         except:
+            logger = configure_logging(__name__, thread_id=thread_id)
+            logger.exception("Failed to delete thread in MongoDB", extra={"thread_id": thread_id})
             return False
     
 

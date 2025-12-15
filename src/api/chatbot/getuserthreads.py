@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.core.logging_setup import configure_logging
 
 router = APIRouter()
 
@@ -16,6 +17,8 @@ async def get_user_threads(
     Returns the latest 10 threads of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
+    logger = configure_logging(__name__, user_id=auth.username)
+
     if not auth.username:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
@@ -28,6 +31,11 @@ async def get_user_threads(
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
     threads, total_num_threads = await Storage.list_recent_threads(auth.username, limit=num_threads)
+
+    logger.info(
+        "Fetched recent threads",
+        extra={"user_id": auth.username, "thread_count": len(threads), "requested": num_threads},
+    )
 
     return [
         [

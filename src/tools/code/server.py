@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 from contextvars import ContextVar
 
 from fastmcp import FastMCP
@@ -13,8 +12,7 @@ from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
 from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_code
 
-logger = logging.getLogger(__name__)
-configure_logging()
+logger = configure_logging(__name__, named_log="code_server")
 
 _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)

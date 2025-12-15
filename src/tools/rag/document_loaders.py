@@ -9,7 +9,7 @@ from langchain_community.document_loaders import TextLoader, JSONLoader, PyPDFLo
 
 from src.core.logging_setup import configure_logging
 
-logger = configure_logging()
+logger = configure_logging(__name__, named_log="rag_server")
 
 
 loader_cls_dict={

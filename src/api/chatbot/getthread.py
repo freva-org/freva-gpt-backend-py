@@ -8,6 +8,7 @@ from src.services.service_factory import Authenticator, AuthRequired, auth_depen
 from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
 from src.services.streaming.stream_orchestrator import prepare_for_stream
 from src.services.streaming.active_conversations import get_conv_messages
+from src.core.logging_setup import configure_logging
 
 
 router = APIRouter()
@@ -48,6 +49,8 @@ async def get_thread(
     if not Auth.vault_url:
         raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
 
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=Auth.username)
+
     # Thread storage 
     Storage = await get_thread_storage(vault_url=Auth.vault_url)
 
@@ -57,18 +60,24 @@ async def get_thread(
             user_id=Auth.username,
             Auth=Auth,
             Storage=Storage,
-            read_history=True
+            read_history=True,
+            logger=logger,
         )
         if prep_error:
+            logger.info("Prep for stream returned an error!", extra={"thread_id": thread_id})
             return prep_error
 
     except FileNotFoundError:
+        logger.warning("Thread not found", extra={"thread_id": thread_id})
         raise HTTPException(status_code=404, detail="Thread not found")
     except Exception:
+        logger.exception("Error reading thread file", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail="Error reading thread file.")
         
     content = await get_conv_messages(thread_id)
 
     content = _post_process(content)
+
+    logger.info("Fetched thread content", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

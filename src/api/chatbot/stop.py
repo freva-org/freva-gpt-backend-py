@@ -1,14 +1,9 @@
-import logging
-
 from fastapi import APIRouter, Query, HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.services.service_factory import AuthRequired
 from src.core.logging_setup import configure_logging
 from src.services.streaming.active_conversations import request_stop, cancel_tool_tasks
-
-log = logging.getLogger(__name__)
-configure_logging()
 
 router = APIRouter()
 
@@ -27,10 +22,11 @@ async def stop_get(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Thread ID is missing. Please provide a thread_id in the query parameters.",
         )
-    
-    log.debug(f"Initiated to stop conversation with id: {thread_id}")
+
+    logger = configure_logging(__name__, thread_id=thread_id)
 
     ok = await request_stop(thread_id)
+    logger.debug("Initiated stop request", extra={"thread_id": thread_id})
 
     if ok:
         return {"ok": ok, "body": "Conversation stopped."}

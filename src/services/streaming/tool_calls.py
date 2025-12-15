@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
 from typing import Any, Dict, List
 from dataclasses import dataclass
 
 from src.services.service_factory import McpManager
+from src.core.logging_setup import configure_logging
 
 from src.services.streaming.stream_variants import (
     SVUser,
@@ -18,7 +18,7 @@ from src.services.streaming.stream_variants import (
 )
 
 
-log = logging.getLogger(__name__)
+DEFAULT_LOGGER = configure_logging(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP tool runner
@@ -29,7 +29,9 @@ async def run_tool_via_mcp(
     mcp: McpManager,
     tool_name: str,
     arguments_json: str,
+    logger=None,
 ) -> str:
+    log = logger or DEFAULT_LOGGER
     try:
         args = json.loads(arguments_json or "{}")
     except Exception:
@@ -37,6 +39,7 @@ async def run_tool_via_mcp(
 
     server_name = mcp.get_server_from_tool(tool_name)
 
+    log.info(f"Executing tool call:\nname : {tool_name}   arguments : {args}")
     # Run the blocking MCP call in a thread so cancellation of the coroutine
     # doesn’t block the event loop.
     loop = asyncio.get_running_loop()
@@ -100,15 +103,17 @@ class FinalSummary:
     is_error: bool
 
 
-def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
+def parse_tool_result(out_txt: str, tool_name: str, call_id: str, logger=None):
+    log = logger or DEFAULT_LOGGER
     if tool_name == "code_interpreter":
-        yield from parse_code_interpreter_result(out_txt, call_id)
+        yield from parse_code_interpreter_result(out_txt, call_id, logger=log)
     else:
         log.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
 
-def parse_code_interpreter_result(result_txt: str, id: str):
+def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
+    log = logger or DEFAULT_LOGGER
     code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 

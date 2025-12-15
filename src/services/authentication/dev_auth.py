@@ -1,4 +1,7 @@
+from src.core.logging_setup import configure_logging
 from .authenticator import Authenticator
+
+log = configure_logging(__name__)
 
 
 class DevAuthenticator(Authenticator):
@@ -23,4 +26,8 @@ class DevAuthenticator(Authenticator):
             self.access_token = "Access-token"
             self.freva_config_path = ""
 
+        log.info(
+            "DEV auth applied",
+            extra={"user_id": self.username, "vault_url": self.vault_url, "rest_url": self.rest_url},
+        )
         return self

@@ -15,8 +15,9 @@ services:
       - "8600:${FREVAGPT_BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
       - "${FREVAGPT_DEBUG_PORT:-5678}:${FREVAGPT_DEBUG_PORT:-5678}" # Port for debugpy
     volumes: 
-      -  ./cache/:/app/cache
-      -  ./threads/:/app/threads
+      - ./cache/:/app/cache
+      - ./threads/:/app/threads
+      - ./logs/:/app/logs
     networks: 
       - freva-gpt
   rag:
@@ -36,6 +37,7 @@ services:
       - "8050:8050"
     volumes: 
       - ./resources:/app/resources:ro
+      - ./logs/:/app/logs
     networks: 
       - freva-gpt
   code:
@@ -55,6 +57,7 @@ services:
       - "8051:8051"
     volumes:
       - ./cache/:/app/cache
+      - ./logs/:/app/logs
     networks: 
       - freva-gpt
   litellm:

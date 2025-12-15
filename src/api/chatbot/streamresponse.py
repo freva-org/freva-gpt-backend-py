@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import base64
 import time
@@ -28,9 +27,6 @@ from src.services.streaming.active_conversations import (
 )
 
 router = APIRouter()
-
-log = logging.getLogger(__name__)
-configure_logging()
 
 CHECK_INTERVAL = 3  # seconds, the interval to wait before check STOP request
 
@@ -60,11 +56,16 @@ async def streamresponse(
     """
     Thin HTTP wrapper that delegates streaming to the orchestrator.
     """
+    logger = configure_logging(__name__)
     read_history=False
     if not thread_id:
         thread_id = await new_thread_id()
+        logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
     else:
+        logger.info(f"Resuming conversation with thread_id: {thread_id}...")
         if not await check_thread_exists(thread_id):
+            logger.info(f"Existing conversation is not found in the registry: {thread_id} ! "\
+                        "It will be registered after the thread history is read.")
             read_history = True
 
     user_input = input or None
@@ -77,6 +78,7 @@ async def streamresponse(
     model_name = chatbot or default_chatbot()
 
     user_name = Auth.username
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=user_name)
 
     if not Auth.vault_url:
         raise HTTPException(
@@ -89,15 +91,30 @@ async def streamresponse(
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 
+    logger.info(
+        "Streaming response",
+        extra={
+            "thread_id": thread_id,
+            "user_id": user_name,
+            "model_name": model_name,
+        },
+    )
+
     async def event_stream():
+
         prep_error = await prepare_for_stream(
             thread_id=thread_id, 
             user_id=user_name,
             Auth=Auth,
             Storage=Storage,
-            read_history=read_history
+            read_history=read_history,
+            logger=logger,
         )
         if prep_error:
+            logger.warning(
+                "prepare_for_stream returned non-stream variant",
+                extra={"thread_id": thread_id, "user_id": user_name},
+            )
             yield _sse_data(from_sv_to_json(prep_error))
             return
 
@@ -107,9 +124,11 @@ async def streamresponse(
             thread_id=thread_id,
             user_input=user_input,
             system_prompt=system_prompt,
+            logger=logger,
         ):
             for data in _sse_data(from_sv_to_json(variant)):
                 yield data
+
             now = time.monotonic()
             # Check if there is STOP request from
             if now-last_check > CHECK_INTERVAL:
@@ -121,8 +140,12 @@ async def streamresponse(
                     await add_to_conversation(thread_id, [end_v])
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
+                    logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})
                     return
+                
         await end_and_save_conversation(thread_id, Storage)
+        logger.info("Completed streaming and saved conversation", extra={"thread_id": thread_id, "user_id": user_name})
+
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",

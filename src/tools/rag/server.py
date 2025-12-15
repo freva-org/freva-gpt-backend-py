@@ -1,6 +1,5 @@
 import os
 import requests
-import logging
 from functools import lru_cache
 from contextvars import ContextVar
 
@@ -16,8 +15,7 @@ from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
 
-configure_logging()
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__, named_log="rag_server")
 
 LITE_LLM_ADDRESS: str = os.getenv("FREVAGPT_LITE_LLM_ADDRESS", "http://litellm:4000")
 

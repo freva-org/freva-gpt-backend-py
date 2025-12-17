@@ -150,7 +150,7 @@ async def stream_with_tools(
                 while not tool_task.done():
                     hb = await heartbeat_content()
                     yield hb
-                    await asyncio.sleep(3)  # adjust heartbeat interval (seconds)
+                    await asyncio.sleep(10)  # heartbeat interval (seconds)
 
                 # When done, return the final result text
                 result_text = await tool_task

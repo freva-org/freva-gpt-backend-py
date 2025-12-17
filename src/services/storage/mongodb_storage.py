@@ -29,7 +29,10 @@ class MongoThreadStorage(ThreadStorage):
     @classmethod
     async def create(cls, vault_url: str):
         self = cls(vault_url)
-        self.db = await get_database(self.vault_url)
+        if settings.DEV:
+            self.db = AsyncIOMotorClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
+        else:
+            self.db = await get_database(self.vault_url)
         return self
 
 

@@ -80,6 +80,18 @@ services:
     hostname: ollama-instance-${FREVAGPT_INSTANCE_NAME}
     networks: 
       - freva-gpt
+  mongodb:
+    networks:
+      - freva-gpt
+    image: mongo:latest
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: secret
+    hostname: mongodb
+    ports:
+      - "27017:27017"
+    command: --quiet --logpath /dev/null 
+
 
 networks:
   freva-gpt:

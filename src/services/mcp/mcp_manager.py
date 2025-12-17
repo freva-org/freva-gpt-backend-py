@@ -195,7 +195,7 @@ class McpManager:
 
 async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[str, str]:
     log = logger or DEFAULT_LOGGER
-    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
+    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
     access_token = auth.access_token
     freva_cfg_path = auth.freva_config_path
     _verify_access_to_file(freva_cfg_path, logger=log)

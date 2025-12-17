@@ -13,7 +13,6 @@ from .mcp.mcp_manager import McpManager, get_mcp_headers
 
 from .storage.thread_storage import ThreadStorage, create_dir_at_cache
 from .storage.mongodb_storage import MongoThreadStorage
-from .storage.disk_storage import DiskThreadStorage
 
 log = configure_logging(__name__)
 
@@ -51,12 +50,7 @@ async def get_thread_storage(
 ) -> ThreadStorage:
     if user_name and thread_id:
         create_dir_at_cache(user_name, thread_id)
-    if settings.DEV:
-        # DEV mode: disk storage (no MongoDB dependency)
-        return DiskThreadStorage()
-    else:
-        # PROD: MongoDB storage
-        return await MongoThreadStorage.create(vault_url=vault_url)
+    return await MongoThreadStorage.create(vault_url=vault_url)
 
 
 async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:

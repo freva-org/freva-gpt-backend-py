@@ -37,7 +37,6 @@ Bind mounts expose `/work`, logs, threads, and shared `cache` to other Freva ser
 
 ### Requirements
 - Python `3.11.x`
-- Set `FREVAGPT_MONGODB_URI_LOCAL` for RAG server
 - LiteLLM instance that fronts OpenAI, Ollama, or Azure models and understands `litellm_config.yaml`
 
 <!-- ### Install dependencies (uv)
@@ -121,7 +120,7 @@ Generated artifacts that persist across runs:
 
 ## Development Workflow
 - **Run tests**: `uv run pytest` (or `uv run pytest tests/test_auth.py -k bearer` for focused cases). Tests cover auth flows, prompt assembly, storage, stream variant conversions, and route parameter validation.
-- **Interactive chat**: `uv run python scripts/dev_chat.py` starts a REPL that exercises the same orchestrator logic, persisting outputs to disk and optionally pointing at local MCP servers (configure `FREVAGPT_MONGODB_URI_LOCAL` & `freva_config_path` env vars).
+- **Interactive chat**: `uv run python scripts/dev_chat.py` starts a REPL that exercises the same orchestrator logic, persisting outputs to disk and optionally pointing at local MCP servers (configure `freva_config_path` env vars).
 - **Check kernel env**: `python scripts/check_kernel_env.py` verifies the code interpreter container has the expected libraries and env vars.
 
 ## Troubleshooting

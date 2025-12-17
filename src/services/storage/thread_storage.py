@@ -81,7 +81,6 @@ def create_dir_at_cache(
     retry with a sanitized user_id (keep only [A-Za-z0-9]). Logs but never raises.
     """
     cache = CACHE_ROOT / thread_id
-    # cache = CACHE_ROOT / user_id / thread_id
     try:
         cache.mkdir(parents=True, exist_ok=True)
         DEFAULT_LOGGER.debug("cache created or exists: %s", cache)
@@ -89,13 +88,6 @@ def create_dir_at_cache(
     except Exception as e:
         DEFAULT_LOGGER.debug("Failed to create cache=%s, err=%s -- retrying with sanitized user_id", cache, e)
 
-    # sanitized_user = "".join(c for c in user_id if c.isalnum()) or "user"
-    # sanitized = CACHE_ROOT / sanitized_user / thread_id
-    # try:
-    #     sanitized.mkdir(parents=True, exist_ok=True)
-    #     log.debug("Sanitized cache created or exists: %s", sanitized)
-    # except Exception as e:
-    #     log.error("Failed to create sanitized cache=%s, err=%s", sanitized, e)
 
 # ==== Summarization for topic ====
 

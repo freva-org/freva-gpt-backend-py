@@ -197,8 +197,6 @@ async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[
     log = logger or DEFAULT_LOGGER
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
     access_token = auth.access_token
-    freva_cfg_path = auth.freva_config_path
-    _verify_access_to_file(freva_cfg_path, logger=log)
     
     auth_header = f"Bearer {access_token}" if access_token else None
     
@@ -209,18 +207,7 @@ async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[
             },
         "code": {
             "Authorization": auth_header,
-            "freva-config-path": freva_cfg_path,
             "working-dir": str(cache),
             },
             }
     return headers
-
-
-def _verify_access_to_file(file_path, logger=None):
-    log = logger or DEFAULT_LOGGER
-    try:
-        with open(file_path) as f:
-            s = f.read()
-    except:
-        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
-                    "Note that if it is freva-config path, any usage of the freva library will fail.")

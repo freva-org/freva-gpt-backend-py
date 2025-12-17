@@ -32,13 +32,6 @@ class FullAuthenticator(Authenticator):
         vault_url = headers.get("x-freva-vault-url")
         self.vault_url = vault_url
 
-        freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
-        if not freva_cfg_path:
-            warnings.warn("The User requested a stream without a freva_config path being set.")
-        # TODO: the file from header cannot be accessed
-        freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
-        self.freva_config_path = freva_cfg_path
-
         if header_val:
             # -> Bearer flow
             try:

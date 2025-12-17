@@ -28,7 +28,6 @@ class Authenticator(ABC):
         self.vault_url: Optional[str] = None
         self.rest_url: Optional[str] = None
         self.access_token: Optional[str] = None
-        self.freva_config_path: Optional[str] = None
 
     @abstractmethod
     async def run(self) -> "Authenticator":

@@ -89,7 +89,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: secret
     hostname: mongodb
     ports:
-      - "27017:27017"
+      - "27016:27017"
     command: --quiet --logpath /dev/null 
 
 

@@ -156,7 +156,10 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
                 code_msgs.extend(help_convert_sv_ccrm([json_v]))
         isError = True if out_error else False
     else:
-        out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
+        if result_json.get("error"):
+            out = f"Code-Server: {result_json.get('error')}"
+        else:
+            out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
         codeout_v = SVCodeOutput(output=out, id=id)
         yield codeout_v
         code_block.append(codeout_v)

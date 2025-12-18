@@ -1,19 +1,17 @@
-import json
-from pathlib import Path
-
 import pytest
 
-from src.services.storage.disk_storage import DiskThreadStorage
-from src.services.storage import disk_storage
+import src.services.storage.mongodb_storage as mongo_storage
+from src.services.storage.mongodb_storage import MongoThreadStorage, MONGODB_COLLECTION_NAME
 from src.services.streaming.stream_variants import SVPrompt, SVUser, SVAssistant, SVStreamEnd
 
 
 @pytest.mark.asyncio
-async def test_save_and_read_thread(tmp_path: Path, monkeypatch):
-    # Redirect THREADS_DIR to tmp (dev/local storage root)
-    monkeypatch.setattr(disk_storage, "THREADS_DIR", tmp_path, raising=True)
+async def test_save_and_read_thread(monkeypatch, patch_db, GOOD_HEADERS):
+    async def fake_topic(content):
+        return "topic"
+    monkeypatch.setattr(mongo_storage, "summarize_topic", fake_topic, raising=True)
 
-    storage = DiskThreadStorage()
+    storage = await MongoThreadStorage.create(vault_url=GOOD_HEADERS["x-freva-vault-url"])
 
     tid = "T123"
     user_id = "alice"
@@ -39,14 +37,12 @@ async def test_save_and_read_thread(tmp_path: Path, monkeypatch):
         append_to_existing=True,
     )
 
-    # File exists with lines
-    f = tmp_path / f"{tid}.txt"
-    assert f.exists()
-    lines = f.read_text().splitlines()
-    assert lines  # has content
+    coll = patch_db[MONGODB_COLLECTION_NAME]
+    assert tid in coll.storage
 
     # Read back as wire variants (dicts)
     conv = await storage.read_thread(tid)
     kinds = [v.get("variant") for v in conv]
     # Prompt, User, Assistant, StreamEnd (no unexpected extra StreamEnd)
     assert kinds == ["Prompt", "User", "Assistant", "StreamEnd"]
+    assert coll.storage[tid]["content"] == conv

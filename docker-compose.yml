@@ -13,9 +13,6 @@ services:
     volumes:
       - /work:/work:ro
       - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/logs:/app/logs
-      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/threads:/app/threads
-      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/target:/app/target
-      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/python_pickles:/app/python_pickles
       - /scratch/b/b380001/freva-gpt/cache:/app/cache:rw
     networks:
       - freva-gpt
@@ -33,6 +30,7 @@ services:
       - "8050:8050"
     volumes:
       - ./resources:/app/resources:ro
+      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/logs:/app/logs
     networks:
       - freva-gpt
   code:
@@ -50,6 +48,7 @@ services:
     volumes:
       - /work:/work:ro
       - /scratch/b/b380001/freva-gpt/cache:/app/cache:rw
+      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/logs:/app/logs
     networks:
       - freva-gpt
   litellm:

@@ -24,7 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.core.available_chatbots import model_is_gpt_5
+from src.core.available_chatbots import model_is_gpt_5, model_is_ollama
 from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,10 @@ GPT5_DIRS = [
     Path("src/prompt_library/gpt_5"),
 ]
 
+OLLAMA_DIRS = [
+    Path("src/prompt_library/ollama"),
+]
+
 
 def _resolve_baseline_dir() -> Path:
     for d in BASELINE_DIRS:
@@ -58,9 +62,23 @@ def _resolve_gpt5_dir_or_placeholder() -> Path:
     return _resolve_baseline_dir()
 
 
+def _resolve_ollama_dir() -> Path:
+    logger.warning("Ollama prompting is developed mainly focussing on Mistral. "\
+                   "IMPORTANT: Check if model name is recognized as Ollama model"\
+                    "hint: model_is_ollama")
+    for d in OLLAMA_DIRS:
+        if all((d / name).is_file() for name in (STARTING_TXT, SUMMARY_TXT,)):
+            # Examples may be adjusted and added to dir later
+            return d
+    tried = [str(d.resolve()) for d in OLLAMA_DIRS]
+    raise FileNotFoundError(f"Ollama prompt set not found. Tried: {tried}")
+
+
 def _pick_prompt_dir(model: str) -> Path:
     if model_is_gpt_5(model):
         return _resolve_gpt5_dir_or_placeholder()
+    elif model_is_ollama(model):
+        return _resolve_ollama_dir()
     return _resolve_baseline_dir()
 
 

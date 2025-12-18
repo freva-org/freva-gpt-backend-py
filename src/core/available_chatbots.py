@@ -11,7 +11,6 @@ Behavior:
 - Ignore comments naturally (YAML parser drops them)
 - Fatal (SystemExit) if the resulting list is empty
 
-Helpers mirror Rust semantics where applicable:
 - model_is_reasoning: names starting with 'o3', 'o4', or 'gpt-5'
 - model_is_gpt_5:    names starting with 'gpt-5'
 - model_supports_images: names starting with 'gpt-4o', 'gpt-5', or 'gpt-4.1'
@@ -148,7 +147,7 @@ def default_chatbot() -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Helper predicates (parity with Rust semantics)
+# Helper predicates
 # ──────────────────────────────────────────────────────────────────────────────
 
 def model_is_reasoning(model: str) -> bool:
@@ -163,6 +162,14 @@ def model_is_gpt_5(model: str) -> bool:
     True for names starting with 'gpt-5'.
     """
     return model.startswith("gpt-5")
+
+
+def model_is_ollama(model: str) -> bool:
+    """
+    True for names starting with 'mistral', 'ministral', 'qwen', 'llama' or 'deepseek'.
+    """
+    ollama_list = ('mistral', 'ministral', 'qwen', 'llama', 'deepseek',)
+    return model.startswith(ollama_list)
 
 
 def model_supports_images(model: str) -> bool:
@@ -191,6 +198,7 @@ __all__ = [
     "default_chatbot",
     "model_is_reasoning",
     "model_is_gpt_5",
+    "model_is_ollama",
     "model_supports_images",
     "model_ends_on_no_choice",
     "refresh_cache",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-import logging
 from typing import Optional, Dict, Any, Literal, List
 
 from src.core.logging_setup import configure_logging
@@ -11,10 +10,8 @@ from src.services.storage.mongodb_storage import get_mongodb_uri
 from src.services.authentication.authenticator import Authenticator
 from src.services.streaming.stream_variants import mcp_tool_to_openai_function
 
-log = logging.getLogger(__name__)
-configure_logging()
-
 settings = get_settings()
+DEFAULT_LOGGER = configure_logging(__name__)
 
 Target = Literal[*settings.AVAILABLE_MCP_SERVERS]
 
@@ -34,8 +31,10 @@ class McpManager:
         servers: List, 
         server_urls: Dict[Target, str],
         default_headers: Optional[Dict[str, str]] = None,
+        logger=None,
     ) -> None:
         self._lock = threading.RLock()
+        self.log = logger or DEFAULT_LOGGER
 
         self._servers = servers
         self._server_urls = server_urls
@@ -61,7 +60,13 @@ class McpManager:
     def _build_client(self, target: Target) -> McpClient:
         with self._lock:
             if not self._clients.get(target):
-                self._clients.update({target: McpClient(self._server_urls.get(target), default_headers=self._default_headers.get(target))})
+                self._clients.update({
+                    target: McpClient(
+                        self._server_urls.get(target),
+                        default_headers=self._default_headers.get(target),
+                        logger=self.log,
+                    )
+                })
            
 
     # ────────── initialization / discovery ──────────
@@ -85,7 +90,7 @@ class McpManager:
                     try:
                         self._discover_tools(s)  # populates _tools_by_target[tgt]
                     except Exception as e:
-                        log.warning("MCP tool discovery failed for %s: %s", s, e, exc_info=True)
+                        self.log.warning("MCP tool discovery failed for %s: %s", s, e, exc_info=True)
 
                 # build OpenAI tool list (merged)
                 self._openai_tools_cache = []
@@ -93,13 +98,13 @@ class McpManager:
                     for t in self._tools_by_target[tgt]:  # type: ignore[index]
                         self._openai_tools_cache.append(mcp_tool_to_openai_function(t))
 
-                log.info(
+                self.log.info(
                     f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} " + \
                     " ".join([s+':' + str(len(self._tools_by_target[s])) for s in self._servers])
                 )
         except Exception as e:
             # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-            log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
+            self.log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
 
 
     def _discover_tools(self, target: Target) -> None:
@@ -182,17 +187,16 @@ class McpManager:
             try:
                 return self._clients.get(tgt).call_tool(name=name, args=arguments, extra_headers=extra_headers)
             except Exception as e:
-                log.debug("tool %s failed on %s: %s", name, tgt, e)
+                self.log.debug("tool %s failed on %s: %s", name, tgt, e)
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
 
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-async def get_mcp_headers(auth: Authenticator, cache: str) -> Dict[str, str]:
-    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
+async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[str, str]:
+    log = logger or DEFAULT_LOGGER
+    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
     access_token = auth.access_token
-    freva_cfg_path = auth.freva_config_path
-    _verify_access_to_file(freva_cfg_path)
     
     auth_header = f"Bearer {access_token}" if access_token else None
     
@@ -203,17 +207,7 @@ async def get_mcp_headers(auth: Authenticator, cache: str) -> Dict[str, str]:
             },
         "code": {
             "Authorization": auth_header,
-            "freva-config-path": freva_cfg_path,
             "working-dir": str(cache),
             },
             }
     return headers
-
-
-def _verify_access_to_file(file_path):
-    try:
-        with open(file_path) as f:
-            s = f.read()
-    except:
-        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
-                    "Note that if it is freva-config path, any usage of the freva library will fail.")

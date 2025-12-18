@@ -1,6 +1,5 @@
 import os
 import sys
-import logging
 from contextvars import ContextVar
 
 from fastmcp import FastMCP
@@ -13,8 +12,7 @@ from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
 from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_code
 
-logger = logging.getLogger(__name__)
-configure_logging()
+logger = configure_logging(__name__, named_log="code_server")
 
 _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
@@ -27,19 +25,9 @@ EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in ca
 
 # ── Header helpers ────────────────────────────────────────────────────────────
 # Per-request header context
-FREVA_CONFIG_HDR = "freva-config-path"
-freva_cfg_ctx: ContextVar[str | None] = ContextVar("freva_cfg_ctx", default=None)
 CODE_INTERPRETER_CWD_HDR = "working-dir"
 cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
 
-def _get_freva_config_path():
-    freva_path = freva_cfg_ctx.get()
-    if not freva_path:
-        logger.warning(f"Missing required header '{FREVA_CONFIG_HDR}'! "\
-                       "Not setting freva_config_path, this WILL break any calls to the code interpreter that require it.")
-        return
-    else:
-        return {"EVALUATION_SYSTEM_CONFIG_FILE": freva_path}
     
 def _get_cwd():
     cwd = cwd_ctx.get()
@@ -56,13 +44,11 @@ def _current_sid() -> str:
     ctx = get_context()
     return (getattr(ctx, "session_id"), "")
 
-def _get_or_start_kernel(sid: str, cwd_str: str, session_env: dict[str, str] | None = None) -> KernelManager:
+def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)
     if km is None:
-        # We preserve the env variables set in Dockerfile and add freva-config-path 
+        # We preserve the env variables set in Dockerfile
         env = os.environ.copy()
-        if session_env:
-            env.update({k: str(v) for k, v in session_env.items()})
         km = KernelManager()
         km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
         km.start_kernel(env=env, cwd=cwd_str)
@@ -70,9 +56,8 @@ def _get_or_start_kernel(sid: str, cwd_str: str, session_env: dict[str, str] | N
     return km
 
 def _run_cell(sid: str, code: str) -> dict:
-    freva_env_var = _get_freva_config_path()
     working_dir = _get_cwd() or os.getcwd()
-    km = _get_or_start_kernel(sid, cwd_str=working_dir, session_env=freva_env_var)
+    km = _get_or_start_kernel(sid, cwd_str=working_dir)
     kc = km.client()
     kc.start_channels()
     try:
@@ -156,8 +141,8 @@ if __name__ == "__main__":
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
         mcp.http_app(),
-        ctx_list=[freva_cfg_ctx, cwd_ctx],
-        header_name_list=[FREVA_CONFIG_HDR, CODE_INTERPRETER_CWD_HDR],
+        ctx_list=[cwd_ctx],
+        header_name_list=[CODE_INTERPRETER_CWD_HDR],
         logger=logger,       
         mcp_path=path,  
     )

@@ -1,5 +1,4 @@
 from pathlib import Path
-import logging
 from typing import Optional, Dict
 from fastapi import Depends, Request
 
@@ -14,10 +13,8 @@ from .mcp.mcp_manager import McpManager, get_mcp_headers
 
 from .storage.thread_storage import ThreadStorage, create_dir_at_cache
 from .storage.mongodb_storage import MongoThreadStorage
-from .storage.disk_storage import DiskThreadStorage
 
-log = logging.getLogger(__name__)
-configure_logging()
+log = configure_logging(__name__)
 
 settings = get_settings()
 
@@ -53,12 +50,7 @@ async def get_thread_storage(
 ) -> ThreadStorage:
     if user_name and thread_id:
         create_dir_at_cache(user_name, thread_id)
-    if settings.DEV:
-        # DEV mode: disk storage (no MongoDB dependency)
-        return DiskThreadStorage()
-    else:
-        # PROD: MongoDB storage
-        return await MongoThreadStorage.create(vault_url=vault_url)
+    return await MongoThreadStorage.create(vault_url=vault_url)
 
 
 async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
@@ -70,19 +62,23 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
     # Defaults to send; per-call headers (vault/rest) are added at call time.
     default_headers: Dict[str, str] = {}
 
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=authenticator.username)
+
     mgr = McpManager(
         servers=settings.AVAILABLE_MCP_SERVERS,
         server_urls=MCP_SERVER_URLs,
         default_headers=default_headers,
+        logger=logger,
     )
 
     cache = CACHE_ROOT / thread_id
 
-    extra_headers = await get_mcp_headers(authenticator, cache)
+    extra_headers = await get_mcp_headers(authenticator, cache, logger=logger)
 
     try:
         mgr.initialize(extra_headers)
+        logger.info("Successfully initialized the MCPManager!")
         return mgr
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        logger.warning("MCP manager initialization failed (tools may be unavailable): %s", e)

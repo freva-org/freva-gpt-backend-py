@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-
 import re
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from dataclasses import dataclass
@@ -23,6 +21,7 @@ from src.services.streaming.stream_variants import (
 from src.services.streaming.tool_calls import run_tool_via_mcp, accumulate_tool_calls, finalize_tool_calls, parse_tool_result, FinalSummary
 from src.core.heartbeat import heartbeat_content
 from src.core.available_chatbots import model_supports_images
+from src.core.logging_setup import configure_logging
 
 from src.services.streaming.active_conversations import (
     ConversationState, get_conversation_state, 
@@ -31,7 +30,7 @@ from src.services.streaming.active_conversations import (
     register_tool_task, unregister_tool_task,   
 )
 
-log = logging.getLogger(__name__)
+DEFAULT_LOGGER = configure_logging(__name__)
 
 
 @dataclass
@@ -52,7 +51,9 @@ async def stream_with_tools(
     messages: List[Dict[str, Any]], # system_prompt
     acomplete_func=acomplete,
     stream_state: StreamState = None,
+    logger=None,
 ) -> AsyncIterator[StreamVariant]:
+    log = logger or DEFAULT_LOGGER
     
     # Append the conversation history to system prompt
     conv_sv = await get_conv_messages(thread_id)
@@ -136,7 +137,10 @@ async def stream_with_tools(
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
             tool_task = asyncio.create_task(run_tool_via_mcp(
-                mcp=mcp, tool_name=name, arguments_json=args_txt,
+                mcp=mcp,
+                tool_name=name,
+                arguments_json=args_txt,
+                logger=log,
             ))
 
             await register_tool_task(thread_id, tool_task)
@@ -146,7 +150,7 @@ async def stream_with_tools(
                 while not tool_task.done():
                     hb = await heartbeat_content()
                     yield hb
-                    await asyncio.sleep(3)  # adjust heartbeat interval (seconds)
+                    await asyncio.sleep(10)  # heartbeat interval (seconds)
 
                 # When done, return the final result text
                 result_text = await tool_task
@@ -214,10 +218,12 @@ async def run_stream(
     thread_id: Optional[str],
     user_input: str,
     system_prompt: List[Dict[str, Any]],
+    logger=None,
 ) -> AsyncGenerator[StreamVariant, None]:
     """
     Orchestrate a single turn, yielding StreamVariant objects.
     """
+    log = logger or DEFAULT_LOGGER
     # Append ServerHint with thread_id
     hint = SVServerHint(data={"thread_id": thread_id})
     yield hint
@@ -240,14 +246,16 @@ async def run_stream(
                 model=model,
                 acomplete_func=acomplete,
                 stream_state=stream_state,
+                logger=log,
             ):  
                 yield piece
 
         except asyncio.CancelledError:
             end_v = SVStreamEnd(message="Cancelled.")
+            log.error("Stream is cancelled.")
             # await add_to_conversation(thread_id, [end_v])
         except Exception as e:
-            log.exception("stream error: %s", e)
+            log.exception("Stream error: %s", e)
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Stream ended with an error.")
             # await add_to_conversation(thread_id, [err_v, end_v])
@@ -263,7 +271,13 @@ async def prepare_for_stream(
     Auth: Optional[Authenticator] = None, 
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
+    logger=None,
 ) :
+    """ 
+    Preparations for the streaming, read history (if needed), add to Registry and 
+    set conversation state to "streaming
+    """
+    log = logger or DEFAULT_LOGGER
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
         try:
@@ -276,7 +290,7 @@ async def prepare_for_stream(
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
-    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth)
+    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=log)
     return None
 
 

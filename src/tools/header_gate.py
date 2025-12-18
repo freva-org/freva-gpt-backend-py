@@ -43,7 +43,7 @@ def make_header_gate(
                 k.decode("latin-1").lower(): v.decode("latin-1")
                 for k, v in scope.get("headers", [])
             }
-            log.debug(f"Raw server headers: {hdrs}")
+            # log.debug(f"Raw server headers: {hdrs}")
 
             tokens: list[tuple[ContextVar, Any]] = []
 

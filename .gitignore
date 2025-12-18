@@ -8,6 +8,7 @@ dist/
 wheels/
 *.egg-info
 .DS_Store
+.coverage
 
 .env
 
@@ -17,3 +18,4 @@ wheels/
 
 threads/
 cache/
+logs/

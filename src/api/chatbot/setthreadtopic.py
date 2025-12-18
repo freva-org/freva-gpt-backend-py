@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.core.logging_setup import configure_logging
 
 router = APIRouter()
 
@@ -27,11 +28,15 @@ async def set_thread_topic(
     if not auth.vault_url:
         raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
 
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
+
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
     ok = await Storage.update_thread_topic(thread_id, topic)
 
     if ok:
+        logger.info("Updated thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
         return {"ok": ok, "body": "Successfully updated thread topic."}
     else:
+        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
         return {"ok": ok, "body": f"Failed to update thread topic: {thread_id}"}

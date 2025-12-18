@@ -1,11 +1,11 @@
 from fastapi import HTTPException, status
 import warnings
-import logging
 import httpx
 
+from src.core.logging_setup import configure_logging
 from .authenticator import Authenticator
 
-log = logging.getLogger(__name__)
+log = configure_logging(__name__)
 
 
 class FullAuthenticator(Authenticator):
@@ -32,13 +32,6 @@ class FullAuthenticator(Authenticator):
         vault_url = headers.get("x-freva-vault-url")
         self.vault_url = vault_url
 
-        freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
-        if not freva_cfg_path:
-            warnings.warn("The User requested a stream without a freva_config path being set.")
-        # TODO: the file from header cannot be accessed
-        freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
-        self.freva_config_path = freva_cfg_path
-
         if header_val:
             # -> Bearer flow
             try:
@@ -58,7 +51,7 @@ class FullAuthenticator(Authenticator):
             self.rest_url = rest_url
 
             try:
-                username = await get_username_from_token(token, rest_url)
+                username = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=self.username))
                 self.username = username
                 return self
             except HTTPException as err:
@@ -101,11 +94,12 @@ def _normalize_systemuser_path(rest_url: str) -> str:
     return "/api/freva-nextgen/auth/v2/systemuser"
 
 
-async def get_username_from_token(token: str, rest_url: str) -> str:
+async def get_username_from_token(token: str, rest_url: str, logger=None) -> str:
     """
     Calls the token-check endpoint at <rest_url>/api/freva-nextgen/auth/v2/systemuser
     and returns the username (pw_name).
     """
+    log = logger or configure_logging(__name__)
 
     path = _normalize_systemuser_path(rest_url)
     url = f"{rest_url}{path}"

@@ -24,7 +24,7 @@ jobs:
           cache-environment: true
           cache-downloads: true
           create-args: python>=3.11 tox
-        condarc: |
+          condarc: |
             channels:
               - conda-forge
             channel_priority: strict

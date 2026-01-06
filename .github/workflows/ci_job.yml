@@ -56,6 +56,6 @@ jobs:
           python3 -m pip install tox
       - name: Set up services
         run: |
-          docker compose -f docker-compose.dev.yaml up -d --remove-orphans
+          docker compose -f docker-compose.dev.yml up -d --remove-orphans
       - name: Run tests
         run: tox -e test

@@ -1,0 +1,60 @@
+name: CI Tests
+
+permissions:
+  pull-requests: write
+  contents: write
+  packages: write
+
+on: [push, pull_request, workflow_call]
+
+jobs:
+  lint-and-type-checks:
+    name: Build wheels
+    runs-on: ubuntu-latest
+    steps:
+      - Name: Checkeout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          micromamba-version: "latest"
+          environment-name: ci
+          cache-environment: true
+          cache-downloads: true
+          create-args: python>=3.11 tox
+        condarc: |
+            channels:
+              - conda-forge
+            channel_priority: strict
+      - name: Linting, type checking and docs with tox
+        run: micromamba run -n ci tox run-parallel --parallel-no-spinner
+
+
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          submodules: recursive
+          fetch-depth: 0
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{matrix.python-version}}
+      - name: Install dependencies
+        run: |
+          python3 -m pip install tox
+      - name: Set up services
+        run: |
+          docker compose -f docker-compose.yaml up -d --remove-orphans
+      - name: Run tests
+        run: tox -e test

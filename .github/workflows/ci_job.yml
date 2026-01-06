@@ -9,7 +9,7 @@ on: [push, pull_request, workflow_call]
 
 jobs:
   lint-and-type-checks:
-    name: Build wheels
+    name: Linting and Type checking
     runs-on: ubuntu-latest
     steps:
       - name: Checkeout
@@ -34,6 +34,7 @@ jobs:
 
 
   tests:
+    name: CI Tests
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 5

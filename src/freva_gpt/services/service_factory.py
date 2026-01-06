@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import Depends, Request
+
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.settings import get_server_url_dict, get_settings
 

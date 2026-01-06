@@ -1,7 +1,6 @@
 from typing import Any, Dict
 
 from fastapi import Request
-
 from src.services.mcp.mcp_manager import McpManager
 from src.services.storage.mongodb_storage import get_mongodb_uri
 

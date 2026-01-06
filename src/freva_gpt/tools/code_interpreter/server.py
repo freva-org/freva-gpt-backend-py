@@ -6,7 +6,6 @@ from contextvars import ContextVar
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
 from jupyter_client import KernelManager
-
 from src.core.logging_setup import configure_logging
 from src.tools.code_interpreter.helpers import (
     code_is_likely_safe,

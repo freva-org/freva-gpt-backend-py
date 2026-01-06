@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from fastapi import Request
+
 from freva_gpt.core.settings import get_settings
 
 # ──────────────────── Base Authenticator Class ──────────────────────────────

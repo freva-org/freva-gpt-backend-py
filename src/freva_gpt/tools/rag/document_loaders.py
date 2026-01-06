@@ -2,7 +2,6 @@ import ast
 from pathlib import Path
 from typing import List
 
-from freva_gpt.logger import logger
 from langchain_community.document_loaders import (
     DirectoryLoader,
     JSONLoader,
@@ -10,6 +9,8 @@ from langchain_community.document_loaders import (
     TextLoader,
 )
 from langchain_core.documents import Document
+
+from freva_gpt.logger import logger
 
 loader_cls_dict = {
     ".txt": TextLoader,

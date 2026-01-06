@@ -3,8 +3,9 @@ import json
 import time
 from operator import itemgetter
 
-from freva_gpt.logger import logger
 from pymongo.operations import SearchIndexModel
+
+from freva_gpt.logger import logger
 
 
 def json_to_str(data) -> str:

@@ -1,24 +1,4 @@
 services:
-  freva-gpt-backend:
-    platform: linux/amd64 # We need this, otherwise it defaults to arm64 base image and has mismatch for miniforge installer when built on mac
-    image: localhost/freva-gpt-backend-${INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    env_file: .env
-    environment:
-      DEV: ${DEV}
-      DEBUG: ${DEBUG:-0}
-    hostname: freva-gpt-backend-instance-${INSTANCE_NAME}
-    ports:
-      - "${TARGET_PORT:-8502}:${BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
-      - "8600:${BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
-      - "${DEBUG_PORT:-5678}:${DEBUG_PORT:-5678}" # Port for debugpy
-    volumes: 
-      -  ./rw_dir/:/app/rw_dir
-      -  ./threads/:/app/threads
-    networks: 
-      - freva-gpt
   rag:
     platform: linux/amd64
     image: localhost/rag-server-${INSTANCE_NAME}

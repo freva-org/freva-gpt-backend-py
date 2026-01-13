@@ -52,6 +52,8 @@ class MongoThreadStorage(ThreadStorage):
         coll = self.db[MONGODB_COLLECTION_NAME]
 
         existing = await coll.find_one({"thread_id": thread_id})
+        merged_sv: List[StreamVariant] = content
+        topic = None
         if existing:
             if append_to_existing:
                 existing_stream = existing.get("content", [])
@@ -59,9 +61,6 @@ class MongoThreadStorage(ThreadStorage):
                 merged_sv: List[StreamVariant] = existing_sv + content
             # topic: keep existing if present
             topic = existing.get("topic", "") or None
-        else:
-            merged_sv = content
-            topic = None
 
         # compute topic if missing
         if not topic:

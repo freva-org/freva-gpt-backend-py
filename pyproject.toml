@@ -1,18 +1,59 @@
+[build-system]
+requires = ["flit_core >=3.2"]
+build-backend = "flit_core.buildapi"
 [project]
-name = "freva-gpt-backend-py"
-version = "0.1.0"
-description = "Add your description here"
+name = "freva-gpt"
+dynamic = ["version"]
+description = "A LLM chatBot API for freva."
 readme = "README.md"
-requires-python = ">=3.11.10,<3.12"
+authors = [{name = "DKRZ, Data Analysis", email = "freva@dkrz.de"}]
+classifiers = [
+               "Development Status :: 4 - Beta",
+               "Environment :: Console",
+               "Intended Audience :: Developers",
+               "Intended Audience :: Science/Research",
+               "License :: OSI Approved :: BSD License",
+               "Operating System :: POSIX :: Linux",
+               "Programming Language :: Python :: 3",
+               "Programming Language :: Python :: 3.9",
+               "Programming Language :: Python :: 3.10",
+               "Programming Language :: Python :: 3.11",
+               "Programming Language :: Python :: 3.12",
+               "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.8"
 dependencies = [
-    "anyio>=4.10.0",
-    "fastapi>=0.116.1",
+    "anyio",
+    "fastapi",
     "fastmcp>=2.12.4",
-    "httpx>=0.28.1",
-    "ipython>=9.6.0",
+    "httpx",
+    "ipython",
     "langchain-community>=0.3.31",
     "litellm>=1.76.2",
-    "motor>=3.7.1",
+    "motor",
+    "platformdirs",
+    "python-dotenv",
+    "pyyaml",
+    "respx",
+    "rich-argparse",
+    "rich",
+    "uvicorn[standard]",
+    "debugpy",
+    "toml",
+    "jq",
+    "ansi2html",
+    "psutil",
+]
+[project.scripts]
+freva-gpt-server = "freva_gpt:cli.cli_app"
+[project.urls]
+Documentation = "https://github.com/freva-org/freva-gpt-backend-py"
+Issues = "https://github.com/freva-org/freva-gpt-backend-py/issues"
+Source = "https://github.com/freva-org/freva-gpt-backend-py"
+
+[project.optional-dependencies]
+dev = ["tox", "isort", "black", "pre-commit"]
+tests = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "python-dotenv>=1.1.1",
@@ -23,5 +64,110 @@ dependencies = [
     "jq>=1.10.0",
     "ansi2html>=1.9.2",
     "psutil>=7.1.3",
-    "pytest-cov>=7.0.0",
 ]
+[package-data]
+freva_gpt = ["py.typed", "*.toml"]
+
+[tool.isort]
+known_first_party = ["freva_gpt"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.coverage.report]
+ignore_errors = false
+exclude_lines = [
+  "pragma: no cover",
+  "noqa",
+  "def __call__",
+  "def __repr__",
+  "if self\\.debug",
+  "def _post_url\\(self\\)",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "except KeyboardInterrupt:",
+  "except ImportError:",
+  "except RuntimeError",
+  "raise SystemExit",
+  "except OSError:",
+  "except Exception as error:",
+  "except errors.BulkWriteError as bwe:",
+  "except Exception:",
+  "class Completer",
+  "if 0:",
+  "if perf_file *:",
+  "p_col = *",
+  "f_col = *",
+  "q_col = *",
+  "if __name__ == .__main__.:",
+]
+
+[tool.mypy]
+files = "src"
+strict = true
+warn_unused_ignores = true
+warn_unreachable = true
+show_error_codes = true
+install_types = true
+non_interactive = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+allow_untyped_calls = true
+
+[tool.pydocstyle]
+convention = "numpy"
+add-ignore = "D407, D105"
+
+[tool.codespell]
+skip = ".git,.tox,build,dist,*.svg,*.min.js,*.lock,*.ico,.mypy_cache,.ruff_cache,.venv"
+ignore-words-list = "te,nd,fo,ist"
+ignore-words = ".codespellignorewords.txt"
+check-filenames = true
+check-hidden = true
+
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+min_version = 4.0
+env_list = types, lint
+[testenv]
+parallel_show_output = false
+
+[testenv:test]
+deps = -e .[tests]
+
+commands =
+    pytest -vv --cov=freva_gpt --cov-report=html:coverage_report --junitxml report.xml --cov-report xml tests/
+    python3 -m coverage report --precision=2
+
+[testenv:lint]
+deps = black
+       isort
+       flake8
+       codespell
+       pydocstyle
+       bandit[toml]
+
+skip_install = true
+allowlist_externals =
+    codespell
+commands =
+    ; --- Python linting -----
+    python3 -m isort --check --profile black -t py313 -l 79 src
+    python3 -m flake8 src --count --max-complexity=10 --ignore=E203,F405,F403,E704,W503,C901 --max-line-length=88 --statistics --show-source
+    codespell {posargs: --quiet-level=2} src/freva_gpt
+    python3 -m pydocstyle src/metadata_crawler
+    bandit -r src/freva_gpt --skip B110 --severity-level medium --confidence-level high
+
+[testenv:types]
+deps = .
+       mypy
+       types-toml
+       pytest-stub
+commands = mypy --install-types --non-interactive
+commands_post = rm bump.py
+"""

@@ -1,8 +1,7 @@
-import logging
-import warnings
-
-import httpx
 from fastapi import HTTPException, status
+import warnings
+import logging
+import httpx
 
 from .authenticator import Authenticator
 

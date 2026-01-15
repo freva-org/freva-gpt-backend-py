@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import base64
 import time
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
 
 from freva_gpt.core.available_chatbots import default_chatbot
 from freva_gpt.core.logging_setup import configure_logging
@@ -53,11 +56,12 @@ def _sse_data(obj: dict):
         CHUNK_SIZE = 16_384  # 16 KiB per JSON line
 
         for frag in chunks(image_b64, CHUNK_SIZE):
-            payload = json.dumps({"variant": "Image", "content": frag, "id": id})
+            payload = json.dumps({"variant":"Image", "content":frag, "id":id})
             yield f"{payload}\n".encode("utf-8")
     else:
         payload = json.dumps(obj)
         yield f"{payload}\n".encode("utf-8")
+
 
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
@@ -80,9 +84,9 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String.",
-        )
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY, 
+            detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
+            )
 
     model_name = chatbot or default_chatbot()
 
@@ -93,11 +97,9 @@ async def streamresponse(
             status_code=HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
-
+    
     # Get thread storage
-    Storage = await get_thread_storage(
-        vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id
-    )
+    Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 

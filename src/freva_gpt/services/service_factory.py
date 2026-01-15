@@ -1,6 +1,5 @@
 import logging
-from typing import Dict, Optional
-
+from typing import Optional, Dict
 from fastapi import Depends, Request
 
 from freva_gpt.core.logging_setup import configure_logging
@@ -9,6 +8,7 @@ from freva_gpt.core.settings import get_server_url_dict, get_settings
 from .authentication.authenticator import Authenticator
 from .authentication.dev_auth import DevAuthenticator
 from .authentication.full_auth import FullAuthenticator
+
 from .mcp.mcp_manager import McpManager, get_mcp_headers
 from .storage.disk_storage import DiskThreadStorage
 from .storage.mongodb_storage import MongoThreadStorage
@@ -82,6 +82,4 @@ async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
         return mgr
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        log.warning(
-            "MCP manager initialization failed (tools may be unavailable): %s", e
-        )
+        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)

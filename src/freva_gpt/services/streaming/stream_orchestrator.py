@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+
 import re
-from dataclasses import dataclass
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
+from dataclasses import dataclass
 
 from freva_gpt.core.available_chatbots import model_supports_images
 from freva_gpt.core.heartbeat import heartbeat_content
@@ -31,9 +32,9 @@ from freva_gpt.services.streaming.stream_variants import (
     SVServerError,
     SVServerHint,
     SVStreamEnd,
-    SVUser,
-    from_json_to_sv,
+    StreamVariant,
     help_convert_sv_ccrm,
+    from_json_to_sv
 )
 from freva_gpt.services.streaming.tool_calls import (
     FinalSummary,
@@ -49,7 +50,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class StreamState:
     user_invoked: bool = True
-    tool_call: Optional[Dict[str, Any]] = None
+    tool_call: Optional[Dict[str, Any]] = None 
     finished: bool = False
 
 
@@ -57,21 +58,18 @@ class StreamState:
 # Streaming with tools
 # ──────────────────────────────────────────────────────────────────────────────
 
-
 async def stream_with_tools(
     *,
     model: str,
     thread_id: str,
-    messages: List[Dict[str, Any]],  # system_prompt
+    messages: List[Dict[str, Any]], # system_prompt
     acomplete_func=acomplete,
     stream_state: StreamState = None,
 ) -> AsyncIterator[StreamVariant]:
-
+    
     # Append the conversation history to system prompt
     conv_sv = await get_conv_messages(thread_id)
-    msg_hist = help_convert_sv_ccrm(
-        conv_sv, include_images=model_supports_images(model), include_meta=False
-    )
+    msg_hist = help_convert_sv_ccrm(conv_sv, include_images=model_supports_images(model), include_meta=False)
     messages.extend(msg_hist)
 
     # Get MCPManager of the conversation
@@ -106,16 +104,12 @@ async def stream_with_tools(
             tc_list = delta.get("tool_calls") or []
             if tc_list:
                 accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
-                tool_name = (
-                    tool_agg.get("by_index")[0].get("function").get("name")
-                    if tool_agg
-                    else None
-                )
+                tool_name = tool_agg.get("by_index")[0].get("function").get("name") if tool_agg else None
                 for tc in tc_list:
                     fn = tc.get("function") or {}
                     call_id = tc.get("id", call_id)
                     args_chunk = fn.get("arguments", "")
-                    if args_chunk and tool_name == "code_interpreter":
+                    if args_chunk and tool_name=="code_interpreter":
                         # stream arguments chunk immediately
                         yield SVCode(code=args_chunk, id=call_id)
 
@@ -131,7 +125,7 @@ async def stream_with_tools(
 
     # 2) Any tool calls?
     tool_calls = finalize_tool_calls(tool_agg)
-
+    
     if accumulated_asst_text:
         asst_v = SVAssistant(text="".join(accumulated_asst_text))
         await add_to_conversation(thread_id, [asst_v])
@@ -154,13 +148,9 @@ async def stream_with_tools(
 
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
-            tool_task = asyncio.create_task(
-                run_tool_via_mcp(
-                    mcp=mcp,
-                    tool_name=name,
-                    arguments_json=args_txt,
-                )
-            )
+            tool_task = asyncio.create_task(run_tool_via_mcp(
+                mcp=mcp, tool_name=name, arguments_json=args_txt,
+            ))
 
             await register_tool_task(thread_id, tool_task)
 
@@ -174,7 +164,7 @@ async def stream_with_tools(
                 # When done, return the final result text
                 result_text = await tool_task
                 yield result_text
-
+            
             except asyncio.CancelledError:
                 # /stop or connection close has cancelled this task
                 tool_task.cancel()
@@ -197,13 +187,13 @@ async def stream_with_tools(
                     heartbeats_v.append(item)
                 elif isinstance(item, str):
                     # The function returns the final tool result as last value
-                    result_text = item
+                    result_text = item 
         except Exception as e:
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
 
         # We will collect tool input and output as Stream Variants and append to thread
-        tc_variants: List[StreamVariant] = []
+        tc_variants : List[StreamVariant] = []
 
         if name == "code_interpreter":
             # We append accumulated code text to thread
@@ -215,13 +205,7 @@ async def stream_with_tools(
         # Parsing tool call output as StreamVariants and messages to model
         for r in parse_tool_result(result_text, tool_name=name, call_id=id):
             if isinstance(r, FinalSummary):
-                (
-                    tool_out_v,
-                    tool_msgs,
-                ) = (
-                    r.var_block,
-                    r.tool_messages,
-                )
+                tool_out_v, tool_msgs, = r.var_block, r.tool_messages
                 break
             else:
                 yield r  # Streaming the result to endpoint
@@ -236,7 +220,6 @@ async def stream_with_tools(
 # ──────────────────────────────────────────────────────────────────────────────
 # High-level orchestrator (storage-agnostic)
 # ──────────────────────────────────────────────────────────────────────────────
-
 
 async def run_stream(
     *,
@@ -256,7 +239,7 @@ async def run_stream(
     await add_to_conversation(thread_id, [hint, user_v])
 
     stream_state = StreamState()
-
+    
     # Stream model/tool output
     while not stream_state.finished:
         conv_state = await get_conversation_state(thread_id)
@@ -269,7 +252,7 @@ async def run_stream(
                 model=model,
                 acomplete_func=acomplete,
                 stream_state=stream_state,
-            ):
+            ):  
                 yield piece
 
         except asyncio.CancelledError:
@@ -286,12 +269,12 @@ async def run_stream(
 
 
 async def prepare_for_stream(
-    thread_id,
+    thread_id, 
     user_id,
-    Auth: Optional[Authenticator] = None,
+    Auth: Optional[Authenticator] = None, 
     Storage: Optional[ThreadStorage] = None,
-    read_history: Optional[bool] = False,
-):
+    read_history: Optional[bool] = False, 
+) :
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
         try:
@@ -303,17 +286,15 @@ async def prepare_for_stream(
             return err
 
     # Check if the conversation already exists in registry
-    # If not initialize it, and add the first messages
-    await initialize_conversation(
-        thread_id, user_id, messages=messages, auth=Auth
-    )
+    # If not initialize it, and add the first messages 
+    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth)
     return None
 
 
 async def get_conversation_history(
     thread_id: Optional[str],
     Storage: ThreadStorage,
-):
+    ):
     # Build messages for ongoing conversation
     prior_json: List[dict] = await Storage.read_thread(thread_id)
     prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]

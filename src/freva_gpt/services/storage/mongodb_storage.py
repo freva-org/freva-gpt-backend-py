@@ -21,22 +21,23 @@ log = logging.getLogger(__name__)
 # ──────────────────── Config from settings.py ────────────────────────────
 
 settings = get_settings()
-MONGODB_DATABASE_NAME = settings.MONGO_DB_DATABASE_NAME
-MONGODB_COLLECTION_NAME = settings.MONGO_DB_COLLECTION_NAME
+MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
+MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 
 class MongoThreadStorage(ThreadStorage):
     """PROD / shared implementation: store threads in MongoDB."""
-
     def __init__(self, vault_url: str) -> None:
         self.vault_url = vault_url
         self.db = None
+
 
     @classmethod
     async def create(cls, vault_url: str):
         self = cls(vault_url)
         self.db = await get_database(self.vault_url)
         return self
+
 
     async def save_thread(
         self,
@@ -73,15 +74,14 @@ class MongoThreadStorage(ThreadStorage):
             "thread_id": thread_id,
             "date": datetime.now(timezone.utc),
             "topic": topic,
-            "content": all_stream,
+            "content": all_stream, 
         }
 
         if existing:
-            await coll.update_one(
-                {"thread_id": thread_id}, {"$set": doc}, upsert=True
-            )
+            await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
         else:
             await coll.insert_one(doc)
+
 
     async def list_recent_threads(
         self,
@@ -103,25 +103,32 @@ class MongoThreadStorage(ThreadStorage):
             for d in docs
         ], n_threads
 
+
     async def read_thread(
         self,
         thread_id: str,
     ) -> List[Dict]:
-        # TODO check the return
+        #TODO check the return
         coll = self.db[MONGODB_COLLECTION_NAME]
         doc = await coll.find_one({"thread_id": thread_id})
         if not doc:
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
+    
 
-    async def update_thread_topic(self, thread_id: str, topic: str) -> bool:
+    async def update_thread_topic(
+        self,
+        thread_id: str,
+        topic: str
+    ) -> bool:
         try:
             coll = self.db[MONGODB_COLLECTION_NAME]
-            update_op = {"$set": {"topic": topic}}
+            update_op = { '$set' :  { 'topic' : topic } }
             await coll.update_one({"thread_id": thread_id}, update_op)
             return True
         except:
             return False
+        
 
     async def delete_thread(
         self,
@@ -130,14 +137,13 @@ class MongoThreadStorage(ThreadStorage):
         try:
             coll = self.db[MONGODB_COLLECTION_NAME]
             await coll.delete_one({"thread_id": thread_id})
-            # TODO check the return
+            #TODO check the return
             return True
         except:
             return False
-
+    
 
 # ──────────────────── Connection ──────────────────────────────
-
 
 async def get_mongodb_uri(vault_url: str) -> str:
     # 1) GET vault_url
@@ -146,53 +152,44 @@ async def get_mongodb_uri(vault_url: str) -> str:
             r = await client.get(vault_url)
     except Exception:
         # 503 ServiceUnavailable
-        raise HTTPException(
-            status_code=503, detail="Error sending request to vault."
-        )
+        raise HTTPException(status_code=503, detail="Error sending request to vault.")
     if not r.is_success:
         # 502 BadGateway
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to get MongoDB URL. Is Nginx running correctly?",
-        )
+        raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
 
     # 2) Parse JSON and extract key
     try:
         data = r.json()
     except Exception:
         # 502 BadGateway
-        raise HTTPException(
-            status_code=502, detail="Vault response was malformed."
-        )
+        raise HTTPException(status_code=502, detail="Vault response was malformed.")
 
     uri = data.get("mongodb.url") or data.get("mongo.url")
     if not uri:
         # 502 BadGateway
-        raise HTTPException(
-            status_code=502, detail="MongoDB URL not found in vault response."
-        )
+        raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
     return uri.strip()
 
 
-async def get_database(vault_url: str) -> AsyncIOMotorDatabase:
-    """
-    Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
-    If connection fails, retry once without URI options (strip trailing ?query).
-    """
-    mongodb_uri = await get_mongodb_uri(vault_url)
+async def get_database(
+        vault_url: str
+    ) -> AsyncIOMotorDatabase:
+        """
+        Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
+        If connection fails, retry once without URI options (strip trailing ?query).
+        """
+        mongodb_uri = await get_mongodb_uri(vault_url)
 
-    try:
-        client = AsyncIOMotorClient(mongodb_uri)
-        return client[MONGODB_DATABASE_NAME]
-    except Exception:
-        # Rust-style fallback: strip query options and retry once
-        if "?" in mongodb_uri:
-            stripped = mongodb_uri.rsplit("?", 1)[0]
-            try:
-                client = AsyncIOMotorClient(stripped)
-                return client[MONGODB_DATABASE_NAME]
-            except Exception:
-                pass
-        raise HTTPException(
-            status_code=503, detail="Failed to connect to MongoDB"
-        )
+        try:
+            client = AsyncIOMotorClient(mongodb_uri)
+            return client[MONGODB_DATABASE_NAME]
+        except Exception:
+            # Rust-style fallback: strip query options and retry once
+            if "?" in mongodb_uri:
+                stripped = mongodb_uri.rsplit("?", 1)[0]
+                try:
+                    client = AsyncIOMotorClient(stripped)
+                    return client[MONGODB_DATABASE_NAME]
+                except Exception:
+                    pass
+            raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")

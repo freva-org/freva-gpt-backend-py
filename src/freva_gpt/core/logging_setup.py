@@ -1,10 +1,10 @@
+import os
 import logging
 
 from freva_gpt.core.settings import get_settings
 
 _SILENCED = False
 settings = get_settings()
-
 
 def configure_logging() -> None:
     """Basic console logging"""

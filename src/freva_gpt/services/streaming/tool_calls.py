@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
+
 from typing import Any, Dict, List
+from dataclasses import dataclass
 
 from freva_gpt.services.service_factory import McpManager
 from freva_gpt.services.streaming.stream_variants import (
@@ -15,12 +16,12 @@ from freva_gpt.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
 )
 
+
 log = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP tool runner
 # ──────────────────────────────────────────────────────────────────────────────
-
 
 async def run_tool_via_mcp(
     *,
@@ -54,7 +55,6 @@ async def run_tool_via_mcp(
 # Tool-call accumulation helpers (OpenAI-style deltas)
 # ──────────────────────────────────────────────────────────────────────────────
 
-
 def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
     choices = delta.get("choices") or []
     if not choices:
@@ -69,19 +69,14 @@ def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
         idx = item.get("index")
         if idx is None:
             continue
-        entry = store.setdefault(
-            idx, {"type": "function", "function": {"name": "", "arguments": ""}}
-        )
+        entry = store.setdefault(idx, {"type": "function", "function": {"name": "", "arguments": ""}})
         if item.get("id"):
             entry["id"] = item["id"]
         f = item.get("function") or {}
         if f.get("name"):
             entry["function"]["name"] = f["name"]
         if f.get("arguments"):
-            entry["function"]["arguments"] = (
-                entry["function"].get("arguments", "") + f["arguments"]
-            )
-
+            entry["function"]["arguments"] = entry["function"].get("arguments", "") + f["arguments"]
 
 def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
     store = agg.get("by_index") or {}
@@ -90,13 +85,9 @@ def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
         tc = store[idx]
         fn = tc.get("function") or {}
         tc.setdefault("type", "function")
-        tc["function"] = {
-            "name": fn.get("name", ""),
-            "arguments": fn.get("arguments", ""),
-        }
+        tc["function"] = {"name": fn.get("name", ""), "arguments": fn.get("arguments", "")}
         out.append(tc)
     return out
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool result parsers
@@ -112,17 +103,15 @@ def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
     if tool_name == "code_interpreter":
         yield from parse_code_interpreter_result(out_txt, call_id)
     else:
-        log.warning(
-            f"Please implement output processing function for the tool {tool_name}"
-        )
+        log.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
 
 def parse_code_interpreter_result(result_txt: str, id: str):
-    code_block: List[StreamVariant] = []
+    code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 
-    # Code output: structured dict of displayed data, image or error
+    # Code output: structured dict of displayed data, image or error   
     result_json = json.loads(result_txt)
 
     if "structuredContent" in result_json.keys():
@@ -130,18 +119,14 @@ def parse_code_interpreter_result(result_txt: str, id: str):
         result = result_json.get("structuredContent")
 
         # Printed/displayed output + error message if exists
-        out = (
-            ""
-            + (("\n" + result["stdout"]) if result["stdout"] else "")
-            + (("\n" + result["result_repr"]) if result["result_repr"] else "")
-        )
-        out_error = (("\n" + result["stderr"]) if result["stderr"] else "") + (
-            ("\n" + result["error"]) if result["error"] else ""
-        )
+        out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
+            (("\n" + result["result_repr"]) if result["result_repr"] else "") 
+        out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
+            (("\n" + result["error"]) if result["error"] else "")
         if out or out_error:
             codeout = out + out_error
         else:
-            codeout = ""  # We must send something here, the model expects it.
+            codeout = "" # We must send something here, the model expects it.
         codeout_v = SVCodeOutput(output=codeout, id=id)
         yield codeout_v
         code_block.append(codeout_v)
@@ -155,35 +140,22 @@ def parse_code_interpreter_result(result_txt: str, id: str):
                 image_v = SVImage(b64=base64_image, id=image_id)
                 yield image_v
                 code_block.append(image_v)
-                code_msgs.extend(
-                    help_convert_sv_ccrm(
-                        [
-                            SVUser(
-                                text="Here is the image returned by the Code Interpreter."
-                            ),
-                            image_v,
-                        ],
-                        include_images=True,
-                    )
-                )
+                code_msgs.extend(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],
+                                                      include_images=True))
 
             if "application/json" in r.keys():
-                json_v = SVCodeOutput(
-                    output=r["application/json"], id=f"{id}:json"
-                )
+                json_v = SVCodeOutput(output=r["application/json"], id=f"{id}:json")
                 yield json_v
                 code_block.append(json_v)
                 code_msgs.extend(help_convert_sv_ccrm([json_v]))
         isError = True if out_error else False
     else:
-        out = result_json.get("content", {}).get(
-            "text", "Unknown code interpreter response."
-        )
+        out = result_json.get("content", {}).get("text", "Unknown code interpreter response.")
         codeout_v = SVCodeOutput(output=out, id=id)
         yield codeout_v
         code_block.append(codeout_v)
         code_msgs.extend(help_convert_sv_ccrm([codeout_v]))
         isError = True
-    yield FinalSummary(
-        var_block=code_block, tool_messages=code_msgs, is_error=isError
-    )
+    yield FinalSummary(var_block=code_block, 
+                       tool_messages=code_msgs, 
+                       is_error=isError)

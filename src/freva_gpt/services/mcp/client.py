@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-import logging
-import threading
+import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, List, Tuple
+import logging
+import threading
 
 import httpx
 
@@ -215,9 +216,7 @@ class McpClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         }
-        r = self._http.post(
-            "/mcp", headers=self._headers(extra_headers), json=body
-        )
+        r = self._http.post("/mcp", headers=self._headers(extra_headers), json=body)
         res = self._rpc_result(r, rpc_id)
         if res.ok and isinstance(res.result, dict):
             return res.result
@@ -230,9 +229,7 @@ class McpClient:
             "method": "tools.call",
             "params": {"name": name, "arguments": args},
         }
-        r2 = self._http.post(
-            "/mcp", headers=self._headers(extra_headers), json=body2
-        )
+        r2 = self._http.post("/mcp", headers=self._headers(extra_headers), json=body2)
         res2 = self._rpc_result(r2, rpc_id2)
         if res2.ok and isinstance(res2.result, dict):
             return res2.result
@@ -269,16 +266,9 @@ class McpClient:
                 if code == -32602:
                     raise McpInvalidParams(msg or str(err))
                 raise McpError(msg or str(err))
-            return McpCallResult(
-                ok=True,
-                id=rpc_id,
-                result=payload.get("result"),
-                status_code=response.status_code,
-            )
+            return McpCallResult(ok=True, id=rpc_id, result=payload.get("result"), status_code=response.status_code)
 
-        return McpCallResult(
-            ok=True, id=rpc_id, result=payload, status_code=response.status_code
-        )
+        return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)
 
     # ────────── convenience ──────────
 
@@ -288,9 +278,8 @@ class McpClient:
         except Exception:
             pass
 
-
+        
 # ──────────────────── Helper functions ──────────────────────────────
-
 
 def drop_none(d: dict) -> None:
     """Remove keys from d whose value is None."""

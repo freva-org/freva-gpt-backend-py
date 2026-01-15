@@ -12,7 +12,6 @@ from freva_gpt.services.service_factory import (
 
 router = APIRouter()
 
-
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(
     num_threads: int,

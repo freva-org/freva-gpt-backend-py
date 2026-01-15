@@ -21,11 +21,11 @@ set -euo pipefail
 # configured to be able to use DEBUG mode.
 # ------------------------------------------------------------------
 
-# Set DEV flag for everything in this session
-export DEV=1
-export MCP_DISABLE_AUTH=1
+# Set FREVAGPT_DEV flag for everything in this session
+export FREVAGPT_DEV=1
+export FREVAGPT_MCP_DISABLE_AUTH=1
 
-DEBUG="${DEBUG:-0}"
+FREVAGPT_DEBUG="${FREVAGPT_DEBUG:-0}"
 COMPOSE_FILE="docker-compose.dev.yml"
 COMPOSE_ARGS=()
 
@@ -33,15 +33,15 @@ for arg in "$@"; do
   case "$arg" in
     # Enable debug
     --debug|--DEBUG)
-      DEBUG=1
+      FREVAGPT_DEBUG=1
       ;;
     # Explicit value: --debug=0 / --DEBUG=1 etc.
     --debug=*|--DEBUG=*)
-      DEBUG="${arg#*=}"
+      FREVAGPT_DEBUG="${arg#*=}"
       ;;
     # Disable debug
     --no-debug)
-      DEBUG=0
+      FREVAGPT_DEBUG=0
       ;;
     # Help
     -h|--help)
@@ -56,9 +56,9 @@ for arg in "$@"; do
 done
 
 # Export for docker compose / containers
-export DEBUG
+export FREVAGPT_DEBUG
 
-echo "[dev.sh] Using ${COMPOSE_FILE} with DEBUG=${DEBUG}"
+echo "[dev.sh] Using ${COMPOSE_FILE} with DEBUG=${FREVAGPT_DEBUG}"
 echo "[dev.sh] docker compose -f ${COMPOSE_FILE} ${COMPOSE_ARGS[*]}"
 
 docker compose -f "${COMPOSE_FILE}" "${COMPOSE_ARGS[@]}"

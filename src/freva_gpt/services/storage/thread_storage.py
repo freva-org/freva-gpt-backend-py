@@ -1,10 +1,10 @@
 from __future__ import annotations
+from abc import ABC, abstractmethod
 
 import logging
-from abc import ABC, abstractmethod
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 from freva_gpt.core.available_chatbots import default_chatbot
 from freva_gpt.services.streaming.litellm_client import acomplete, first_text
@@ -16,7 +16,6 @@ RW_DIR_ROOT = Path("./rw_dir")
 
 # ──────────────────────────── Model ───────────────────────────────────
 
-
 @dataclass
 class Thread:
     user_id: str
@@ -25,48 +24,57 @@ class Thread:
     topic: str
     content: List[StreamVariant]
 
-
 # ────────────────────────── Base Class ─────────────────────────────────
 
-
 class ThreadStorage(ABC):
-
+        
     @abstractmethod
     async def save_thread(
         self,
         thread_id: str,
         user_id: str,
         content: List[StreamVariant],
-        append_to_existing: Optional[bool],
-    ) -> None: ...
+        append_to_existing: Optional[bool]
+    ) -> None:
+        ...
 
     @abstractmethod
     async def list_recent_threads(
         self,
         user_id: str,
         limit: int = 20,
-    ) -> Tuple[List[Thread], int]: ...
+    ) -> Tuple[List[Thread], int]:
+        ...
 
     @abstractmethod
     async def read_thread(
         self,
         thread_id: str,
-    ) -> List[Dict]: ...
+    ) -> List[Dict]:
+        ...
 
     @abstractmethod
-    async def update_thread_topic(self, thread_id: str, topic: str) -> bool: ...
+    async def update_thread_topic(
+        self,
+        thread_id: str,
+        topic: str
+    ) -> bool:
+        ...
 
     @abstractmethod
     async def delete_thread(
         self,
         thread_id: str,
-    ) -> bool: ...
+    ) -> bool:
+        ...
 
 
 # ──────────────────── Helper Functions ──────────────────────────────
 
-
-def create_dir_at_rw_dir(user_id: str, thread_id: str) -> None:
+def create_dir_at_rw_dir(
+    user_id: str, 
+    thread_id: str
+) -> None:
     """
     Create rw_dir/{user_id}/{thread_id}. On failure (e.g., non-alphanumeric user_id),
     retry with a sanitized user_id (keep only [A-Za-z0-9]). Logs but never raises.
@@ -77,11 +85,7 @@ def create_dir_at_rw_dir(user_id: str, thread_id: str) -> None:
         log.debug("rw_dir created or exists: %s", rw_dir)
         return
     except Exception as e:
-        log.debug(
-            "Failed to create rw_dir=%s, err=%s -- retrying with sanitized user_id",
-            rw_dir,
-            e,
-        )
+        log.debug("Failed to create rw_dir=%s, err=%s -- retrying with sanitized user_id", rw_dir, e)
 
     sanitized_user = "".join(c for c in user_id if c.isalnum()) or "user"
     sanitized = RW_DIR_ROOT / sanitized_user / thread_id
@@ -91,11 +95,9 @@ def create_dir_at_rw_dir(user_id: str, thread_id: str) -> None:
     except Exception as e:
         log.error("Failed to create sanitized rw_dir=%s, err=%s", sanitized, e)
 
-
 # ==== Summarization for topic ====
 
 # TODO: update topic
-
 
 def _fallback_topic(raw: str | None) -> str:
     if not raw:
@@ -112,16 +114,13 @@ async def summarize_topic(content: List[Dict]) -> str:
     """
     if isinstance(content[0], Dict):
         topic = next(
-            (
-                item.get("content", "")
-                for item in content
-                if item.get("variant") == "user"
-            ),
-            "Untitled",
+            (item.get("content", "") for item in content if item.get("variant") == "user"),
+            "Untitled"
         )
     else:
         topic = next(
-            (sv.text for sv in content if isinstance(sv, SVUser)), "Untitled"
+            (sv.text for sv in content if isinstance(sv, SVUser)),
+            "Untitled"
         )
 
     prompt = (

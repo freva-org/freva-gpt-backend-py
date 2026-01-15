@@ -8,6 +8,7 @@ dist/
 wheels/
 *.egg-info
 .DS_Store
+.coverage
 
 .env
 
@@ -16,4 +17,5 @@ wheels/
 .python-version
 
 threads/
-rw_dir/
+cache/
+logs/

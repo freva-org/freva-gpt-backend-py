@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 import threading
-from typing import Any, Dict, List, Literal, Optional
+import logging
+from typing import Optional, Dict, Any, Literal, List
 
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.settings import get_settings
@@ -108,26 +108,16 @@ class McpManager:
                 self._openai_tools_cache = []
                 for tgt in self._servers:
                     for t in self._tools_by_target[tgt]:  # type: ignore[index]
-                        self._openai_tools_cache.append(
-                            mcp_tool_to_openai_function(t)
-                        )
+                        self._openai_tools_cache.append(mcp_tool_to_openai_function(t))
 
                 log.info(
-                    f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} "
-                    + " ".join(
-                        [
-                            s + ":" + str(len(self._tools_by_target[s]))
-                            for s in self._servers
-                        ]
-                    )
+                    f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} " + \
+                    " ".join([s+':' + str(len(self._tools_by_target[s])) for s in self._servers])
                 )
         except Exception as e:
             # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-            log.warning(
-                "MCP manager initialization failed (tools may be unavailable): %s",
-                e,
-                exc_info=True,
-            )
+            log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
+
 
     def _discover_tools(self, target: Target) -> None:
         """
@@ -139,9 +129,7 @@ class McpManager:
 
         res = cli.tools_list_rpc()
         if res.ok and isinstance(res.result, dict):
-            items = (
-                res.result.get("tools") or res.result.get("items") or res.result
-            )
+            items = res.result.get("tools") or res.result.get("items") or res.result
             if isinstance(items, list):
                 tools = items  # assume already normalized
 
@@ -154,9 +142,7 @@ class McpManager:
             name = tool.get("name") or tool.get("tool_name") or ""
             desc = tool.get("description") or ""
             schema = tool.get("input_schema") or tool.get("parameters") or {}
-            normalized.append(
-                {"name": name, "description": desc, "input_schema": schema}
-            )
+            normalized.append({"name": name, "description": desc, "input_schema": schema})
 
         with self._lock:
             self._tools_by_target[target] = normalized
@@ -199,23 +185,19 @@ class McpManager:
         *,
         name: str,
         arguments: Dict[str, Any],
-        extra_headers: Optional[Dict] = None,
+        extra_headers: Optional[Dict]=None,
     ) -> Dict[str, Any]:
         """
-        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS,
+        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS, 
         all the available servers are called as best-effort.
         """
         if target in self._servers:
-            return self._clients.get(target).call_tool(
-                name=name, args=arguments, extra_headers=extra_headers
-            )
-
+            return self._clients.get(target).call_tool(name=name, args=arguments, extra_headers=extra_headers)
+        
         # fallback routing: best-effort
         for tgt in self._servers:
             try:
-                return self._clients.get(tgt).call_tool(
-                    name=name, args=arguments, extra_headers=extra_headers
-                )
+                return self._clients.get(tgt).call_tool(name=name, args=arguments, extra_headers=extra_headers)
             except Exception as e:
                 log.debug("tool %s failed on %s: %s", name, tgt, e)
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
@@ -223,29 +205,24 @@ class McpManager:
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-
 async def get_mcp_headers(auth: Authenticator) -> Dict[str, str]:
-    mongodb_uri = (
-        await get_mongodb_uri(auth.vault_url)
-        if not settings.DEV
-        else settings.MONGODB_URI_LOCAL
-    )
+    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_LOCAL
     access_token = auth.access_token
     freva_cfg_path = auth.freva_config_path
     _verify_access_to_file(freva_cfg_path)
-
+    
     auth_header = f"Bearer {access_token}" if access_token else None
-
+    
     headers = {
         "rag": {
             "Authorization": auth_header,
-            "mongodb-uri": mongodb_uri,
-        },
+            "mongodb-uri":  mongodb_uri,
+            },
         "code": {
             "Authorization": auth_header,
             "freva-config-path": freva_cfg_path,
-        },
-    }
+            },
+            }
     return headers
 
 
@@ -254,7 +231,5 @@ def _verify_access_to_file(file_path):
         with open(file_path) as f:
             s = f.read()
     except:
-        log.warning(
-            f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
-            "Note that if it is freva-config path, any usage of the freva library will fail."
-        )
+        log.warning(f"The User requested a stream with a file path that cannot be accessed. Path: {file_path}\n"
+                    "Note that if it is freva-config path, any usage of the freva library will fail.")

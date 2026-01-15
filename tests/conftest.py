@@ -44,12 +44,11 @@ def client(app):
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("AUTH_KEY", "test-auth-key")
-    monkeypatch.setenv("HOST", "localhost")
-    monkeypatch.setenv("BACKEND_PORT", "8502")
+    monkeypatch.setenv("FREVAGPT_HOST", "localhost")
+    monkeypatch.setenv("FREVAGPT_BACKEND_PORT", "8502")
 
     # Decide: default test mode
-    monkeypatch.setenv("DEV", "0")  # for PROD-like auth & Mongo path
+    monkeypatch.setenv("FREVAGPT_DEV", "0")  # for PROD-like auth & Mongo path
     # or "1" if you want DevAuthenticator + DiskThreadStorage
 
     yield
@@ -90,17 +89,50 @@ class DummyCollection:
     def __init__(self):
         self.storage = {}
 
+    class _Cursor:
+        def __init__(self, docs):
+            self._docs = docs
+            self._limit = None
+
+        def sort(self, *args, **kwargs):
+            return self
+
+        def limit(self, n):
+            self._limit = n
+            return self
+
+        async def to_list(self, length):
+            docs = list(self._docs.values())
+            if length is not None:
+                docs = docs[:length]
+            return docs[: self._limit] if self._limit is not None else docs
+
     async def find_one(self, q):
         return self.storage.get(q.get("thread_id"))
 
-    async def find(self, q):
-        # tests only use list_recent_threads and read
-        for item in self.storage.values():
-            yield item
+    def find(self, q):
+        return self._Cursor(self.storage)
 
     async def insert_one(self, doc):
         self.storage[doc["thread_id"]] = doc
         return None
+
+    async def update_one(self, query, update, upsert=False):
+        tid = query.get("thread_id")
+        doc = update.get("$set", update)
+        self.storage[tid] = doc
+        return None
+
+    async def delete_one(self, query):
+        tid = query.get("thread_id")
+        self.storage.pop(tid, None)
+        return None
+
+    async def count_documents(self, q):
+        user_id = q.get("user_id")
+        if user_id is None:
+            return len(self.storage)
+        return sum(1 for doc in self.storage.values() if doc.get("user_id") == user_id)
 
 
 class DummyDB:
@@ -172,7 +204,7 @@ def patch_read_thread(monkeypatch):
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
-    async def _fake_append(database, thread_id: str, user_id: str, messages):
+    async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
         return 
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
@@ -258,7 +290,7 @@ def patch_mcp_manager(monkeypatch):
     """
     from src.services.streaming import active_conversations as ac
 
-    async def fake_get_mcp_manager(authenticator):
+    async def fake_get_mcp_manager(authenticator, thread_id):
         # You can assert on authenticator if you want
         return DummyMcpManager()
 

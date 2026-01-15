@@ -19,4 +19,6 @@ async def available_chatbots_endpoint(request: Request) -> List[str]:
     If no model is specified there, the first item of this list is the default.
     """
     # Return ordered list of model names from litellm_config.yaml
-    return available_chatbots()
+    chatbot_list = available_chatbots()
+
+    return [c for c in chatbot_list if "embed" not in c]

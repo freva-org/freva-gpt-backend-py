@@ -3,13 +3,12 @@ import pytest
 ENDPOINTS_GET = [
     "/api/chatbot/heartbeat",
     "/api/chatbot/availablechatbots",
-    "/api/chatbot/getuserthreads",
 ]
 
 @pytest.mark.asyncio
 async def test_all_get_routes_require_auth(client):
     async with client:
-        for ep in ENDPOINTS_GET + ["/api/chatbot/getthread"]:
+        for ep in ENDPOINTS_GET + ["/api/chatbot/getthread", "/api/chatbot/getuserthreads", "/api/chatbot/streamresponse"]:
             r = await client.get(ep)
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
 
@@ -35,7 +34,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
                 assert r.status_code == 200, f"{ep} should succeed with auth"
 
             # 2) username is injected 
-            r = await client.get("/api/chatbot/getuserthreads", headers=GOOD_HEADERS)
+            r = await client.get("/api/chatbot/getuserthreads", params={"num_threads": 2}, headers=GOOD_HEADERS)
             assert r.status_code == 200
             assert r.json()[0][0].get("user_id") == "alice"
 

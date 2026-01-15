@@ -52,7 +52,7 @@ Issues = "https://github.com/freva-org/freva-gpt-backend-py/issues"
 Source = "https://github.com/freva-org/freva-gpt-backend-py"
 
 [project.optional-dependencies]
-dev = ["tox"]
+dev = ["tox", "isort", "black", "pre-commit"]
 tests = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",

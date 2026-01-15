@@ -1,10 +1,10 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
 
 import logging
-from typing import List, Dict, Tuple, Optional
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from freva_gpt.core.available_chatbots import default_chatbot
 from freva_gpt.services.streaming.litellm_client import acomplete, first_text

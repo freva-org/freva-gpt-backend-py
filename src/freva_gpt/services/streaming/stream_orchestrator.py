@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-
 import re
-from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from dataclasses import dataclass
+from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 
 from freva_gpt.core.available_chatbots import model_supports_images
 from freva_gpt.core.heartbeat import heartbeat_content
@@ -32,9 +31,8 @@ from freva_gpt.services.streaming.stream_variants import (
     SVServerError,
     SVServerHint,
     SVStreamEnd,
-    StreamVariant,
+    from_json_to_sv,
     help_convert_sv_ccrm,
-    from_json_to_sv
 )
 from freva_gpt.services.streaming.tool_calls import (
     FinalSummary,

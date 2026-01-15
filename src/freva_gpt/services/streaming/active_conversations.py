@@ -1,12 +1,14 @@
-import string
-import random
-import json
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
-import logging
 import asyncio
+import json
+import logging
+import random
+import string
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from src.services.streaming.tool_calls import run_tool_via_mcp
 
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import (
@@ -15,7 +17,6 @@ from freva_gpt.services.service_factory import (
     ThreadStorage,
     get_mcp_manager,
 )
-from src.services.streaming.tool_calls import run_tool_via_mcp
 
 log = logging.getLogger(__name__)
 configure_logging()

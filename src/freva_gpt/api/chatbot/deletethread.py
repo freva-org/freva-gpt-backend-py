@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from freva_gpt.services.service_factory import (

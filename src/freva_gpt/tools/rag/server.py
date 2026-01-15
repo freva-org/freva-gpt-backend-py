@@ -1,20 +1,18 @@
-import os
-import requests
 import logging
-from functools import lru_cache
+import os
 from contextvars import ContextVar
+from functools import lru_cache
 
+import requests
+from fastmcp import FastMCP
 from pymongo import MongoClient
 
-from fastmcp import FastMCP
-
-from freva_gpt.tools.rag.helpers import *
-from freva_gpt.rag.document_loaders import CustomDirectoryLoader
-from freva_gpt.tools.rag.text_splitters import CustomDocumentSplitter
-from freva_gpt.tools.header_gate import make_header_gate
-from freva_gpt.tools.server_auth import jwt_verifier
-
 from freva_gpt.core.logging_setup import configure_logging
+from freva_gpt.rag.document_loaders import CustomDirectoryLoader
+from freva_gpt.tools.header_gate import make_header_gate
+from freva_gpt.tools.rag.helpers import *
+from freva_gpt.tools.rag.text_splitters import CustomDocumentSplitter
+from freva_gpt.tools.server_auth import jwt_verifier
 
 configure_logging()
 logger = logging.getLogger(__name__)

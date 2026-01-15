@@ -14,9 +14,15 @@ from src.tools.code_interpreter.helpers import (
 )
 from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
+
 <<<<<<<< HEAD:src/freva_gpt/tools/code_interpreter/server.py
 ========
-from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_code
+from src.tools.code.helpers import (
+    code_is_likely_safe,
+    sanitize_code,
+    strip_ansi,
+)
+
 >>>>>>>> 52a1409e72a59373e451c51389847e3d3a6c6163:src/tools/code/server.py
 
 logger = configure_logging(__name__, named_log="code_server")

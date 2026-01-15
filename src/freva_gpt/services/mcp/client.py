@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, List, Tuple
-import logging
-import threading
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 

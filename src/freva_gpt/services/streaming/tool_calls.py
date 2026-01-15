@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-
-from typing import Any, Dict, List
 from dataclasses import dataclass
+from typing import Any, Dict, List
 
 from freva_gpt.services.service_factory import McpManager
 from freva_gpt.services.streaming.stream_variants import (
@@ -15,7 +14,6 @@ from freva_gpt.services.streaming.stream_variants import (
     SVUser,
     help_convert_sv_ccrm,
 )
-
 
 log = logging.getLogger(__name__)
 

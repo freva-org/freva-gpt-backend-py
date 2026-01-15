@@ -1,5 +1,6 @@
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 from fastapi import Depends, Request
 
 from freva_gpt.core.logging_setup import configure_logging
@@ -8,7 +9,6 @@ from freva_gpt.core.settings import get_server_url_dict, get_settings
 from .authentication.authenticator import Authenticator
 from .authentication.dev_auth import DevAuthenticator
 from .authentication.full_auth import FullAuthenticator
-
 from .mcp.mcp_manager import McpManager, get_mcp_headers
 from .storage.disk_storage import DiskThreadStorage
 from .storage.mongodb_storage import MongoThreadStorage

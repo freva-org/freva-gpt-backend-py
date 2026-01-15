@@ -10,9 +10,8 @@ from langchain_community.document_loaders import (
 )
 from langchain_core.documents import Document
 
-from freva_gpt.logger import logger
-
 from freva_gpt.core.logging_setup import configure_logging
+from freva_gpt.logger import logger
 
 logger = configure_logging()
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import threading
 import logging
-from typing import Optional, Dict, Any, Literal, List
+import threading
+from typing import Any, Dict, List, Literal, Optional
 
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.settings import get_settings

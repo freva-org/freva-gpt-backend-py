@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
-import base64
 import time
-from typing import Optional, List, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Request, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
+from starlette.status import (
+    HTTP_422_UNPROCESSABLE_ENTITY,
+    HTTP_503_SERVICE_UNAVAILABLE,
+)
 
 from freva_gpt.core.available_chatbots import default_chatbot
 from freva_gpt.core.logging_setup import configure_logging

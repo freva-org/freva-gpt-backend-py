@@ -1,7 +1,7 @@
-from glob import glob
 import hashlib
 import json
 import time
+from glob import glob
 from operator import itemgetter
 
 from pymongo.operations import SearchIndexModel

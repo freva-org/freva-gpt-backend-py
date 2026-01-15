@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing import List, Dict
 
-
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY

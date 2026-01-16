@@ -146,3 +146,33 @@ async def get_database(
                 except Exception:
                     pass
             raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")
+
+
+# ──────────────────── Search threads ──────────────────────────────
+
+Variant = Literal["User", "Assistant", "Code", "CodeOutput"]
+
+
+PREFIX_MAP: Dict[str, Variant] = {
+    # user variants
+    "user": "User", "u": "User", "input": "User", "me": "User", "question": "User",
+    "request": "User", "i": "User", "benutzer": "User", "eingabe": "User",
+    # assistant variants
+    "ai": "Assistant", "a": "Assistant", "assistant": "Assistant",
+    "frevagpt": "Assistant", "freva-gpt": "Assistant", "freva_gpt": "Assistant",
+    "answer": "Assistant", "ki": "Assistant", "assistent": "Assistant",
+    "computer": "Assistant",
+    # code input variants
+    "code_input": "Code", "ci": "Code", "code": "Code", "codeinput": "Code",
+    "python": "Code", "py": "Code",
+    # code output variants
+    "code_output": "CodeOutput", "co": "CodeOutput", "codeoutput": "CodeOutput",
+    "output": "CodeOutput", "ausgabe": "CodeOutput", "ergebnis": "CodeOutput",
+}
+
+VARIANT_FIELD: Dict[Variant, str] = {
+    "User": "user_text",
+    "Assistant": "assistant_text",
+    "Code": "code_input",
+    "CodeOutput": "code_output",
+}

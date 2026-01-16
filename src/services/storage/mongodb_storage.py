@@ -1,13 +1,11 @@
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
 
-import httpx
-from fastapi import HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import AsyncMongoClient
 
+from .helpers import Thread, get_database, summarize_topic
 from src.core.settings import get_settings
-from src.services.streaming.stream_variants import SVUser, StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
-from .thread_storage import ThreadStorage, Thread, summarize_topic
+from src.services.streaming.stream_variants import StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
 from src.core.logging_setup import configure_logging
 
 DEFAULT_LOGGER = configure_logging(__name__)
@@ -19,7 +17,7 @@ MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 
-class MongoThreadStorage(ThreadStorage):
+class ThreadStorage():
     """PROD / shared implementation: store threads in MongoDB."""
     def __init__(self, vault_url: str) -> None:
         self.vault_url = vault_url
@@ -30,7 +28,7 @@ class MongoThreadStorage(ThreadStorage):
     async def create(cls, vault_url: str):
         self = cls(vault_url)
         if settings.DEV:
-            self.db = AsyncIOMotorClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
+            self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
         else:
             self.db = await get_database(self.vault_url)
         return self
@@ -152,55 +150,3 @@ class MongoThreadStorage(ThreadStorage):
             logger = configure_logging(__name__, thread_id=thread_id)
             logger.exception("Failed to delete thread in MongoDB", extra={"thread_id": thread_id})
             return False
-    
-
-# ──────────────────── Connection ──────────────────────────────
-
-async def get_mongodb_uri(vault_url: str) -> str:
-    # 1) GET vault_url
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(vault_url)
-    except Exception:
-        # 503 ServiceUnavailable
-        raise HTTPException(status_code=503, detail="Error sending request to vault.")
-    if not r.is_success:
-        # 502 BadGateway
-        raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
-
-    # 2) Parse JSON and extract key
-    try:
-        data = r.json()
-    except Exception:
-        # 502 BadGateway
-        raise HTTPException(status_code=502, detail="Vault response was malformed.")
-
-    uri = data.get("mongodb.url") or data.get("mongo.url")
-    if not uri:
-        # 502 BadGateway
-        raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
-    return uri.strip()
-
-
-async def get_database(
-        vault_url: str
-    ) -> AsyncIOMotorDatabase:
-        """
-        Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
-        If connection fails, retry once without URI options (strip trailing ?query).
-        """
-        mongodb_uri = await get_mongodb_uri(vault_url)
-
-        try:
-            client = AsyncIOMotorClient(mongodb_uri)
-            return client[MONGODB_DATABASE_NAME]
-        except Exception:
-            # Rust-style fallback: strip query options and retry once
-            if "?" in mongodb_uri:
-                stripped = mongodb_uri.rsplit("?", 1)[0]
-                try:
-                    client = AsyncIOMotorClient(stripped)
-                    return client[MONGODB_DATABASE_NAME]
-                except Exception:
-                    pass
-            raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")

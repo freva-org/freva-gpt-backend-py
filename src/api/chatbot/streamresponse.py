@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_503_SERVICE_UNAVAILABLE
 
 from src.core.logging_setup import configure_logging
 from src.core.available_chatbots import default_chatbot
@@ -71,7 +71,7 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, 
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT, 
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
             )
 
@@ -82,7 +82,7 @@ async def streamresponse(
 
     if not Auth.vault_url:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
     

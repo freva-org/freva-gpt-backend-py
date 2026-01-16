@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Dict
 
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
@@ -42,7 +42,7 @@ async def get_thread(
     """
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 

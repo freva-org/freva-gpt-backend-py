@@ -112,7 +112,7 @@ async def streamresponse(
                 logger=logger,
             )
         except Exception as e:
-            msg = f"Prompt/history assembly failed: {e}"
+            msg = f"Stream preparation has failed: {e}"
             logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
             raise e
 

@@ -102,21 +102,19 @@ async def streamresponse(
 
     async def event_stream():
 
-        prep_error = await prepare_for_stream(
-            thread_id=thread_id, 
-            user_id=user_name,
-            Auth=Auth,
-            Storage=Storage,
-            read_history=read_history,
-            logger=logger,
-        )
-        if prep_error:
-            logger.warning(
-                "prepare_for_stream returned non-stream variant",
-                extra={"thread_id": thread_id, "user_id": user_name},
+        try:
+            await prepare_for_stream(
+                thread_id=thread_id, 
+                user_id=user_name,
+                Auth=Auth,
+                Storage=Storage,
+                read_history=read_history,
+                logger=logger,
             )
-            yield _sse_data(from_sv_to_json(prep_error))
-            return
+        except Exception as e:
+            msg = f"Stream preparation has failed: {e}"
+            logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
+            raise e
 
         last_check = time.monotonic()
         async for variant in run_stream(

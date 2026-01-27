@@ -64,8 +64,8 @@ async def get_thread(
             logger=logger,
         )
     except FileNotFoundError:
-        logger.exception("Thread not found", extra={"thread_id": thread_id})
-        raise HTTPException(status_code=404, detail="Thread not found")
+        logger.exception("Thread not found.", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=404, detail="Thread not found.")
     except ValueError as e:
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
@@ -74,6 +74,6 @@ async def get_thread(
 
     content = _post_process(content)
 
-    logger.info("Fetched thread content", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

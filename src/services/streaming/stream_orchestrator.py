@@ -278,18 +278,11 @@ async def prepare_for_stream(
     log = logger or DEFAULT_LOGGER
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
-        try:
-            messages = await get_conversation_history(thread_id, Storage)
-        except Exception as e:
-            msg = f"Prompt/history assembly failed: {e}"
-            log.exception(msg)
-            err = SVServerError(message=msg)
-            return err
+        messages = await get_conversation_history(thread_id, Storage)
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
     await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=log)
-    return None
 
 
 async def get_conversation_history(

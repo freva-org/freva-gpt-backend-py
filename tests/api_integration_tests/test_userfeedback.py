@@ -100,7 +100,7 @@ async def test_userfeedback_remove_success(
     import src.services.storage.mongodb_storage as mongo_store
     
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "read_thread",
         _fake,
         raising=False,

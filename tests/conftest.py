@@ -185,7 +185,7 @@ def patch_mongo_uri(monkeypatch):
 
 @pytest.fixture
 def patch_read_thread(monkeypatch):
-    async def _fake(thread_id: str, database):
+    async def _fake(self, thread_id: str):
         return [
             {"variant": "Prompt", "text": "user prompt should be filtered out"},
             {"variant": "User", "text": "kept"},
@@ -204,7 +204,22 @@ def patch_read_thread(monkeypatch):
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
-    async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
+    calls = []
+
+    async def _fake_append(
+        self,
+        thread_id: str,
+        user_id: str,
+        content,
+        **kwargs,
+    ):
+        calls.append(
+            {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "content": content,
+            }
+        )
         return 
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
@@ -214,7 +229,8 @@ def patch_save_thread(monkeypatch):
         raising=False,
     )
 
-    return _fake_append 
+    return calls 
+
 
 
 @pytest.fixture

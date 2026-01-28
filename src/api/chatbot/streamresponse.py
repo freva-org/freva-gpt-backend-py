@@ -136,7 +136,6 @@ async def streamresponse(
                 if state == ConversationState.STOPPING:
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
                     yield _sse_data(from_sv_to_json(end_v))
-                    await add_to_conversation(thread_id, [end_v])
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
                     logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})

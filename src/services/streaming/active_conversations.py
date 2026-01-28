@@ -108,6 +108,7 @@ async def initialize_conversation(
         async with RegistryLock:
             conv = Registry.get(thread_id)
             conv.state = ConversationState.STREAMING
+            conv.messages = messages
             conv.last_activity = datetime.now(timezone.utc)
         
 

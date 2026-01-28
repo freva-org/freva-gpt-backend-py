@@ -100,21 +100,22 @@ async def streamresponse(
         },
     )
 
-    async def event_stream():
+    try:
+        await prepare_for_stream(
+            thread_id=thread_id, 
+            user_id=user_name,
+            Auth=Auth,
+            Storage=Storage,
+            read_history=read_history,
+            logger=logger,
+        )
+    except Exception as e:
+        msg = f"Stream preparation has failed: {e}"
+        logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
+        # Normalize response to a clean HTTP 500 instead of a partial stream
+        raise HTTPException(status_code=500, detail="Internal Server Error: {e}")
 
-        try:
-            await prepare_for_stream(
-                thread_id=thread_id, 
-                user_id=user_name,
-                Auth=Auth,
-                Storage=Storage,
-                read_history=read_history,
-                logger=logger,
-            )
-        except Exception as e:
-            msg = f"Stream preparation has failed: {e}"
-            logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
-            raise e
+    async def event_stream():
 
         last_check = time.monotonic()
         async for variant in run_stream(

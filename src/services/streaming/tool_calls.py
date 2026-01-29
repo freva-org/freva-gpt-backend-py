@@ -13,8 +13,11 @@ from src.services.streaming.stream_variants import (
     SVUser,
     SVCodeOutput,
     SVImage,
+    SVAssistant,
+    SVServerError,
+    SVToolOutput,
     StreamVariant,
-    help_convert_sv_ccrm
+    help_convert_sv_ccrm, _tool_result_message
 )
 
 
@@ -107,6 +110,8 @@ def parse_tool_result(out_txt: str, tool_name: str, call_id: str, logger=None):
     log = logger or DEFAULT_LOGGER
     if tool_name == "code_interpreter":
         yield from parse_code_interpreter_result(out_txt, call_id, logger=log)
+    elif tool_name == "web_search":
+        yield from parse_web_search_result(out_txt, call_id, logger=log)
     else:
         log.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
@@ -167,4 +172,29 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
         isError = True
     yield FinalSummary(var_block=code_block, 
                        tool_messages=code_msgs, 
+                       is_error=isError)
+
+
+def parse_web_search_result(result_txt: str, id: str, logger=None):
+    log = logger or DEFAULT_LOGGER
+    isError = False
+
+    # Code output: structured dict of displayed data, image or error   
+    result_json = json.loads(result_txt)
+
+    if "structuredContent" in result_json.keys():
+        # Code output: structured dict of displayed data, image or error
+        result = result_json.get("structuredContent")
+        web_sv = SVToolOutput(output=result.get("result"), tool_name="web-search", id=id)
+    else:
+        if result_json.get("error"):
+            out = f"Web-Search-Server: {result_json.get('error')}"
+        else:
+            out = result_json.get("content", {}).get("text", "Unknown web-search response.")
+        web_sv = SVServerError(output=out, id=id)
+        yield web_sv
+        isError = True
+    web_msg = help_convert_sv_ccrm([web_sv])
+    yield FinalSummary(var_block=[web_sv], 
+                       tool_messages=web_msg, 
                        is_error=isError)

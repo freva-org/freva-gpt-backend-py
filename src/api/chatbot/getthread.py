@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Dict
 
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
@@ -42,7 +42,7 @@ async def get_thread(
     """
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 
@@ -55,7 +55,7 @@ async def get_thread(
     Storage = await get_thread_storage(vault_url=Auth.vault_url)
 
     try:
-        prep_error = await prepare_for_stream(
+        await prepare_for_stream(
             thread_id=thread_id, 
             user_id=Auth.username,
             Auth=Auth,
@@ -63,21 +63,17 @@ async def get_thread(
             read_history=True,
             logger=logger,
         )
-        if prep_error:
-            logger.info("Prep for stream returned an error!", extra={"thread_id": thread_id})
-            return prep_error
-
     except FileNotFoundError:
-        logger.warning("Thread not found", extra={"thread_id": thread_id})
-        raise HTTPException(status_code=404, detail="Thread not found")
-    except Exception:
-        logger.exception("Error reading thread file", extra={"thread_id": thread_id})
-        raise HTTPException(status_code=500, detail="Error reading thread file.")
+        logger.exception("Thread not found.", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=404, detail="Thread not found.")
+    except ValueError as e:
+        logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
     content = await get_conv_messages(thread_id)
 
     content = _post_process(content)
 
-    logger.info("Fetched thread content", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

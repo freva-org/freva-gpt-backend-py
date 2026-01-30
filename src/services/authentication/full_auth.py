@@ -68,13 +68,13 @@ def bearer_token_from_header(header_val: str) -> str:
     # The header can be any value, we only allow String.
     if not isinstance(header_val, str):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Authorization header is not a valid UTF-8 string.",
         )
     # The Authentication header is a Bearer token, so we need to extract the token from it.
     if not header_val.startswith("Bearer "):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Authorization header is not a Bearer token. Please use the Bearer token format.",
         )
     return header_val[len("Bearer ") :]

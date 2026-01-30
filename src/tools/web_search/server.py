@@ -12,13 +12,14 @@ logger = configure_logging(__name__, named_log="web-search-server")
 
 OPENAI_API_KEY: str = os.getenv("FREVAGPT_OPENAI_API_KEY")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
+_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("web-search-server", auth=None if _disable_auth else jwt_verifier)
 
 # ── Config ───────────────────────────────────────────────────────────────────
 WEB_SEARCH_MODEL="gpt-4o"
 ALLOWED_DOMAINS=[
     "docs.dkrz.de",
+    "docs.icon-model.org",
     ]
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -27,19 +28,23 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 @mcp.tool()
 def web_search(query: str) -> str:
     """
-    Call a web-search agent to access HPC and DKRZ documentation website
+    Calls a web-search agent to access DKRZ/HPC and ICON model documentation website.
     Args:
         query (str): The user's (or LLMs) query.
     Returns:
         str: Relevant context extracted from web-page.
     """
-    logger.info(f"Searching doc.dkrz.de for DKRZ/HPC-related context in documentation for query: {query}")
+    logger.info(f"Searching for DKRZ/HPC- or ICON-related context in documentation "\
+                "for query: {query}")
     prompt = (
-        "Use the DKRZ documentation website 'https://docs.dkrz.de/search.html?q=' for searching "\
-        "and creating answers, ensuring the information provided is accurate and up-to-date."\
-        "'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2' use SEARCHTEAM 1 and 2"\
-        "to find relevant information. Only answer questions if claims can be supported by web citations.\n\n"
-        f"User question:\n{(query or '')}"
+        "You are a web-search agent that can search documentations for ICON model "\
+        "and DKRZ/HPC. Use the documentation websites for searching and creating "\
+        "answers. Make sure the information provided is accurate and up-to-date. "\
+        "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
+        "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
+        "Use SEARCHTEAM 1 and 2 to find relevant information. Only answer questions "\
+        "if claims can be supported by web citations. Include inline citations for "\
+        f"URLs found in the web search results.\n\n User query:\n{(query or '')}"
     )
     kwargs = {
         "model": WEB_SEARCH_MODEL, 

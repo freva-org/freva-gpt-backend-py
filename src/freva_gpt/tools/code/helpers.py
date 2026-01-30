@@ -1,6 +1,6 @@
 import re
 
-from src.core.logging_setup import configure_logging
+from freva_gpt.core.logging_setup import configure_logging
 
 logger = configure_logging(__name__, named_log="code_server")
 

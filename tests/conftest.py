@@ -171,10 +171,10 @@ def patch_mongo_uri(monkeypatch):
         # Return a dummy MongoDB URI; it will be consumed by get_database
         return "mongodb://dummy-host/dummy-db"
 
-    import src.services.storage.mongodb_storage as mongo_storage
+    import src.services.storage.helpers as storage_helpers
 
     monkeypatch.setattr(
-        mongo_storage,
+        storage_helpers,
         "get_mongodb_uri",
         fake_mongodb_uri,
         raising=False,
@@ -193,7 +193,7 @@ def patch_read_thread(monkeypatch):
         ]
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "read_thread",
         _fake,
         raising=False,
@@ -208,7 +208,7 @@ def patch_save_thread(monkeypatch):
         return 
     import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "save_thread",
         _fake_append,
         raising=False,
@@ -242,7 +242,7 @@ def patch_user_threads(monkeypatch):
     import src.services.storage.mongodb_storage as mongo_store
 
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "list_recent_threads",
         fake_get_user_threads,
         raising=True,

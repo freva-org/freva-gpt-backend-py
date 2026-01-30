@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, Literal, List
 from src.core.logging_setup import configure_logging
 from src.core.settings import get_settings
 from src.services.mcp.client import McpClient
-from src.services.storage.mongodb_storage import get_mongodb_uri
+from src.services.storage.helpers import get_mongodb_uri
 from src.services.authentication.authenticator import Authenticator
 from src.services.streaming.stream_variants import mcp_tool_to_openai_function
 

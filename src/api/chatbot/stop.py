@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import AuthRequired
 from src.core.logging_setup import configure_logging
@@ -19,7 +19,7 @@ async def stop_get(
 
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID is missing. Please provide a thread_id in the query parameters.",
         )
 

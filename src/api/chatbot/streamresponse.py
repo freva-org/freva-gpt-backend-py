@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_503_SERVICE_UNAVAILABLE
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_503_SERVICE_UNAVAILABLE
 
 from src.core.logging_setup import configure_logging
 from src.core.available_chatbots import default_chatbot
@@ -71,7 +71,7 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY, 
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT, 
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
             )
 
@@ -82,7 +82,7 @@ async def streamresponse(
 
     if not Auth.vault_url:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
     
@@ -100,9 +100,8 @@ async def streamresponse(
         },
     )
 
-    async def event_stream():
-
-        prep_error = await prepare_for_stream(
+    try:
+        await prepare_for_stream(
             thread_id=thread_id, 
             user_id=user_name,
             Auth=Auth,
@@ -110,13 +109,13 @@ async def streamresponse(
             read_history=read_history,
             logger=logger,
         )
-        if prep_error:
-            logger.warning(
-                "prepare_for_stream returned non-stream variant",
-                extra={"thread_id": thread_id, "user_id": user_name},
-            )
-            yield _sse_data(from_sv_to_json(prep_error))
-            return
+    except Exception as e:
+        msg = f"Stream preparation has failed: {e}"
+        logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
+        # Normalize response to a clean HTTP 500 instead of a partial stream
+        raise HTTPException(status_code=500, detail="Internal Server Error: {e}")
+
+    async def event_stream():
 
         last_check = time.monotonic()
         async for variant in run_stream(

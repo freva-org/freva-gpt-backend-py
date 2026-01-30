@@ -11,8 +11,8 @@ from .authentication.full_auth import FullAuthenticator
 
 from .mcp.mcp_manager import McpManager, get_mcp_headers
 
-from .storage.thread_storage import ThreadStorage, create_dir_at_cache
-from .storage.mongodb_storage import MongoThreadStorage
+from .storage.helpers import create_dir_at_cache
+from .storage.mongodb_storage import ThreadStorage
 
 log = configure_logging(__name__)
 
@@ -50,7 +50,7 @@ async def get_thread_storage(
 ) -> ThreadStorage:
     if user_name and thread_id:
         create_dir_at_cache(user_name, thread_id)
-    return await MongoThreadStorage.create(vault_url=vault_url)
+    return await ThreadStorage.create(vault_url=vault_url)
 
 
 async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:

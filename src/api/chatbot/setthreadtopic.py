@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.core.logging_setup import configure_logging
@@ -21,7 +21,7 @@ async def set_thread_topic(
     """
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 

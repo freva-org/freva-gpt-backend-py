@@ -6,24 +6,15 @@ from contextvars import ContextVar
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
 from jupyter_client import KernelManager
-from src.core.logging_setup import configure_logging
-from src.tools.code_interpreter.helpers import (
+from freva_gpt.core.logging_setup import configure_logging
+
+from freva_gpt.tools.header_gate import make_header_gate
+from freva_gpt.tools.server_auth import jwt_verifier
+from freva_gpt.tools.code.helpers import (
     code_is_likely_safe,
     sanitize_code,
     strip_ansi,
 )
-from src.tools.header_gate import make_header_gate
-from src.tools.server_auth import jwt_verifier
-
-<<<<<<<< HEAD:src/freva_gpt/tools/code_interpreter/server.py
-========
-from src.tools.code.helpers import (
-    code_is_likely_safe,
-    sanitize_code,
-    strip_ansi,
-)
-
->>>>>>>> 52a1409e72a59373e451c51389847e3d3a6c6163:src/tools/code/server.py
 
 logger = configure_logging(__name__, named_log="code_server")
 

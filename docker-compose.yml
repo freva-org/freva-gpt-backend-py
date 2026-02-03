@@ -51,6 +51,22 @@ services:
       - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/logs:/app/logs
     networks:
       - freva-gpt
+  web-search:
+    platform: linux/amd64
+    image: localhost/web-search-server-${FREVAGPT_INSTANCE_NAME}
+    build:
+      context: .
+      dockerfile: docker/web-search-server/Dockerfile
+    env_file: .env
+    environment:
+      FREVAGPT_MCP_HOST: 0.0.0.0
+      FREVAGPT_MCP_PORT: 8052
+    ports: 
+      - "8052:8052"
+    networks: 
+      - freva-gpt
+    volumes:
+      - /container/da/freva-gpt-backend-links/${FREVAGPT_INSTANCE_NAME}/logs:/app/logs
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable

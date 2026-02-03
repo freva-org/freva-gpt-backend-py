@@ -8,7 +8,7 @@ from src.tools.server_auth import jwt_verifier
 from src.core.logging_setup import configure_logging
 from openai import OpenAI
 
-logger = configure_logging(__name__, named_log="web-search-server")
+logger = configure_logging(__name__, named_log="web_search_server")
 
 OPENAI_API_KEY: str = os.getenv("FREVAGPT_OPENAI_API_KEY")
 
@@ -34,8 +34,8 @@ def web_search(query: str) -> str:
     Returns:
         str: Relevant context extracted from web-page.
     """
-    logger.info(f"Searching for DKRZ/HPC- or ICON-related context in documentation "\
-                "for query: {query}")
+    logger.info("Searching for DKRZ/HPC- or ICON-related context in documentation "\
+                f"for query: {query}")
     prompt = (
         "You are a web-search agent that can search documentations for ICON model "\
         "and DKRZ/HPC. Use the documentation websites for searching and creating "\
@@ -64,6 +64,7 @@ def web_search(query: str) -> str:
 
     try:
         resp = client.responses.create(**kwargs)
+        logger.info(f"Succesfully completed web search with query {query}.\n")
         return resp.output_text
     except Exception as e:
         logger.warning("Web-search failed due to error: %s", e)

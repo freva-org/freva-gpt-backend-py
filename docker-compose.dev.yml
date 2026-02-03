@@ -77,6 +77,8 @@ services:
       - "8052:8052"
     networks: 
       - freva-gpt
+    volumes:
+      - ./logs/:/app/logs
   litellm:
     platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable

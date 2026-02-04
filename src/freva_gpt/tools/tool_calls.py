@@ -1,8 +1,8 @@
 from typing import Any, Dict
 
 from fastapi import Request
-from src.services.mcp.mcp_manager import McpManager
-from src.services.storage.mongodb_storage import get_mongodb_uri
+from freva_gpt.services.mcp.mcp_manager import McpManager
+from freva_gpt.services.storage.helpers import get_mongodb_uri
 
 # DEPRECATED
 

@@ -17,15 +17,16 @@ Behavior:
 - model_ends_on_no_choice: names starting with 'qwen2_5'
 """
 
-import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, List, Optional
+from typing import Any, List, Optional
 
 import yaml  # type: ignore
 
-logger = logging.getLogger(__name__)
+from freva_gpt.core.logging_setup import configure_logging
+
+logger = configure_logging(__name__)
 
 ENV_CONFIG_PATH = "LITELLM_CONFIG"
 DEFAULT_CONFIG_BASENAME = "litellm_config.yaml"

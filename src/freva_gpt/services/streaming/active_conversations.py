@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import random
 import string
 from dataclasses import dataclass, field
@@ -8,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from src.services.streaming.tool_calls import run_tool_via_mcp
-
+from freva_gpt.services.streaming.tool_calls import run_tool_via_mcp
+from freva_gpt.services.streaming.stream_variants import StreamVariant, SVCode
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import (
     Authenticator,
@@ -18,9 +17,7 @@ from freva_gpt.services.service_factory import (
     get_mcp_manager,
 )
 
-log = logging.getLogger(__name__)
-configure_logging()
-
+DEFAULT_LOGGER = configure_logging(__name__)
 
 class ConversationState(str, Enum):
     STREAMING = "streaming"
@@ -73,7 +70,10 @@ async def initialize_conversation(
     user_id: str,
     messages: Optional[List[Dict[str, Any]]] = [],
     auth: Optional[Authenticator] = None,
+    logger=None,
 ) -> ActiveConversation:
+    log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
+
     now = datetime.now(timezone.utc)      
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
@@ -219,6 +219,8 @@ async def _replay_code_history(thread_id: str) -> None:
 
     This is best-effort: failures are logged and we continue or stop depending on the error.
     """
+    log = configure_logging(__name__, thread_id=thread_id)
+    
     async with RegistryLock:
         conv = Registry.get(thread_id)
         if conv is None:
@@ -246,6 +248,7 @@ async def _replay_code_history(thread_id: str) -> None:
                 mcp=mcp,
                 tool_name="code_interpreter",
                 arguments_json=json.dumps({"code": code}),
+                logger=log,
             )
 
         except Exception as e:

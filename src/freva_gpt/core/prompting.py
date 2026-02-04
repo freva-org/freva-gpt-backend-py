@@ -19,18 +19,18 @@ Differences from Rust (documented for future parity)
 """
 
 import json
-import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.available_chatbots import model_is_gpt_5
 from freva_gpt.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
     parse_examples_jsonl,
 )
 
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__)
 
 # Filenames we expect in a prompt set
 STARTING_TXT = "starting_prompt.txt"

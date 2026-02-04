@@ -4,9 +4,10 @@ import warnings
 import httpx
 from fastapi import HTTPException, status
 
+from freva_gpt.core.logging_setup import configure_logging
 from .authenticator import Authenticator
 
-log = logging.getLogger(__name__)
+logger = configure_logging(__name__)
 
 
 class FullAuthenticator(Authenticator):
@@ -22,18 +23,7 @@ class FullAuthenticator(Authenticator):
       - else 422/400/401/502/503 same as Rust
     """
     async def run(self) -> "FullAuthenticator":
-        settings = self.settings
         request = self.request
-
-        # 500 if AUTH_KEY not initialized
-        if not settings.AUTH_KEY:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No auth key found in the environment; Authorization failed.",
-            )
-
-        q = request.query_params
-        maybe_key = q.get("auth_key")
         headers = request.headers
 
         # Checking Authorization header OR x-freva-user-token
@@ -42,13 +32,6 @@ class FullAuthenticator(Authenticator):
         # Checking vault_url. If it is not found, the exception is raised in the endpoints, where this is a must-have
         vault_url = headers.get("x-freva-vault-url")
         self.vault_url = vault_url
-
-        freva_cfg_path = request.headers.get("freva-config") or request.headers.get("x-freva-config-path")
-        if not freva_cfg_path:
-            warnings.warn("The User requested a stream without a freva_config path being set.")
-        # TODO: the file from header cannot be accessed
-        freva_cfg_path = "/work/ch1187/clint/nextgems/freva/evaluation_system.conf"
-        self.freva_config_path = freva_cfg_path
 
         if header_val:
             # -> Bearer flow
@@ -71,12 +54,6 @@ class FullAuthenticator(Authenticator):
             try:
                 username = await get_username_from_token(token, rest_url)
                 self.username = username
-                if maybe_key:
-                    if maybe_key != settings.AUTH_KEY:
-                        # Might raise 401 here later, but for now only warning
-                        warnings.warn("The authentication keys given in query parameters and environment do not match!")
-                else:
-                    warnings.warn("No key provided in the request. Please set the auth_key in the query parameters.")
                 return self
             except HTTPException as err:
                 raise err
@@ -92,13 +69,13 @@ def bearer_token_from_header(header_val: str) -> str:
     # The header can be any value, we only allow String.
     if not isinstance(header_val, str):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Authorization header is not a valid UTF-8 string.",
         )
     # The Authentication header is a Bearer token, so we need to extract the token from it.
     if not header_val.startswith("Bearer "):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Authorization header is not a Bearer token. Please use the Bearer token format.",
         )
     return header_val[len("Bearer ") :]
@@ -126,14 +103,14 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
 
     path = _normalize_systemuser_path(rest_url)
     url = f"{rest_url}{path}"
-    log.debug("Token check URL: %s", url)
+    logger.debug("Token check URL: %s", url)
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
     except Exception as e:
         # ServiceUnavailable on request error to vault/rest
-        log.error("Error sending request to systemuser endpoint: %s", e)
+        logger.error("Error sending request to systemuser endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Error sending token check request, is the URL correct?",
@@ -148,11 +125,11 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
 
     # parse JSON and extract username/detail
     text = resp.text
-    log.debug("Token check success status=%s body=%s", resp.status_code, text[:500])
+    logger.debug("Token check success status=%s body=%s", resp.status_code, text[:500])
     try:
         data = resp.json()
     except Exception as e:
-        log.error("Error parsing token check response: %s", e)
+        logger.error("Error parsing token check response: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Token check response is malformed, not valid JSON.",

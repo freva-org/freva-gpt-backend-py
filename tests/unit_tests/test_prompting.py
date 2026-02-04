@@ -1,7 +1,7 @@
 from pathlib import Path
 from textwrap import dedent
 
-from src.core import prompting as P
+from freva_gpt.core import prompting as P
 
 def test_get_entire_prompt_uses_assets_from_dir(tmp_path: Path, monkeypatch):
     # Create a fake prompt set

@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import logging
 import os, importlib
-from typing import Iterable, Dict, Optional, Any
+from typing import Dict, Any
 
-from src.services.mcp.client import McpClient
+from freva_gpt.services.mcp.client import McpClient
+from freva_gpt.core.logging_setup import configure_logging
 
 import pytest
 pytestmark = pytest.mark.integration 
 # Run these tests using `pytest -m integration`
 
-
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__)
 
 
 @pytest.fixture(autouse=True)
 def _force_dev(monkeypatch):
     monkeypatch.setenv("FREVAGPT_DEV", "1")
     monkeypatch.setenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
-    import src.core.settings as settings
+    import freva_gpt.core.settings as settings
     importlib.reload(settings)
     yield
 

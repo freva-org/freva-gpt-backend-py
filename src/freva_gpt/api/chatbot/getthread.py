@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, HTTPException, Query, Depends
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from freva_gpt.services.service_factory import (
     Authenticator,
@@ -11,6 +11,7 @@ from freva_gpt.services.service_factory import (
     auth_dependency,
     get_thread_storage,
 )
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.streaming.active_conversations import get_conv_messages
 from freva_gpt.services.streaming.stream_orchestrator import prepare_for_stream
 from freva_gpt.services.streaming.stream_variants import (
@@ -40,7 +41,6 @@ def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
 
 @router.get("/getthread", dependencies=[AuthRequired])
 async def get_thread(
-    request: Request,
     thread_id: str | None = Query(None),
     Auth: Authenticator = Depends(auth_dependency),
 ):
@@ -51,9 +51,12 @@ async def get_thread(
     - Requires header x-freva-vault-url
     - Removes Prompt variants
     """
+
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=Auth.username)
+
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 
@@ -67,23 +70,24 @@ async def get_thread(
     Storage = await get_thread_storage(vault_url=Auth.vault_url)
 
     try:
-        prep_error = await prepare_for_stream(
-            thread_id=thread_id,
+        await prepare_for_stream(
+            thread_id=thread_id, 
             user_id=Auth.username,
             Auth=Auth,
             Storage=Storage,
             read_history=True,
         )
-        if prep_error:
-            return prep_error
-
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Thread not found")
-    except Exception:
-        raise HTTPException(status_code=500, detail="Error reading thread file.")
-
+        logger.exception("Thread not found.", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=404, detail="Thread not found.")
+    except ValueError as e:
+        logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
+        raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
+        
     content = await get_conv_messages(thread_id)
 
     content = _post_process(content)
+
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

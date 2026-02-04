@@ -1,6 +1,5 @@
-import logging
 from typing import Dict, Optional
-
+from pathlib import Path
 from fastapi import Depends, Request
 
 from freva_gpt.core.logging_setup import configure_logging
@@ -10,14 +9,14 @@ from .authentication.authenticator import Authenticator
 from .authentication.dev_auth import DevAuthenticator
 from .authentication.full_auth import FullAuthenticator
 from .mcp.mcp_manager import McpManager, get_mcp_headers
-from .storage.disk_storage import DiskThreadStorage
-from .storage.mongodb_storage import MongoThreadStorage
-from .storage.thread_storage import ThreadStorage, create_dir_at_rw_dir
 
-log = logging.getLogger(__name__)
-configure_logging()
+from .storage.helpers import create_dir_at_cache
+from .storage.mongodb_storage import ThreadStorage
+
+DEFAULT_LOGGER = configure_logging(__name__)
 
 settings = get_settings()
+CACHE_ROOT = Path("./cache")
 
 
 def get_authenticator() -> Authenticator:
@@ -51,19 +50,16 @@ async def get_thread_storage(
     thread_id: Optional[str] = None,
 ) -> ThreadStorage:
     if user_name and thread_id:
-        create_dir_at_rw_dir(user_name, thread_id)
-    if settings.DEV:
-        # DEV mode: disk storage (no MongoDB dependency)
-        return DiskThreadStorage()
-    else:
-        # PROD: MongoDB storage
-        return await MongoThreadStorage.create(vault_url=vault_url)
+        create_dir_at_cache(user_name, thread_id)
+    return await ThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
+async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=authenticator.username)
+
     MCP_SERVER_URLs = get_server_url_dict(settings.AVAILABLE_MCP_SERVERS)
 
     # Defaults to send; per-call headers (vault/rest) are added at call time.
@@ -73,13 +69,17 @@ async def get_mcp_manager(authenticator: Authenticator) -> McpManager:
         servers=settings.AVAILABLE_MCP_SERVERS,
         server_urls=MCP_SERVER_URLs,
         default_headers=default_headers,
+        logger=logger,
     )
 
-    extra_headers = await get_mcp_headers(authenticator)
+    cache = CACHE_ROOT / thread_id
+
+    extra_headers = await get_mcp_headers(authenticator, cache, logger=logger)
 
     try:
         mgr.initialize(extra_headers)
+        logger.info("Successfully initialized the MCPManager!")
         return mgr
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        log.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        logger.warning("MCP manager initialization failed (tools may be unavailable): %s", e)

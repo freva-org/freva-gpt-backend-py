@@ -2,8 +2,9 @@ import logging
 
 from freva_gpt import __version__
 from freva_gpt.core.settings import Settings
+from freva_gpt.core.logging_setup import configure_logging
 
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__)
 
 # TODO: code-interpreter tests
 # TODO: ping to LiteLLM for liveliness (warning only)

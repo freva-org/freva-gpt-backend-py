@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from fastapi import APIRouter, HTTPException, Depends
+from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from freva_gpt.services.service_factory import (
     Authenticator,
@@ -9,6 +9,7 @@ from freva_gpt.services.service_factory import (
     auth_dependency,
     get_thread_storage,
 )
+from freva_gpt.core.logging_setup import configure_logging
 
 router = APIRouter()
 
@@ -23,9 +24,11 @@ async def set_thread_topic(
     Updates the thread topic with user-given str of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
+
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 
@@ -40,6 +43,8 @@ async def set_thread_topic(
     ok = await Storage.update_thread_topic(thread_id, topic)
 
     if ok:
+        logger.info("Updated thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
         return {"ok": ok, "body": "Successfully updated thread topic."}
     else:
+        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
         return {"ok": ok, "body": f"Failed to update thread topic: {thread_id}"}

@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import McpManager
 from freva_gpt.services.streaming.stream_variants import (
     StreamVariant,
@@ -15,7 +16,7 @@ from freva_gpt.services.streaming.stream_variants import (
     help_convert_sv_ccrm,
 )
 
-log = logging.getLogger(__name__)
+DEFAULT_LOGGER = configure_logging(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP tool runner
@@ -26,13 +27,18 @@ async def run_tool_via_mcp(
     mcp: McpManager,
     tool_name: str,
     arguments_json: str,
+    logger=None,
 ) -> str:
+    log = logger or DEFAULT_LOGGER
+
     try:
         args = json.loads(arguments_json or "{}")
     except Exception:
         args = {"_raw": arguments_json}
 
     server_name = mcp.get_server_from_tool(tool_name)
+
+    log.info(f"Executing tool call:\nname : {tool_name}   arguments : {args}")
 
     # Run the blocking MCP call in a thread so cancellation of the coroutine
     # doesn’t block the event loop.
@@ -76,6 +82,7 @@ def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
         if f.get("arguments"):
             entry["function"]["arguments"] = entry["function"].get("arguments", "") + f["arguments"]
 
+
 def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
     store = agg.get("by_index") or {}
     out: List[Dict[str, Any]] = []
@@ -97,15 +104,19 @@ class FinalSummary:
     is_error: bool
 
 
-def parse_tool_result(out_txt: str, tool_name: str, call_id: str):
+def parse_tool_result(out_txt: str, tool_name: str, call_id: str, logger=None):
+    logger = logger or DEFAULT_LOGGER
+
     if tool_name == "code_interpreter":
-        yield from parse_code_interpreter_result(out_txt, call_id)
+        yield from parse_code_interpreter_result(out_txt, call_id, logger=logger)
     else:
-        log.warning(f"Please implement output processing function for the tool {tool_name}")
+        logger.warning(f"Please implement output processing function for the tool {tool_name}")
         yield FinalSummary(var_block=[], tool_messages=[], is_error=True)
 
 
-def parse_code_interpreter_result(result_txt: str, id: str):
+def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
+    logger = logger or DEFAULT_LOGGER
+
     code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 

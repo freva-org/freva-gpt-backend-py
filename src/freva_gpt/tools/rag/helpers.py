@@ -6,7 +6,9 @@ from operator import itemgetter
 
 from pymongo.operations import SearchIndexModel
 
-from freva_gpt.logger import logger
+from freva_gpt.core.logging_setup import configure_logging
+
+logger = configure_logging(__name__, named_log="rag_server")
 
 
 def json_to_str(data) -> str:

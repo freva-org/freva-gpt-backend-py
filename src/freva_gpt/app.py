@@ -16,6 +16,7 @@ from .core.settings import get_settings
 from .services.streaming.active_conversations import cleanup_idle
 
 settings = get_settings()
+logger = configure_logging()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
@@ -25,7 +26,6 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup (was @app.on_event("startup"))
-    configure_logging()
     run_startup_checks(get_settings())
 
     async def periodic_cleanup_task():

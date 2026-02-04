@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from src.services.streaming.litellm_client import acomplete, first_text
+from freva_gpt.services.streaming.litellm_client import acomplete, first_text
 
 
 class FakeResp:
@@ -41,7 +41,7 @@ async def test_acomplete_success_roundtrip(monkeypatch):
         return fake
 
     with patch(
-        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        "freva_gpt.services.streaming.litellm_client.httpx.AsyncClient.post",
         new=fake_post,
     ):
         result = await acomplete(model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}])
@@ -61,7 +61,7 @@ async def test_acomplete_includes_error_body(monkeypatch):
         return fake
 
     with patch(
-        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        "freva_gpt.services.streaming.litellm_client.httpx.AsyncClient.post",
         new=fake_post,
     ):
         with pytest.raises(requests.HTTPError) as ei:

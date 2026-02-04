@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import logging
 import threading
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,8 +10,7 @@ import httpx
 
 from freva_gpt.core.logging_setup import configure_logging
 
-log = logging.getLogger(__name__)
-configure_logging()
+DEFAULT_LOGGER = configure_logging(__name__)
 
 MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
@@ -47,13 +44,14 @@ class McpClient:
     """
 
     def __init__(
-        self, base_url: str, *, default_headers: Optional[Dict[str, str]] = None
+        self, base_url: str, *, default_headers: Optional[Dict[str, str]] = None, logger=None
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.default_headers = default_headers or {}
         self._session_id: Optional[str] = None
         self._lock = threading.RLock()
         self._session_ids: Dict[str, str] = {}
+        self.log = logger or DEFAULT_LOGGER
 
         # simple shared client
         self._http = httpx.Client(

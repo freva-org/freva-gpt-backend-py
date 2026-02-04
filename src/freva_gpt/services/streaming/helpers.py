@@ -1,15 +1,8 @@
-import json
-import logging
-from dataclasses import dataclass
-from typing import Any, Dict, List
-
 from ansi2html import Ansi2HTMLConverter
 
 from freva_gpt.core.logging_setup import configure_logging
 
-log = logging.getLogger(__name__)
-configure_logging()
-
+logger = configure_logging(__name__)
 
 # TODO: Frontend: sending html messages instead of stripping color codes
 # Jupyter sends the stdout or stderr as a string containing ANSI escape sequences 

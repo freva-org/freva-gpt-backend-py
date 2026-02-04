@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 
 from freva_gpt.core.available_chatbots import model_supports_images
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.heartbeat import heartbeat_content
 from freva_gpt.services.service_factory import Authenticator, ThreadStorage
 from freva_gpt.services.streaming.active_conversations import (
@@ -28,6 +28,7 @@ from freva_gpt.services.streaming.stream_variants import (
     SVServerError,
     SVServerHint,
     SVStreamEnd,
+    SVUser,
     from_json_to_sv,
     help_convert_sv_ccrm,
 )
@@ -39,7 +40,7 @@ from freva_gpt.services.streaming.tool_calls import (
     run_tool_via_mcp,
 )
 
-log = logging.getLogger(__name__)
+DEFAULT_LOGGER = configure_logging(__name__)
 
 
 @dataclass
@@ -60,7 +61,9 @@ async def stream_with_tools(
     messages: List[Dict[str, Any]], # system_prompt
     acomplete_func=acomplete,
     stream_state: StreamState = None,
+    logger=None,
 ) -> AsyncIterator[StreamVariant]:
+    logger = logger or DEFAULT_LOGGER
     
     # Append the conversation history to system prompt
     conv_sv = await get_conv_messages(thread_id)
@@ -144,7 +147,7 @@ async def stream_with_tools(
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
             tool_task = asyncio.create_task(run_tool_via_mcp(
-                mcp=mcp, tool_name=name, arguments_json=args_txt,
+                mcp=mcp, tool_name=name, arguments_json=args_txt, logger=logger,
             ))
 
             await register_tool_task(thread_id, tool_task)
@@ -184,7 +187,7 @@ async def stream_with_tools(
                     # The function returns the final tool result as last value
                     result_text = item 
         except Exception as e:
-            log.exception("Tool %s failed", name)
+            logger.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
 
         # We will collect tool input and output as Stream Variants and append to thread
@@ -198,7 +201,7 @@ async def stream_with_tools(
         tool_out_v: List[StreamVariant] = []
         tool_msgs: List[Dict[str, Any]] = []
         # Parsing tool call output as StreamVariants and messages to model
-        for r in parse_tool_result(result_text, tool_name=name, call_id=id):
+        for r in parse_tool_result(result_text, tool_name=name, call_id=id, logger=logger):
             if isinstance(r, FinalSummary):
                 tool_out_v, tool_msgs, = r.var_block, r.tool_messages
                 break
@@ -222,10 +225,13 @@ async def run_stream(
     thread_id: Optional[str],
     user_input: str,
     system_prompt: List[Dict[str, Any]],
+    logger=None,
 ) -> AsyncGenerator[StreamVariant, None]:
     """
     Orchestrate a single turn, yielding StreamVariant objects.
     """
+    logger = logger or DEFAULT_LOGGER
+
     # Append ServerHint with thread_id
     hint = SVServerHint(data={"thread_id": thread_id})
     yield hint
@@ -247,14 +253,16 @@ async def run_stream(
                 model=model,
                 acomplete_func=acomplete,
                 stream_state=stream_state,
+                logger=logger,
             ):  
                 yield piece
 
         except asyncio.CancelledError:
             end_v = SVStreamEnd(message="Cancelled.")
+            logger.error("Stream is cancelled.")
             await add_to_conversation(thread_id, [end_v])
         except Exception as e:
-            log.exception("stream error: %s", e)
+            logger.exception("Stream error: %s", e)
             err_v = SVServerError(message=str(e))
             end_v = SVStreamEnd(message="Stream ended with an error.")
             await add_to_conversation(thread_id, [err_v, end_v])
@@ -269,21 +277,22 @@ async def prepare_for_stream(
     Auth: Optional[Authenticator] = None, 
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
+    logger=None,
 ) :
+    """ 
+    Preparations for the streaming, read history (if needed), add to Registry and 
+    set conversation state to "streaming
+    """
+    logger = logger or DEFAULT_LOGGER
+    
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
-        try:
-            messages = await get_conversation_history(thread_id, Storage)
-        except Exception as e:
-            msg = f"Prompt/history assembly failed: {e}"
-            log.exception(msg)
-            err = SVServerError(message=msg)
-            return err
+        messages = await get_conversation_history(thread_id, Storage)
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
-    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth)
-    return None
+    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=logger)
+
 
 
 async def get_conversation_history(

@@ -1,4 +1,3 @@
-import logging
 import os
 from contextvars import ContextVar
 from functools import lru_cache
@@ -14,8 +13,7 @@ from freva_gpt.tools.rag.helpers import *
 from freva_gpt.tools.rag.text_splitters import CustomDocumentSplitter
 from freva_gpt.tools.server_auth import jwt_verifier
 
-configure_logging()
-logger = logging.getLogger(__name__)
+logger = configure_logging(__name__, named_log="rag_server")
 
 LITE_LLM_ADDRESS: str = os.getenv("LITE_LLM_ADDRESS", "http://litellm:4000")
 
@@ -216,11 +214,12 @@ if __name__ == "__main__":
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
         mcp.http_app(),
-        ctx=mongo_uri_ctx,
-        header_name=MONGODB_URI_HDR,
+        ctx_list=[mongo_uri_ctx],
+        header_name_list=[MONGODB_URI_HDR],
         logger=logger,       
         mcp_path=path,  
     )
+
 
     import uvicorn
     uvicorn.run(wrapped_app, host=host, port=port)

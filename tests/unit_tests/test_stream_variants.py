@@ -1,4 +1,4 @@
-from src.services.streaming.stream_variants import (
+from freva_gpt.services.streaming.stream_variants import (
     SVUser, SVAssistant, SVCode, SVCodeOutput, SVStreamEnd, SVServerHint, SVServerError,
     cleanup_conversation, normalize_conv_for_prompt, help_convert_sv_ccrm,
     from_sv_to_json, from_json_to_sv,

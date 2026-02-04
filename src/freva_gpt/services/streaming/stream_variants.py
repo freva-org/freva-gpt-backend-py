@@ -18,14 +18,15 @@ Notes
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import TypedDict
 
-logger = logging.getLogger(__name__)
+from freva_gpt.core.logging_setup import configure_logging
+
+logger = configure_logging(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Constants / Conventions

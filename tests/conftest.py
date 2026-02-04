@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.services.mcp.client import McpClient
+from freva_gpt.services.mcp.client import McpClient
 
 # ──────────────────────────────────────────────────────────────────────────────
 # GLOBAL / COMMON
@@ -21,15 +21,15 @@ from src.services.mcp.client import McpClient
 @pytest.fixture
 def app():
     # Reload settings after environment patching
-    import src.core.settings as settings
+    import freva_gpt.core.settings as settings
     import importlib
     importlib.reload(settings)
 
     # Reload service_factory so that get_authenticator picks up new settings.DEV
-    import src.services.service_factory as sf
+    import freva_gpt.services.service_factory as sf
     importlib.reload(sf)
 
-    from src.app import app as fastapi_app
+    from freva_gpt.app import app as fastapi_app
     return fastapi_app
 
 
@@ -156,7 +156,7 @@ def patch_db(monkeypatch, dummy_db, GOOD_HEADERS):
         return dummy_db
 
     monkeypatch.setattr(
-        "src.services.storage.mongodb_storage.get_database",
+        "freva_gpt.services.storage.mongodb_storage.get_database",
         fake_get_database,
         raising=True,
     )
@@ -171,10 +171,10 @@ def patch_mongo_uri(monkeypatch):
         # Return a dummy MongoDB URI; it will be consumed by get_database
         return "mongodb://dummy-host/dummy-db"
 
-    import src.services.storage.mongodb_storage as mongo_storage
+    import freva_gpt.services.storage.helpers as storage_helpers
 
     monkeypatch.setattr(
-        mongo_storage,
+        storage_helpers,
         "get_mongodb_uri",
         fake_mongodb_uri,
         raising=False,
@@ -191,9 +191,9 @@ def patch_read_thread(monkeypatch):
             {"variant": "User", "text": "kept"},
             {"variant": "Assistant", "text": "also kept"},
         ]
-    import src.services.storage.mongodb_storage as mongo_store
+    import freva_gpt.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "read_thread",
         _fake,
         raising=False,
@@ -206,9 +206,9 @@ def patch_read_thread(monkeypatch):
 def patch_save_thread(monkeypatch):
     async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
         return 
-    import src.services.storage.mongodb_storage as mongo_store
+    import freva_gpt.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "save_thread",
         _fake_append,
         raising=False,
@@ -239,10 +239,10 @@ def patch_user_threads(monkeypatch):
         ]
         return threads, len(threads)
 
-    import src.services.storage.mongodb_storage as mongo_store
+    import freva_gpt.services.storage.mongodb_storage as mongo_store
 
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "list_recent_threads",
         fake_get_user_threads,
         raising=True,
@@ -257,14 +257,14 @@ def patch_user_threads(monkeypatch):
 @pytest.fixture
 def patch_stream(monkeypatch):
     async def fake_run_stream(**kwargs):
-        from src.services.streaming.stream_variants import SVAssistant, SVServerHint
+        from freva_gpt.services.streaming.stream_variants import SVAssistant, SVServerHint
         yield SVServerHint(data={"thread_id": "t-abc"})
         yield SVAssistant(text="hello")
         return
 
     # IMPORTANT: patch where the route resolves it
     monkeypatch.setattr(
-        "src.api.chatbot.streamresponse.run_stream",  
+        "freva_gpt.api.chatbot.streamresponse.run_stream",  
         fake_run_stream,
         raising=True,
     )
@@ -288,7 +288,7 @@ def patch_mcp_manager(monkeypatch):
     Avoid hitting the real MCP manager / MCP Mongo from tests.
     initialize_conversation() will still run, but with a dummy manager.
     """
-    from src.services.streaming import active_conversations as ac
+    from freva_gpt.services.streaming import active_conversations as ac
 
     async def fake_get_mcp_manager(authenticator, thread_id):
         # You can assert on authenticator if you want

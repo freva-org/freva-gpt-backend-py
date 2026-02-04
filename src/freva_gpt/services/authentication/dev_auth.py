@@ -1,8 +1,8 @@
-from src.core.logging_setup import configure_logging
+from freva_gpt.core.logging_setup import configure_logging
 
 from .authenticator import Authenticator
 
-log = configure_logging(__name__)
+log = configure_logging()
 
 
 class DevAuthenticator(Authenticator):

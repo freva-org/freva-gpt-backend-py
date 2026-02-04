@@ -26,7 +26,9 @@ from rich_argparse import ArgumentDefaultsRichHelpFormatter
 from freva_gpt import __version__
 
 from .core.settings import ENV_PREFIX, BootstrapConfig, Config, Settings
-from .logger import apply_verbosity, logger
+from .core.logging_setup import configure_logging
+
+logger = configure_logging(__name__)
 
 NoneType = type(None)
 
@@ -126,7 +128,7 @@ def cli_app(argv: Optional[List[str]] = None) -> None:
     """Start the gpt service."""
     parser = create_arg_parser()
     args = parser.parse_args(argv)
-    apply_verbosity(args.v)
+    # apply_verbosity(args.v)
     defaults = {}
     defaults.setdefault(*Config.deduce_type("dev_mode", args.dev_mode).to_env())
     defaults.setdefault(*Config.deduce_type("log_level", logger.level).to_env())

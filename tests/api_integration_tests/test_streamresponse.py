@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.asyncio
 async def test_streamresponse_returns_500_on_prepare_failure(
     stub_resp,
@@ -8,12 +9,12 @@ async def test_streamresponse_returns_500_on_prepare_failure(
     patch_mongo_uri,
     GOOD_HEADERS,
     monkeypatch,
-):
-    async def _raise_error(**kwargs):
+) -> None:
+    async def _raise_error(**kwargs) -> RuntimeError:
         raise RuntimeError("prep failed")
 
     monkeypatch.setattr(
-        "src.api.chatbot.streamresponse.prepare_for_stream",
+        "freva_gpt.api.chatbot.streamresponse.prepare_for_stream",
         _raise_error,
         raising=True,
     )
@@ -22,8 +23,15 @@ async def test_streamresponse_returns_500_on_prepare_failure(
         async with client:
             r = await client.get(
                 "/api/chatbot/streamresponse",
-                params={"thread_id": "t-err", "input": "hi", "user_id": "alice"},
-                headers={**GOOD_HEADERS, "x-freva-config-path": "/tmp/config.yml"},
+                params={
+                    "thread_id": "t-err",
+                    "input": "hi",
+                    "user_id": "alice",
+                },
+                headers={
+                    **GOOD_HEADERS,
+                    "x-freva-config-path": "/tmp/config.yml",
+                },
             )
 
             assert r.status_code == 500

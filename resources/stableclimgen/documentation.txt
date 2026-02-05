@@ -1,18 +1,18 @@
-Stableclimgen is trained using dataset ERA5 (1940-2019), and NextGEMS (2020-2049). 
+Stableclimgen is trained using dataset ERA5 (1940-2019), and NextGEMS (2020-2049).
 IMPORTANT: if a user do analysis with overlapping time ranges, e.g. 2015 to 2020, THE DATA SOURCES ARE DIFFERENT. WHEN YOU DO SUCH ANALYSIS, EXPLAIN  THE USER THAT SOME PART OF DATA COMES FROM ERA5 AND SOME FROM NextGEMS.
 
 In stableclimgen package, there is a function decode that retrieves climate model output for specific dates between 1940-01-01 and 2049-12-31. This function is imported with "from stableclimgen.src.decode import decode".
 The function signature: decode(timesteps:list, variables:list, lon:float, lat:float, n_avg_timesteps:int)
 
-Input variables: 
-- Timesteps: A list of date strings in "YYYY-MM-DD" format within the valid range. 
-- Variables: A list of variable names to retrieve. The available variables are "tas" (temperature at surface), "uas"/"vas" (zonal/meridional winds), "pres_sfc" (surface pressure). 
-- lon, lat (optional): Scalar float values representing a single longitude and latitude point. 
-- n_avg_timesteps (optional): The number of consecutive days to average starting from each date. 
+Input variables:
+- Timesteps: A list of date strings in "YYYY-MM-DD" format within the valid range.
+- Variables: A list of variable names to retrieve. The available variables are "tas" (temperature at surface), "uas"/"vas" (zonal/meridional winds), "pres_sfc" (surface pressure).
+- lon, lat (optional): Scalar float values representing a single longitude and latitude point.
+- n_avg_timesteps (optional): The number of consecutive days to average starting from each date.
 
 There are three different usages of decode.
-1. Retrieving global data using decode. In this case, lon and lat are None, the function returns two outputs. The first output is a dictionary where keys are variable names and values are PyTorch tensors representing global data in Healpix format (nside=256, zoom level 8). The first dimension of the tensor is the timesteps. The second output is None.  To plot global Healpix data (when lon and lat are None), use the easygems library. 
+1. Retrieving global data using decode. In this case, lon and lat are None, the function returns two outputs. The first output is a dictionary where keys are variable names and values are PyTorch tensors representing global data in Healpix format (nside=256, zoom level 8). The first dimension of the tensor is the timesteps. The second output is None.  To plot global Healpix data (when lon and lat are None), use the easygems library.
 2. Retrieving local data. If lon and lat are provided, the function performs local inference in the area around the given coordinates. It does not return a single scalar value, it returns a dictionary with data tensors corresponding to the AREA around provided coordinates It also returns a coordinate tensor* of shape (space, 2), where each row is [lon, lat] of the corresponding AREA. To plot local data (when lon and lat are provided): The data already corresponds to the given coordinates. To plot the data spatially, you must interpolate it onto a regular grid. Use cartopy for plotting the interpolated result. IMPORTANT: If you are asked to get data for a single grid point, you should first find the closest coordinate (lat and lon) from the coordinate tensor AND THEN YOU NEED TO GRAB THAT GRIDPOINT AGAIN OUT OF THE PRODUCED REGION!
-3. Retrieving average the data over a specified time period. This allows you to compute monthly, annually or custom-period averages. You can use averaging both for global and local data. Use n_avg_timesteps to define the number of consecutive days to average starting from each date given in timesteps. In this case, the list of time steps indicates the beginning of each averaging period. 
+3. Retrieving average the data over a specified time period. This allows you to compute monthly, annually or custom-period averages. You can use averaging both for global and local data. Use n_avg_timesteps to define the number of consecutive days to average starting from each date given in timesteps. In this case, the list of time steps indicates the beginning of each averaging period.
 
 Default data: If you get a request without mentioning data for "tas" (temperature at surface), "uas"/"vas" (zonal/meridional winds), "pres_sfc" (surface pressure), use decode function from stableclimgen package to retrieve it.

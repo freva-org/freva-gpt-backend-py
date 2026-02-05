@@ -1,13 +1,6 @@
 from __future__ import annotations
-import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import os
-os.environ["FREVAGPT_DEV"] = "1"
-os.environ["FREVAGPT_LITE_LLM_ADDRESS"]="http://localhost:4000"
-os.environ["FREVAGPT_RAG_SERVER_URL"]="http://localhost:8050" 
-os.environ["FREVAGPT_CODE_SERVER_URL"]="http://localhost:8051"
-os.environ["FREVAGPT_MCP_DISABLE_AUTH"]="1"
 
 """
 Interactive multi-turn dev runner mirroring /chatbot/streamresponse behaviour.
@@ -26,22 +19,35 @@ Notes:
 """
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
 
-from src.api.chatbot.streamresponse import _sse_data
-from src.core.logging_setup import configure_logging
-from src.core.settings import get_settings
-from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
-from src.core.prompting import get_entire_prompt
-from src.services.streaming.stream_variants import (
-    from_sv_to_json,
+from freva_gpt.api.chatbot.streamresponse import _sse_data
+from freva_gpt.core.logging_setup import configure_logging
+from freva_gpt.core.prompting import get_entire_prompt
+from freva_gpt.core.settings import get_settings
+from freva_gpt.services.service_factory import (
+    auth_dependency,
+    get_thread_storage,
+)
+from freva_gpt.services.streaming.active_conversations import (
+    end_and_save_conversation,
+    new_thread_id,
+)
+from freva_gpt.services.streaming.stream_orchestrator import (
+    prepare_for_stream,
+    run_stream,
+)
+from freva_gpt.services.streaming.stream_variants import (
     SVAssistant,
     SVCode,
+    from_sv_to_json,
 )
-from src.services.service_factory import auth_dependency, get_thread_storage
-from src.services.streaming.active_conversations import (
-    new_thread_id, end_and_save_conversation
-)
+
+os.environ["FREVAGPT_DEV"] = "1"
+os.environ["FREVAGPT_LITE_LLM_ADDRESS"] = "http://localhost:4000"
+os.environ["FREVAGPT_RAG_SERVER_URL"] = "http://localhost:8050"
+os.environ["FREVAGPT_CODE_SERVER_URL"] = "http://localhost:8051"
+os.environ["FREVAGPT_MCP_DISABLE_AUTH"] = "1"
 
 log = logging.getLogger("dev_chat")
 configure_logging()
@@ -55,12 +61,13 @@ settings = get_settings()
 MODEL = "gpt-4o"
 USER_ID = "dev_user"
 
-PRINT_DEBUG = True   # Print non-Assistant stream variants (ServerHint, etc.)
-SHOW_STATS  = True    # Show per-turn simple stats
+PRINT_DEBUG = True  # Print non-Assistant stream variants (ServerHint, etc.)
+SHOW_STATS = True  # Show per-turn simple stats
 
-THREAD_ID = None  # It can be set to a prev thread_id to continue the conversation
+THREAD_ID = ""  # can be set to a prev thread_id to continue the conversation
 
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def _run_turn(
     *,
@@ -84,7 +91,7 @@ async def _run_turn(
     try:
         async for variant in run_stream(
             model=model,
-            thread_id=thread_id,     # ← fixed per conversation
+            thread_id=thread_id,  # ← fixed per conversation
             user_input=user_input,
             system_prompt=system_prompt,
         ):
@@ -132,7 +139,7 @@ async def main() -> None:
 
     Storage = await get_thread_storage(user_name=USER_ID, thread_id=thread_id)
     Auth = await auth_dependency("")
-    
+
     system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
 
     print("Interactive dev chat")
@@ -162,18 +169,18 @@ async def main() -> None:
             continue
         if user_input.lower().startswith("/new"):
             # Optional prefix: "/new"
-            thread_id = new_thread_id()
-            prepare_for_stream(thread_id, Auth)
+            thread_id = await new_thread_id()
+            await prepare_for_stream(thread_id, Auth)
             print(f"Started new conversation. Thread: {thread_id}")
             continue
 
         # Normal turn
         await prepare_for_stream(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             user_id=USER_ID,
             Auth=Auth,
             Storage=Storage,
-            read_history=read_history
+            read_history=read_history,
         )
 
         t_chunks, t_chars = await _run_turn(
@@ -190,7 +197,9 @@ async def main() -> None:
     # At this point the thread file has been incrementally written by the orchestrator.
     # We just print where it lives. (Same path used by recursively_create_dir_at_cache)
     print("\nConversation ended.")
-    print(f"Thread saved under the user/thread directory created for: user={USER_ID}, thread_id={thread_id}")
+    print(
+        f"Thread saved under the user/thread directory created for: user={USER_ID}, thread_id={thread_id}"
+    )
 
 
 if __name__ == "__main__":

@@ -10,12 +10,12 @@ async def test_getthread_returns_404_when_thread_missing(
     patch_mcp_manager,
     GOOD_HEADERS,
     monkeypatch,
-):
+) -> None:
     async def _raise_not_found(*args, **kwargs):
         raise FileNotFoundError("missing")
 
     monkeypatch.setattr(
-        "src.api.chatbot.getthread.prepare_for_stream",
+        "freva_gpt.api.chatbot.getthread.prepare_for_stream",
         _raise_not_found,
         raising=True,
     )
@@ -41,12 +41,12 @@ async def test_getthread_returns_500_when_history_invalid(
     patch_mcp_manager,
     GOOD_HEADERS,
     monkeypatch,
-):
+) -> None:
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("broken history")
 
     monkeypatch.setattr(
-        "src.api.chatbot.getthread.prepare_for_stream",
+        "freva_gpt.api.chatbot.getthread.prepare_for_stream",
         _raise_value_error,
         raising=True,
     )

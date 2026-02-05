@@ -1,0 +1,68 @@
+# This is the default freva-gpt server config file, you can adjust the
+# settings if necessary.
+
+# The port where the restAPI will be running at
+[backend_port]
+default = 8080
+description = "The port the restAPI will be running on."
+type = "integer"
+
+[allow_guests]
+default = false
+description = "Allow 'guest' users to use the system."
+type = "bool"
+
+[lite_llm_address]
+# Set the url to the lite LLM instance, lite LLM is used to as a proxy server
+# to interact with many different LLM API services.
+default = "http://localhost:4000"
+description = "Url of the lite llm service."
+type = "string"
+
+[available_mcp_servers]
+# The available_mcp_servers config is a list of mcp servers that are connected
+# to the restAPI
+default = []
+description = "Set the mcp servers."
+type = "string[]"
+
+[mongodb_uri]
+default =  "mongodb://mongodb-dev"
+description = "Set the url to the mongodb server."
+type = "string"
+
+[mongodb_database_name]
+default = "chatbot"
+description = "Name of the mongo database to store user data."
+type = "string"
+
+[mongodb_collection_name]
+default = "threads"
+description = "Name of the mongo collection to store user data."
+type = "string"
+
+[mongo_db_collection_name_emb]
+default = "embeddings"
+description = "Name of the embeddings collection."
+type = "string"
+
+[mongodb_clear_embeddings]
+default = false
+description = "Auto clear embeddings"
+type = "bool"
+
+# Authentication settings
+[oidc_issuer]
+default = "https://www.freva.dkrz.de/api/freva-nextgen"
+description = "URL of the identity provider."
+type = "string"
+
+[oidc_audience]
+default = "freva"
+description = "Allowed open id connect audience."
+type = "string"
+
+[mcp_required_scopes]
+default = ["openid", "profile"]
+description = "Required token scopes."
+type = "string[]"

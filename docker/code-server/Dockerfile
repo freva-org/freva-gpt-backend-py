@@ -44,7 +44,7 @@ RUN source activate env && uv export --format requirements-txt \
 # Install Python deps via uv (this replaces `pip install ...`)
 RUN source activate env && uv pip install \
     freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy 
+    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy
 
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch

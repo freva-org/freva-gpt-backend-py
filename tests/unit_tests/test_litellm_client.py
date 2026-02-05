@@ -3,11 +3,11 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from src.services.streaming.litellm_client import acomplete, first_text
+from freva_gpt.services.streaming.litellm_client import acomplete, first_text
 
 
 class FakeResp:
-    def __init__(self, status_code=200, json_body=None, text=""):
+    def __init__(self, status_code=200, json_body=None, text="") -> None:
         self.status_code = status_code
         self._json = json_body
         self.text = text
@@ -25,12 +25,14 @@ class FakeResp:
         if not self.ok:
             # mimic requests behavior: raise HTTPError and attach response
             e = requests.HTTPError(f"{self.status_code} Server Error")
-            e.response = self  # tests / client code can read e.response.text/json()
+            e.response = (
+                self  # tests / client code can read e.response.text/json()
+            )
             raise e
 
 
 @pytest.mark.asyncio
-async def test_acomplete_success_roundtrip(monkeypatch):
+async def test_acomplete_success_roundtrip(monkeypatch) -> None:
     fake = FakeResp(
         status_code=200,
         json_body={"choices": [{"message": {"content": "hello world"}}]},
@@ -41,16 +43,18 @@ async def test_acomplete_success_roundtrip(monkeypatch):
         return fake
 
     with patch(
-        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        "freva_gpt.services.streaming.litellm_client.httpx.AsyncClient.post",
         new=fake_post,
     ):
-        result = await acomplete(model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}])
+        result = await acomplete(
+            model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}]
+        )
 
     assert first_text(result) == "hello world"
 
 
 @pytest.mark.asyncio
-async def test_acomplete_includes_error_body(monkeypatch):
+async def test_acomplete_includes_error_body(monkeypatch) -> None:
     fake = FakeResp(
         status_code=500,
         json_body={"error": {"message": "bad"}},
@@ -61,7 +65,7 @@ async def test_acomplete_includes_error_body(monkeypatch):
         return fake
 
     with patch(
-        "src.services.streaming.litellm_client.httpx.AsyncClient.post",
+        "freva_gpt.services.streaming.litellm_client.httpx.AsyncClient.post",
         new=fake_post,
     ):
         with pytest.raises(requests.HTTPError) as ei:

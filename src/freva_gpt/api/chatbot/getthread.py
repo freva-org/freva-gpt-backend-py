@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import (
     Authenticator,
     AuthRequired,
     auth_dependency,
     get_thread_storage,
 )
-from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.streaming.active_conversations import get_conv_messages
 from freva_gpt.services.streaming.stream_orchestrator import prepare_for_stream
 from freva_gpt.services.streaming.stream_variants import (

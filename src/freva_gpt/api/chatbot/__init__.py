@@ -5,9 +5,9 @@ from .deletethread import router as deletethread_router
 from .getthread import router as getthread_router
 from .getuserthreads import router as getuserthreads_router
 from .heartbeat import router as heartbeat_router
+from .searchthreads import router as searchthreads_router
 from .setthreadtopic import router as setthreadtopic_router
 from .stop import router as stop_router
-from .searchthreads import router as searchthreads_router
 from .streamresponse import router as streamresponse_router
 
 router = APIRouter()

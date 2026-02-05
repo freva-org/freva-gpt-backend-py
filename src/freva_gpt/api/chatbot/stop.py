@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from freva_gpt.core.logging_setup import configure_logging

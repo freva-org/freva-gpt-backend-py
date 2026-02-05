@@ -1,5 +1,6 @@
-from typing import Dict, Optional
 from pathlib import Path
+from typing import Dict, Optional
+
 from fastapi import Depends, Request
 
 from freva_gpt.core.logging_setup import configure_logging
@@ -9,7 +10,6 @@ from .authentication.authenticator import Authenticator
 from .authentication.dev_auth import DevAuthenticator
 from .authentication.full_auth import FullAuthenticator
 from .mcp.mcp_manager import McpManager, get_mcp_headers
-
 from .storage.helpers import create_dir_at_cache
 from .storage.mongodb_storage import ThreadStorage
 

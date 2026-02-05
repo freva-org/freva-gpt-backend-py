@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 
 from freva_gpt.core.available_chatbots import model_supports_images
-from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.heartbeat import heartbeat_content
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import Authenticator, ThreadStorage
 from freva_gpt.services.streaming.active_conversations import (
     ConversationState,

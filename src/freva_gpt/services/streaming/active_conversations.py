@@ -7,8 +7,6 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from freva_gpt.services.streaming.tool_calls import run_tool_via_mcp
-from freva_gpt.services.streaming.stream_variants import StreamVariant, SVCode
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import (
     Authenticator,
@@ -16,6 +14,8 @@ from freva_gpt.services.service_factory import (
     ThreadStorage,
     get_mcp_manager,
 )
+from freva_gpt.services.streaming.stream_variants import StreamVariant, SVCode
+from freva_gpt.services.streaming.tool_calls import run_tool_via_mcp
 
 DEFAULT_LOGGER = configure_logging(__name__)
 

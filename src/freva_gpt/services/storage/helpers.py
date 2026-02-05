@@ -1,15 +1,15 @@
-from typing import Dict, List, Literal
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Literal
 
 import httpx
 from fastapi import HTTPException
 from pymongo import AsyncMongoClient
 
-from freva_gpt.core.settings import get_settings
 from freva_gpt.core.logging_setup import configure_logging
-from freva_gpt.services.streaming.stream_variants import StreamVariant, SVUser
+from freva_gpt.core.settings import get_settings
 from freva_gpt.services.streaming.litellm_client import acomplete, first_text
+from freva_gpt.services.streaming.stream_variants import StreamVariant, SVUser
 
 logger = configure_logging(__name__)
 

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
+from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.services.service_factory import (
     Authenticator,
     AuthRequired,
     auth_dependency,
     get_thread_storage,
 )
-from freva_gpt.core.logging_setup import configure_logging
 
 router = APIRouter()
 

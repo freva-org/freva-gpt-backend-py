@@ -5,6 +5,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from freva_gpt.core.logging_setup import configure_logging
+
 from .authenticator import Authenticator
 
 logger = configure_logging(__name__)

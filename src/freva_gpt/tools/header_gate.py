@@ -1,6 +1,7 @@
-from typing import Callable, Awaitable, Dict, Any, List
-from contextvars import ContextVar
 import logging
+from contextvars import ContextVar
+from typing import Any, Awaitable, Callable, Dict, List
+
 from freva_gpt.core.logging_setup import configure_logging
 
 DEFAULT_LOGGER = configure_logging(__name__)

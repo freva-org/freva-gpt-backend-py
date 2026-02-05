@@ -25,8 +25,8 @@ from rich_argparse import ArgumentDefaultsRichHelpFormatter
 
 from freva_gpt import __version__
 
-from .core.settings import ENV_PREFIX, BootstrapConfig, Config, Settings
 from .core.logging_setup import configure_logging
+from .core.settings import ENV_PREFIX, BootstrapConfig, Config, Settings
 
 logger = configure_logging(__name__)
 

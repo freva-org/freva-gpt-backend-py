@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 from fastapi import Request
+
 from freva_gpt.services.mcp.mcp_manager import McpManager
 from freva_gpt.services.storage.helpers import get_mongodb_uri
 

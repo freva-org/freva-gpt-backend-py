@@ -1,13 +1,25 @@
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime, timezone
 import re
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo import AsyncMongoClient
 
-from .helpers import Thread, get_database, summarize_topic, Variant, VARIANT_FIELD
-from freva_gpt.core.settings import get_settings
-from freva_gpt.services.streaming.stream_variants import StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
 from freva_gpt.core.logging_setup import configure_logging
+from freva_gpt.core.settings import get_settings
+from freva_gpt.services.streaming.stream_variants import (
+    StreamVariant,
+    cleanup_conversation,
+    from_json_to_sv,
+    from_sv_to_json,
+)
+
+from .helpers import (
+    VARIANT_FIELD,
+    Thread,
+    Variant,
+    get_database,
+    summarize_topic,
+)
 
 logger = configure_logging(__name__)
 

@@ -66,9 +66,9 @@ class CustomDirectoryLoader(DirectoryLoader):
                     raise (TypeError, f"The directory contains an unsupported file extension. Please add a document loader mapping for {doc_type} files.")
         else:
             logger.warning(f"The directory is empty: {self.path}")
-            
+
         return all_documents
-    
+
     def parse_examples(self, json_lines: List[Document]) -> List[Document]:
         """
         Parse examples from a JSONL file, grouping a user query and returned answers so that each example is one document.
@@ -76,7 +76,7 @@ class CustomDirectoryLoader(DirectoryLoader):
         """
         examples = []
         current_trace = None
-        
+
         example_id = 1
         for line in json_lines:
             content = ast.literal_eval(line.page_content)
@@ -87,7 +87,7 @@ class CustomDirectoryLoader(DirectoryLoader):
                 current_trace = line
                 current_trace.metadata["chunk_id"] = example_id
                 current_trace.metadata["embedded_content"] = user_prompt  # For examples: no need to embed the whole content, just the user input.
-                current_trace.metadata["resource_name"] = self.dir_name 
+                current_trace.metadata["resource_name"] = self.dir_name
                 example_id += 1
                 del current_trace.metadata["seq_num"]
             elif current_trace:
@@ -97,7 +97,7 @@ class CustomDirectoryLoader(DirectoryLoader):
             examples.append(current_trace)
 
         return examples
-    
+
     def standardize_metadata(self, docs: List[Document]) -> List[Document]:
         """
         Add missing fields ("embedded_content") to metadata for Document object for uniform data fields.

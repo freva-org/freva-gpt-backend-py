@@ -5,7 +5,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import os
 os.environ["FREVAGPT_DEV"] = "1"
 os.environ["FREVAGPT_LITE_LLM_ADDRESS"]="http://localhost:4000"
-os.environ["FREVAGPT_RAG_SERVER_URL"]="http://localhost:8050" 
+os.environ["FREVAGPT_RAG_SERVER_URL"]="http://localhost:8050"
 os.environ["FREVAGPT_CODE_SERVER_URL"]="http://localhost:8051"
 os.environ["FREVAGPT_MCP_DISABLE_AUTH"]="1"
 
@@ -132,7 +132,7 @@ async def main() -> None:
 
     Storage = await get_thread_storage(user_name=USER_ID, thread_id=thread_id)
     Auth = await auth_dependency("")
-    
+
     system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
 
     print("Interactive dev chat")
@@ -169,7 +169,7 @@ async def main() -> None:
 
         # Normal turn
         await prepare_for_stream(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             user_id=USER_ID,
             Auth=Auth,
             Storage=Storage,

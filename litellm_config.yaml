@@ -2,12 +2,12 @@ model_list:
   - model_name: gpt-4o ### RECEIVED MODEL NAME ###
     litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
       model: openai/gpt-4o ### MODEL NAME sent to `litellm.completion()` ###
-      api_key: "os.environ/FREVAGPT_OPENAI_API_KEY" 
+      api_key: "os.environ/FREVAGPT_OPENAI_API_KEY"
       # temperature: 0.2
   - model_name: gpt-4o-mini ### RECEIVED MODEL NAME ###
     litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
       model: openai/gpt-4o-mini ### MODEL NAME sent to `litellm.completion()` ###
-      api_key: "os.environ/FREVAGPT_OPENAI_API_KEY" 
+      api_key: "os.environ/FREVAGPT_OPENAI_API_KEY"
   - model_name: "ministral-3:14b"
     litellm_params:
       model: "ollama/ministral-3:14b"
@@ -17,7 +17,7 @@ model_list:
   - model_name: "qwen2.5:3b"
     litellm_params:
       model: "ollama/qwen2.5:3b"
-      api_base: "http://ollama:11434" 
+      api_base: "http://ollama:11434"
     model_info:
       supports_function_calling: true
   - model_name: "mxbai-embed-large:latest"

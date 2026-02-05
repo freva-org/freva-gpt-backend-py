@@ -38,13 +38,13 @@ async def search_threads(
 
     if not auth.vault_url:
         raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
-    
+
     if not query:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Missing query parameter.",
         )
-        
+
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
     # Decide search mode (topic vs variant)
@@ -62,14 +62,14 @@ async def search_threads(
     return [
         [
             {
-                "user_id": t.user_id, 
+                "user_id": t.user_id,
                 "thread_id": t.thread_id,
                 "date": t.date,
                 "topic": t.topic,
                 "content": t.content,
             }
             for t in threads
-        ], 
+        ],
         total_num_threads
     ]
 
@@ -95,5 +95,3 @@ def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
 
     # unknown prefix falls back to topic query, not error
     return "topic", q
-
-

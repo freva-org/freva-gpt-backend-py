@@ -71,7 +71,7 @@ async def get_thread(
 
     try:
         await prepare_for_stream(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             user_id=Auth.username,
             Auth=Auth,
             Storage=Storage,
@@ -83,7 +83,7 @@ async def get_thread(
     except ValueError as e:
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
-        
+
     content = await get_conv_messages(thread_id)
 
     content = _post_process(content)

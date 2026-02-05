@@ -4,7 +4,7 @@ from freva_gpt.tools.tool_calls import call_code, call_rag
 
 router = APIRouter()
 
-# IMPORTANT: These endpoints are not wired to app.py. 
+# IMPORTANT: These endpoints are not wired to app.py.
 # Implemented for the purposes of completeness.
 
 @router.post("/mcp/rag")

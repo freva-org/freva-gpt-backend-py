@@ -27,7 +27,7 @@ def compute_hash(doc):
     return hashlib.sha256((source + content).encode("utf-8")).hexdigest()
 
 
-def clear_embeddings_collection(collection): 
+def clear_embeddings_collection(collection):
     """Clear the embeddings collection in MongoDB."""
     collection.drop()
     logger.info("Cleared embeddings collection.")
@@ -69,11 +69,11 @@ def add_vector_search_index_to_db(collection, embedding_length=1024, similarity_
         logger.info("Vector index created successfully!")
     else:
         logger.info("Vector index already exists.")
-    
+
 
 def is_doc_in_db(doc, db):
     # Hashing on chunk level, not the whole document!
-    doc_hash = compute_hash(doc) 
+    doc_hash = compute_hash(doc)
     doc.metadata["file_hash"] = doc_hash
     return db.count_documents({"file_hash": doc_hash}) > 0
 
@@ -84,7 +84,7 @@ def get_new_or_changes_documents(documents, db):
         # Check if document already embedded
         if is_doc_in_db(doc, db):
             logger.info(f"Embeddings already exist for {doc.metadata.get('source')}-{doc.metadata.get('chunk_id')}")
-            continue  # Skip re-embedding 
+            continue  # Skip re-embedding
         else:
             logger.info(f"Creating embeddings for {doc.metadata.get('source')}-{doc.metadata.get('chunk_id')}")
 
@@ -97,14 +97,14 @@ def postprocessing_query_result(query_results):
     for result in query_results:
         resource_type = result[0].get("resource_type")
         if resource_type == "document":
-            if context: 
+            if context:
                 context += "\n\n"
             context += "Here is some context that you can refer to answer the question:\n\n"
             chunks_sorted = sorted(result, key=itemgetter("document", "chunk_id"))
             context += "\n\n".join(document["content"] for document in chunks_sorted)
 
         elif resource_type == "example":
-            if context: 
+            if context:
                 context += "\n\n"
             context += "Here are some examples that can help you answer the question:\n\n"\
                        f"### EXAMPLES BEGIN ###\n\n"

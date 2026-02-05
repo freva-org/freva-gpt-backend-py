@@ -17,7 +17,7 @@ set -euo pipefail
 #   ./dev.sh --debug up --build -d
 #   ./dev.sh up --build -d --debug
 #
-# IMPORTANT: A debug launcher (launch.json in VSCode) should be 
+# IMPORTANT: A debug launcher (launch.json in VSCode) should be
 # configured to be able to use DEBUG mode.
 # ------------------------------------------------------------------
 

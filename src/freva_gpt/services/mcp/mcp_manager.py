@@ -188,12 +188,12 @@ class McpManager:
         extra_headers: Optional[Dict]=None,
     ) -> Dict[str, Any]:
         """
-        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS, 
+        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS,
         all the available servers are called as best-effort.
         """
         if target in self._servers:
             return self._clients.get(target).call_tool(name=name, args=arguments, extra_headers=extra_headers)
-        
+
         # fallback routing: best-effort
         for tgt in self._servers:
             try:
@@ -209,9 +209,9 @@ async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[
     log = logger or DEFAULT_LOGGER
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
     access_token = auth.access_token
-    
+
     auth_header = f"Bearer {access_token}" if access_token else None
-    
+
     headers = {
         "rag": {
             "Authorization": auth_header,

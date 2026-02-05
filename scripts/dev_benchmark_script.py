@@ -68,7 +68,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
 
         Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
         Auth = get_authenticator()
-        
+
         await prepare_for_stream(thread_id, USER_ID, Auth)
 
         system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)

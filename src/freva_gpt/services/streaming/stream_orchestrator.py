@@ -46,7 +46,7 @@ DEFAULT_LOGGER = configure_logging(__name__)
 @dataclass
 class StreamState:
     user_invoked: bool = True
-    tool_call: Optional[Dict[str, Any]] = None 
+    tool_call: Optional[Dict[str, Any]] = None
     finished: bool = False
 
 
@@ -64,7 +64,7 @@ async def stream_with_tools(
     logger=None,
 ) -> AsyncIterator[StreamVariant]:
     logger = logger or DEFAULT_LOGGER
-    
+
     # Append the conversation history to system prompt
     conv_sv = await get_conv_messages(thread_id)
     msg_hist = help_convert_sv_ccrm(conv_sv, include_images=model_supports_images(model), include_meta=False)
@@ -123,7 +123,7 @@ async def stream_with_tools(
 
     # 2) Any tool calls?
     tool_calls = finalize_tool_calls(tool_agg)
-    
+
     if accumulated_asst_text:
         asst_v = SVAssistant(text="".join(accumulated_asst_text))
         await add_to_conversation(thread_id, [asst_v])
@@ -162,7 +162,7 @@ async def stream_with_tools(
                 # When done, return the final result text
                 result_text = await tool_task
                 yield result_text
-            
+
             except asyncio.CancelledError:
                 # /stop or connection close has cancelled this task
                 tool_task.cancel()
@@ -185,7 +185,7 @@ async def stream_with_tools(
                     heartbeats_v.append(item)
                 elif isinstance(item, str):
                     # The function returns the final tool result as last value
-                    result_text = item 
+                    result_text = item
         except Exception as e:
             logger.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
@@ -240,7 +240,7 @@ async def run_stream(
     await add_to_conversation(thread_id, [hint, user_v])
 
     stream_state = StreamState()
-    
+
     # Stream model/tool output
     while not stream_state.finished:
         conv_state = await get_conversation_state(thread_id)
@@ -254,7 +254,7 @@ async def run_stream(
                 acomplete_func=acomplete,
                 stream_state=stream_state,
                 logger=logger,
-            ):  
+            ):
                 yield piece
 
         except asyncio.CancelledError:
@@ -272,25 +272,25 @@ async def run_stream(
 
 
 async def prepare_for_stream(
-    thread_id, 
+    thread_id,
     user_id,
-    Auth: Optional[Authenticator] = None, 
+    Auth: Optional[Authenticator] = None,
     Storage: Optional[ThreadStorage] = None,
-    read_history: Optional[bool] = False, 
+    read_history: Optional[bool] = False,
     logger=None,
 ) :
-    """ 
-    Preparations for the streaming, read history (if needed), add to Registry and 
+    """
+    Preparations for the streaming, read history (if needed), add to Registry and
     set conversation state to "streaming
     """
     logger = logger or DEFAULT_LOGGER
-    
+
     messages: List[Dict[str, Any]] = []
     if read_history and Storage:
         messages = await get_conversation_history(thread_id, Storage)
 
     # Check if the conversation already exists in registry
-    # If not initialize it, and add the first messages 
+    # If not initialize it, and add the first messages
     await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=logger)
 
 

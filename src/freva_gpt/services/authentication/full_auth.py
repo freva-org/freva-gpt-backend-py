@@ -63,7 +63,7 @@ class FullAuthenticator(Authenticator):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Some necessary field weren't found, check whether the nginx proxy and sets the right headers.",
         )
-    
+
 # ──────────────────── Helper functions ──────────────────────────────
 
 def bearer_token_from_header(header_val: str) -> str:

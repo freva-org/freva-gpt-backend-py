@@ -89,7 +89,7 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT, 
+            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
             )
 
@@ -103,7 +103,7 @@ async def streamresponse(
             status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
-    
+
     # Get thread storage
     Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
 
@@ -120,7 +120,7 @@ async def streamresponse(
 
     try:
         await prepare_for_stream(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             user_id=user_name,
             Auth=Auth,
             Storage=Storage,
@@ -156,7 +156,7 @@ async def streamresponse(
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
                     return
-                
+
         await end_and_save_conversation(thread_id, Storage)
         logger.info("Completed streaming and saved conversation", extra={"thread_id": thread_id, "user_id": user_name})
 

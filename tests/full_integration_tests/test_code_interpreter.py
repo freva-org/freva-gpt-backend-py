@@ -7,7 +7,7 @@ from freva_gpt.services.mcp.client import McpClient
 from freva_gpt.core.logging_setup import configure_logging
 
 import pytest
-pytestmark = pytest.mark.integration 
+pytestmark = pytest.mark.integration
 # Run these tests using `pytest -m integration`
 
 logger = configure_logging(__name__)
@@ -34,13 +34,13 @@ def mcp_client_CI():
 
 def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
     """
-    Adapter layer to  MCP server. 
+    Adapter layer to  MCP server.
     The function must return a dict.
     """
     # - tool name: "code_interpreter"
     # - args: {"code": code}
     # - returns: {"structuredContent": {...}}
-    
+
     results = mcp_c.call_tool(name="code_interpreter",
                               args=code,
     )
@@ -112,14 +112,14 @@ def test_imports(mcp_client_CI):
                 "shapefile",
                 "pyproj",
                 "pyparsing",
-                "PIL", 
+                "PIL",
                 "pandas",
                 "packaging",
                 "numpy",
                 "netCDF4",
                 "matplotlib",
                 "kiwisolver",
-                "fontTools", 
+                "fontTools",
                 "cycler",
                 "contourpy",
                 "cftime",
@@ -140,7 +140,7 @@ def test_soft_crash(mcp_client_CI):
     code = {"code":"1/0"}
     error = _exec_and_get_error_value(mcp_client_CI, code)
     assert "ZeroDivisionError: division by zero" in error
-    
+
 def test_hard_crash(mcp_client_CI):
     result = _execute_code_via_mcp(mcp_client_CI, {"code": "exit()"})
     assert list(result.values()) == ['', '', '', [], '']
@@ -201,7 +201,7 @@ def test_plot_extraction_close(mcp_client_CI):
     rich_data = _exec_and_get_richoutput_value(mcp_client_CI, code)
     assert "image/png" in rich_data[0].keys()
     assert isinstance(rich_data[0].get("image/png"), str)
-    
+
 def test_indentation(mcp_client_CI):
     code = {"code": "a=3\nif a < 2:\n\tprint('smaller')\nelse:\n\tprint('larger')"}
     assert _exec_and_get_printed_value(mcp_client_CI, code) == "larger\n"

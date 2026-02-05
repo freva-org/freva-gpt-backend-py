@@ -63,10 +63,10 @@ async def check_thread_exists(thread_id: str) -> bool:
     """
     async with RegistryLock:
         return thread_id in Registry.keys()
-    
+
 
 async def initialize_conversation(
-    thread_id: str, 
+    thread_id: str,
     user_id: str,
     messages: Optional[List[Dict[str, Any]]] = [],
     auth: Optional[Authenticator] = None,
@@ -74,7 +74,7 @@ async def initialize_conversation(
 ) -> ActiveConversation:
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
 
-    now = datetime.now(timezone.utc)      
+    now = datetime.now(timezone.utc)
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
 
@@ -102,7 +102,7 @@ async def initialize_conversation(
             await register_tool_task(thread_id, task)
             task.add_done_callback(
                 # to be unregistered when done
-                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
+                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t))
             )
 
     else:
@@ -110,26 +110,26 @@ async def initialize_conversation(
             conv = Registry.get(thread_id)
             conv.state = ConversationState.STREAMING
             conv.last_activity = datetime.now(timezone.utc)
-        
+
 
 async def add_to_conversation(
     thread_id: str,
     messages: List[StreamVariant],
-) -> ActiveConversation: 
+) -> ActiveConversation:
     """
     Check if an ActiveConversation exists for thread_id and append new variants.
     Updates last_activity and returns the updated conversation object.
     """
     async with RegistryLock:
         conv = Registry.get(thread_id)
-        if conv is None: 
+        if conv is None:
             raise ValueError("Conversation does not exist. Please initialize first!")
         conv.messages.extend(messages)
         conv.last_activity = datetime.now(timezone.utc)
         return conv
 
 
-async def get_conversation_state(thread_id: str) -> Optional[ConversationState]: 
+async def get_conversation_state(thread_id: str) -> Optional[ConversationState]:
     """
     Return the state of the conversation, or None if it is unknown.
     Does NOT create a conversation if missing.
@@ -137,9 +137,9 @@ async def get_conversation_state(thread_id: str) -> Optional[ConversationState]:
     async with RegistryLock:
         conv = Registry.get(thread_id)
         return conv.state if conv is not None else None
-    
-    
-async def get_conv_mcpmanager(thread_id: str) -> Optional[McpManager]: 
+
+
+async def get_conv_mcpmanager(thread_id: str) -> Optional[McpManager]:
     """
     Return the MCPManager of the conversation, or None if it does not exist
     Does NOT create a conversation if missing.
@@ -147,9 +147,9 @@ async def get_conv_mcpmanager(thread_id: str) -> Optional[McpManager]:
     async with RegistryLock:
         conv = Registry.get(thread_id)
         return conv.mcp_manager if conv is not None else None
-    
 
-async def get_conv_messages(thread_id: str) -> Optional[List[StreamVariant]]: 
+
+async def get_conv_messages(thread_id: str) -> Optional[List[StreamVariant]]:
     """
     Return the messages of the conversation, or None if it does not exist
     Does NOT create a conversation if missing.
@@ -157,7 +157,7 @@ async def get_conv_messages(thread_id: str) -> Optional[List[StreamVariant]]:
     async with RegistryLock:
         conv = Registry.get(thread_id)
         return conv.messages if conv is not None else None
-    
+
 
 async def request_stop(thread_id: str) -> bool:
     """
@@ -172,14 +172,14 @@ async def request_stop(thread_id: str) -> bool:
         conv.state = ConversationState.STOPPING
         conv.last_activity = datetime.now(timezone.utc)
         return True
-    
+
 
 async def end_and_save_conversation(
-    thread_id: str, 
+    thread_id: str,
     Storage: ThreadStorage,
-) -> bool: 
+) -> bool:
     """
-    Mark a conversation as ENDED but keep it in the registry and save to available 
+    Mark a conversation as ENDED but keep it in the registry and save to available
     storage through storage.router. Usually followed by remove_conversation.
     Returns True if a conversation was found and saved, False if it didn't exist.
     """
@@ -197,7 +197,7 @@ async def end_and_save_conversation(
 
 async def remove_conversation(
     thread_id: str
-) -> bool: 
+) -> bool:
     """
     Remove a conversation from the registry.
     Returns True if a conversation was removed, False if it didn't exist.
@@ -220,7 +220,7 @@ async def _replay_code_history(thread_id: str) -> None:
     This is best-effort: failures are logged and we continue or stop depending on the error.
     """
     log = configure_logging(__name__, thread_id=thread_id)
-    
+
     async with RegistryLock:
         conv = Registry.get(thread_id)
         if conv is None:
@@ -243,7 +243,7 @@ async def _replay_code_history(thread_id: str) -> None:
 
     for code in code_blocks:
         try:
-            # Run the blocking MCP call in a thread, reusing helper from stream_orchestrator 
+            # Run the blocking MCP call in a thread, reusing helper from stream_orchestrator
             await run_tool_via_mcp(
                 mcp=mcp,
                 tool_name="code_interpreter",

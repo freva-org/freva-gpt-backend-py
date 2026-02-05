@@ -120,7 +120,7 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
     code_block : List[StreamVariant] = []
     code_msgs: List[Dict] = []
 
-    # Code output: structured dict of displayed data, image or error   
+    # Code output: structured dict of displayed data, image or error
     result_json = json.loads(result_txt)
 
     if "structuredContent" in result_json.keys():
@@ -129,7 +129,7 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
 
         # Printed/displayed output + error message if exists
         out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
-            (("\n" + result["result_repr"]) if result["result_repr"] else "") 
+            (("\n" + result["result_repr"]) if result["result_repr"] else "")
         out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
             (("\n" + result["error"]) if result["error"] else "")
         if out or out_error:
@@ -165,6 +165,6 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
         code_block.append(codeout_v)
         code_msgs.extend(help_convert_sv_ccrm([codeout_v]))
         isError = True
-    yield FinalSummary(var_block=code_block, 
-                       tool_messages=code_msgs, 
+    yield FinalSummary(var_block=code_block,
+                       tool_messages=code_msgs,
                        is_error=isError)

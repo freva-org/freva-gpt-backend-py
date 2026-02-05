@@ -48,7 +48,7 @@ def _collection():
 def get_embedding(text):
     """Get embedding for a given text"""
     payload = {
-        "model": EMBEDDING_MODEL, 
+        "model": EMBEDDING_MODEL,
         "input": text,
         "temperature": 0.2,
         }
@@ -74,8 +74,8 @@ def get_embedding(text):
 
 def create_db_entry_for_document(document):
     entry = {
-        "resource_type": "example" if ".json" in document.metadata.get("source") else "document", 
-        "resource_name": document.metadata.get("resource_name"), 
+        "resource_type": "example" if ".json" in document.metadata.get("source") else "document",
+        "resource_name": document.metadata.get("resource_name"),
         "document": document.metadata.get("source"),
         "chunk_id": document.metadata.get("chunk_id"),
         "file_hash": document.metadata.get("file_hash"),
@@ -121,8 +121,8 @@ def get_query_results(query: str, resource_name):
                 "filter": {
                     "$and": [
                         { "resource_type": src_t },
-                        { "resource_name": resource_name} 
-                        ] 
+                        { "resource_name": resource_name}
+                        ]
                 },
                 "path": "embedding",
                 "numCandidates": 15,
@@ -172,7 +172,7 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
     src_dir = os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from)
     if not os.path.isdir(src_dir):
         return f"Resource directory not found: {src_dir}"
-    
+
     dir_loader = CustomDirectoryLoader(src_dir)
     documents = dir_loader.load()
     doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
@@ -201,9 +201,9 @@ def debug():
     context = get_query_results(question, resources_to_retrieve_from)
     print(context)
 
-    
+
 if __name__ == "__main__":
-    # Configure Streamable HTTP transport 
+    # Configure Streamable HTTP transport
     host = os.getenv("MCP_HOST", "0.0.0.0")
     port = int(os.getenv("MCP_PORT", "8050"))
     path = os.getenv("MCP_PATH", "/mcp")  # standard path
@@ -216,8 +216,8 @@ if __name__ == "__main__":
         mcp.http_app(),
         ctx_list=[mongo_uri_ctx],
         header_name_list=[MONGODB_URI_HDR],
-        logger=logger,       
-        mcp_path=path,  
+        logger=logger,
+        mcp_path=path,
     )
 
 

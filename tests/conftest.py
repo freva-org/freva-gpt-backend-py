@@ -199,13 +199,13 @@ def patch_read_thread(monkeypatch):
         raising=False,
     )
 
-    return _fake 
+    return _fake
 
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
     async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
-        return 
+        return
     import freva_gpt.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
@@ -214,7 +214,7 @@ def patch_save_thread(monkeypatch):
         raising=False,
     )
 
-    return _fake_append 
+    return _fake_append
 
 
 @pytest.fixture
@@ -249,7 +249,7 @@ def patch_user_threads(monkeypatch):
     )
 
     return fake_get_user_threads
-    
+
 # ──────────────────────────────────────────────────────────────────────────────
 # STREAM PATCH
 # ──────────────────────────────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ def patch_stream(monkeypatch):
 
     # IMPORTANT: patch where the route resolves it
     monkeypatch.setattr(
-        "freva_gpt.api.chatbot.streamresponse.run_stream",  
+        "freva_gpt.api.chatbot.streamresponse.run_stream",
         fake_run_stream,
         raising=True,
     )

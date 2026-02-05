@@ -34,7 +34,7 @@ class Thread:
 # ──────────────────── Helper Functions ──────────────────────────────
 
 def create_dir_at_cache(
-    user_id: str, 
+    user_id: str,
     thread_id: str
 ) -> None:
     """

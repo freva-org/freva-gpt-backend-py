@@ -13,15 +13,15 @@ async def test_all_get_routes_require_auth(client):
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
 
 @pytest.mark.asyncio
-async def test_routes_succeed_with_auth_and_username_injection( 
-    stub_resp, 
-    client, 
-    GOOD_HEADERS, 
-    patch_db, 
-    patch_read_thread, 
+async def test_routes_succeed_with_auth_and_username_injection(
+    stub_resp,
+    client,
+    GOOD_HEADERS,
+    patch_db,
+    patch_read_thread,
     patch_save_thread,
-    patch_user_threads, 
-    patch_mongo_uri, 
+    patch_user_threads,
+    patch_mongo_uri,
     patch_stream,
     patch_mcp_manager,
 ):
@@ -33,7 +33,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
                 r = await client.get(ep, headers=GOOD_HEADERS)
                 assert r.status_code == 200, f"{ep} should succeed with auth"
 
-            # 2) username is injected 
+            # 2) username is injected
             r = await client.get("/api/chatbot/getuserthreads", params={"num_threads": 2}, headers=GOOD_HEADERS)
             assert r.status_code == 200
             assert r.json()[0][0].get("user_id") == "alice"
@@ -59,8 +59,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
             assert r.status_code == 200
             assert r.headers.get("content-type", "").startswith("application/x-ndjson")
 
-            # 5) /stop 
+            # 5) /stop
             r = await client.get("/api/chatbot/stop", params={"thread_id": "t-123"}, headers=GOOD_HEADERS)
             assert r.status_code == 200
             assert r.json().get("ok") is True
-

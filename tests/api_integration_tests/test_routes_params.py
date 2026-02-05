@@ -3,8 +3,8 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_getthread_requires_thread_id(
-    stub_resp, 
-    client, 
+    stub_resp,
+    client,
     GOOD_HEADERS
 ):
     with  stub_resp:
@@ -16,11 +16,11 @@ async def test_getthread_requires_thread_id(
 
 @pytest.mark.asyncio
 async def test_getthread_ok_with_thread_id(
-    stub_resp, 
-    client, 
-    patch_db, 
-    patch_read_thread, 
-    patch_mcp_manager, 
+    stub_resp,
+    client,
+    patch_db,
+    patch_read_thread,
+    patch_mcp_manager,
     GOOD_HEADERS
 ):
     with  stub_resp:
@@ -36,13 +36,13 @@ async def test_getthread_ok_with_thread_id(
 
 
 @pytest.mark.asyncio
-async def test_streamresponse_accepts_params_and_headers( 
-    stub_resp, 
-    client, 
-    patch_db, 
-    patch_mongo_uri, 
-    patch_stream, 
-    patch_read_thread, 
+async def test_streamresponse_accepts_params_and_headers(
+    stub_resp,
+    client,
+    patch_db,
+    patch_mongo_uri,
+    patch_stream,
+    patch_read_thread,
     patch_save_thread,
     patch_mcp_manager,
     GOOD_HEADERS
@@ -60,4 +60,3 @@ async def test_streamresponse_accepts_params_and_headers(
             text = r.text
             assert "ServerHint" in text
             assert "Assistant" in text
-

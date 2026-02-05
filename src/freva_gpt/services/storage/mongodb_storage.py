@@ -82,7 +82,7 @@ class ThreadStorage():
             "thread_id": thread_id,
             "date": datetime.now(timezone.utc),
             "topic": topic,
-            "content": all_stream, 
+            "content": all_stream,
         }
 
         if existing:
@@ -122,7 +122,7 @@ class ThreadStorage():
         if not doc:
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
-    
+
 
     async def update_thread_topic(
         self,
@@ -136,7 +136,7 @@ class ThreadStorage():
             return True
         except:
             return False
-        
+
 
     async def delete_thread(
         self,

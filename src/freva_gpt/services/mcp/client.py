@@ -276,7 +276,7 @@ class McpClient:
         except Exception:
             pass
 
-        
+
 # ──────────────────── Helper functions ──────────────────────────────
 
 def drop_none(d: dict) -> None:

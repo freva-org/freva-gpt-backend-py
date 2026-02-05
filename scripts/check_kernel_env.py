@@ -14,13 +14,13 @@ freva_env_var = {"EVALUATION_SYSTEM_CONFIG_FILE": freva_config_path}
 os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_config_path
 
 _KERNEL_REGISTRY: dict[str, KernelManager] = {}
-    
+
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
 def _get_or_start_kernel(sid: str, session_env: dict[str, str] | None = None) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)
     if km is None:
-        # We preserve the env variables set in Dockerfile and add freva-config-path 
+        # We preserve the env variables set in Dockerfile and add freva-config-path
         env = os.environ.copy()
         if session_env:
             env.update({k: str(v) for k, v in session_env.items()})
@@ -64,9 +64,9 @@ def _run_cell(sid: str, code: str) -> dict:
     try:
         msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
         stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
-        # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
+        # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data".
         # For these, we keep only the last updated version.
-        display_data_dict = {} 
+        display_data_dict = {}
 
         # Since Jupyter kernel runs asynchronously, it streams outputs, errors, and state messages while it executes the code.
         # We loop to collect them in real time until the status is "idle".
@@ -84,9 +84,9 @@ def _run_cell(sid: str, code: str) -> dict:
                 (stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts).append(msg["content"]["text"])
             elif msg_type in ("display_data", "update_display_data"): # Jupyter also returns rich outputs (image/png, text/html, etc.)
                 display_id = msg["content"].get("transient", {}).get("display_id", "")
-                if display_id: 
+                if display_id:
                     display_data_dict.update({display_id: msg["content"].get("data", {})})
-                else: 
+                else:
                     display_data.append(msg["content"].get("data", {}))
             elif msg_type == "execute_result":
                 result_repr = msg["content"].get("data", {}).get("text/plain")
@@ -103,7 +103,7 @@ def _run_cell(sid: str, code: str) -> dict:
             "stdout": "".join(stdout_parts),
             "stderr": "".join(stderr_parts),
             "result_repr": result_repr if result_repr else "",
-            "display_data": display_data, 
+            "display_data": display_data,
             "error": error if error else "",
         }
     finally:

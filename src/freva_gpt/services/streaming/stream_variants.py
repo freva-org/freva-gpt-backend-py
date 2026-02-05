@@ -446,7 +446,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
         return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
-    if kind == SERVER_HINT: 
+    if kind == SERVER_HINT:
         return {"variant": SERVER_HINT, "content": d["data"]}
     if kind == SERVER_ERROR:
         return {"variant": SERVER_ERROR, "content": d["message"]}
@@ -457,8 +457,8 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": d["b64"], "id":d["id"]} 
-    if kind == CODE: 
+        return {"variant": IMAGE, "content": d["b64"], "id":d["id"]}
+    if kind == CODE:
         return {"variant": CODE, "content": d["code"], "id": d["id"]}
     if kind == CODE_OUTPUT:
         return {"variant": CODE_OUTPUT, "content": d["output"], "id": d["id"]}

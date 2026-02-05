@@ -13,13 +13,7 @@ from freva_gpt.services.streaming.stream_variants import (
     from_sv_to_json,
 )
 
-from .helpers import (
-    VARIANT_FIELD,
-    Thread,
-    Variant,
-    get_database,
-    summarize_topic,
-)
+from .helpers import Thread, Variant, get_database, summarize_topic
 
 logger = configure_logging(__name__)
 
@@ -30,22 +24,23 @@ MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 
-class ThreadStorage():
+class ThreadStorage:
     """Store threads in MongoDB."""
+
     def __init__(self, vault_url: str) -> None:
         self.vault_url = vault_url
         self.db = None
-
 
     @classmethod
     async def create(cls, vault_url: str):
         self = cls(vault_url)
         if settings.DEV:
-            self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
+            self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[
+                MONGODB_DATABASE_NAME
+            ]
         else:
             self.db = await get_database(self.vault_url)
         return self
-
 
     async def save_thread(
         self,
@@ -76,7 +71,9 @@ class ThreadStorage():
         if not topic:
             topic = await summarize_topic(content or "Untitled")
 
-        all_stream = [from_sv_to_json(v) for v in merged_sv] if merged_sv else []
+        all_stream = (
+            [from_sv_to_json(v) for v in merged_sv] if merged_sv else []
+        )
         doc = {
             "user_id": user_id,
             "thread_id": thread_id,
@@ -86,10 +83,11 @@ class ThreadStorage():
         }
 
         if existing:
-            await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
+            await coll.update_one(
+                {"thread_id": thread_id}, {"$set": doc}, upsert=True
+            )
         else:
             await coll.insert_one(doc)
-
 
     async def list_recent_threads(
         self,
@@ -98,7 +96,9 @@ class ThreadStorage():
     ) -> Tuple[List[Thread], int]:
         coll = self.db[MONGODB_COLLECTION_NAME]
         n_threads = await coll.count_documents({"user_id": user_id})
-        cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).limit(limit)
+        cursor = (
+            coll.find({"user_id": user_id}).sort([("date", -1)]).limit(limit)
+        )
         docs = await cursor.to_list(length=limit)
         return [
             Thread(
@@ -111,32 +111,25 @@ class ThreadStorage():
             for d in docs
         ], n_threads
 
-
     async def read_thread(
         self,
         thread_id: str,
     ) -> List[Dict]:
-        #TODO check the return
+        # TODO check the return
         coll = self.db[MONGODB_COLLECTION_NAME]
         doc = await coll.find_one({"thread_id": thread_id})
         if not doc:
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
 
-
-    async def update_thread_topic(
-        self,
-        thread_id: str,
-        topic: str
-    ) -> bool:
+    async def update_thread_topic(self, thread_id: str, topic: str) -> bool:
         try:
             coll = self.db[MONGODB_COLLECTION_NAME]
-            update_op = { '$set' :  { 'topic' : topic } }
+            update_op = {"$set": {"topic": topic}}
             await coll.update_one({"thread_id": thread_id}, update_op)
             return True
-        except:
+        except Exception:
             return False
-
 
     async def delete_thread(
         self,
@@ -145,9 +138,9 @@ class ThreadStorage():
         try:
             coll = self.db[MONGODB_COLLECTION_NAME]
             await coll.delete_one({"thread_id": thread_id})
-            #TODO check the return
+            # TODO check the return
             return True
-        except:
+        except Exception:
             return False
 
     async def query_by_topic(
@@ -166,11 +159,7 @@ class ThreadStorage():
         }
 
         total = await coll.count_documents(filt)
-        cursor = (
-            coll.find(filt)
-            .sort("updated_at", -1)
-            .limit(num_threads)
-        )
+        cursor = coll.find(filt).sort("updated_at", -1).limit(num_threads)
         docs = await cursor.to_list(length=num_threads)
         threads = [
             Thread(
@@ -183,7 +172,6 @@ class ThreadStorage():
             for d in docs
         ]
         return total, threads
-
 
     async def query_by_variant(
         self,
@@ -208,11 +196,7 @@ class ThreadStorage():
         }
 
         total = await coll.count_documents(filt)
-        cursor = (
-            coll.find(filt)
-            .sort("updated_at", -1)
-            .limit(num_threads)
-        )
+        cursor = coll.find(filt).sort("updated_at", -1).limit(num_threads)
         docs = await cursor.to_list(length=num_threads)
         threads = [
             Thread(

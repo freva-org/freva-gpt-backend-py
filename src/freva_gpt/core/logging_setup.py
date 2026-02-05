@@ -26,7 +26,9 @@ LOG_FORMATTER = logging.Formatter(LOG_FORMAT)
 class ContextFilter(logging.Filter):
     """Ensures thread_id/user_id keys exist on log records."""
 
-    def __init__(self, thread_id: Optional[str] = None, user_id: Optional[str] = None) -> None:
+    def __init__(
+        self, thread_id: Optional[str] = None, user_id: Optional[str] = None
+    ) -> None:
         super().__init__()
         self.thread_id = thread_id or "-"
         self.user_id = user_id or "-"
@@ -142,7 +144,9 @@ def configure_logging(
         if handler not in logger.handlers:
             logger.addHandler(handler)
 
-    return logging.LoggerAdapter(logger, {"thread_id": thread_id or "-", "user_id": user_id or "-"})
+    return logging.LoggerAdapter(
+        logger, {"thread_id": thread_id or "-", "user_id": user_id or "-"}
+    )
 
 
 def silence_logger():

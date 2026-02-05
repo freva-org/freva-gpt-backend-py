@@ -1,6 +1,3 @@
-import logging
-import warnings
-
 import httpx
 from fastapi import HTTPException, status
 
@@ -23,12 +20,15 @@ class FullAuthenticator(Authenticator):
       - 500 if AUTH_KEY unset
       - else 422/400/401/502/503 same as Rust
     """
+
     async def run(self) -> "FullAuthenticator":
         request = self.request
         headers = request.headers
 
         # Checking Authorization header OR x-freva-user-token
-        header_val = headers.get("Authorization") or headers.get("x-freva-user-token")
+        header_val = headers.get("Authorization") or headers.get(
+            "x-freva-user-token"
+        )
 
         # Checking vault_url. If it is not found, the exception is raised in the endpoints, where this is a must-have
         vault_url = headers.get("x-freva-vault-url")
@@ -64,7 +64,9 @@ class FullAuthenticator(Authenticator):
             detail="Some necessary field weren't found, check whether the nginx proxy and sets the right headers.",
         )
 
+
 # ──────────────────── Helper functions ──────────────────────────────
+
 
 def bearer_token_from_header(header_val: str) -> str:
     # The header can be any value, we only allow String.
@@ -79,7 +81,7 @@ def bearer_token_from_header(header_val: str) -> str:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Authorization header is not a Bearer token. Please use the Bearer token format.",
         )
-    return header_val[len("Bearer ") :]
+    return header_val[len("Bearer ") :]  # noqa: E203
 
 
 def _normalize_systemuser_path(rest_url: str) -> str:
@@ -108,7 +110,9 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+            resp = await client.get(
+                url, headers={"Authorization": f"Bearer {token}"}
+            )
     except Exception as e:
         # ServiceUnavailable on request error to vault/rest
         logger.error("Error sending request to systemuser endpoint: %s", e)
@@ -126,7 +130,9 @@ async def get_username_from_token(token: str, rest_url: str) -> str:
 
     # parse JSON and extract username/detail
     text = resp.text
-    logger.debug("Token check success status=%s body=%s", resp.status_code, text[:500])
+    logger.debug(
+        "Token check success status=%s body=%s", resp.status_code, text[:500]
+    )
     try:
         data = resp.json()
     except Exception as e:

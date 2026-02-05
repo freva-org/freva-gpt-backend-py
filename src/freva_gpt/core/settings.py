@@ -46,7 +46,6 @@ def _str_to_bool(
 
 
 def _str_to_list(value: Optional[str]) -> List[str]:
-
     value = value or ""
     return [v.strip() for v in value.split(",") if v.strip()] or []
 
@@ -126,7 +125,6 @@ class Config(BaseModel):
     """The data type."""
 
     def model_post_init(self, __context: Any = None) -> None:
-
         env_var = f"{ENV_PREFIX}_{self.name.upper()}"
         self.__parsed_type = self.parse_type(self.type)
         value = os.getenv(env_var)
@@ -155,7 +153,9 @@ class Config(BaseModel):
           - 'float[2]', 'integer[5]' -> length=number
           - 'string[]'  -> length=None, multi_valued semantics
         """
-        m = re.fullmatch(r"({})(\[(\d*)\])?".format("|".join(Types.items())), v)
+        m = re.fullmatch(
+            r"({})(\[(\d*)\])?".format("|".join(Types.items())), v
+        )
         if not m:
             raise ValueError(f"invalid type spec {v!r}")
         base, _, num = m.groups()
@@ -240,14 +240,18 @@ class BootstrapConfig:
         )
 
     @classmethod
-    def from_env(cls, key: str, default: Optional[str] = None) -> Optional[str]:
+    def from_env(
+        cls, key: str, default: Optional[str] = None
+    ) -> Optional[str]:
         """Read a config entry from environment."""
         key = ENV_PREFIX.rstrip("_") + "_" + key.upper()
         return os.getenv(key, default)
 
     @classmethod
     def from_cli_env(
-        cls, config_path: Optional[Union[str, Path]] = None, **kwargs: ConfigValue
+        cls,
+        config_path: Optional[Union[str, Path]] = None,
+        **kwargs: ConfigValue,
     ) -> "BootstrapConfig":
         config_path = config_path or os.getenv(f"{ENV_PREFIX}_CONFIG_PATH")
         return cls(

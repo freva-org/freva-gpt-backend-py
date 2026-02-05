@@ -54,11 +54,15 @@ async def get_thread_storage(
     return await ThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
+async def get_mcp_manager(
+    authenticator: Authenticator, thread_id: str
+) -> McpManager:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
-    logger = configure_logging(__name__, thread_id=thread_id, user_id=authenticator.username)
+    logger = configure_logging(
+        __name__, thread_id=thread_id, user_id=authenticator.username
+    )
 
     MCP_SERVER_URLs = get_server_url_dict(settings.AVAILABLE_MCP_SERVERS)
 
@@ -74,7 +78,7 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
 
     cache = CACHE_ROOT / thread_id
 
-    extra_headers = await get_mcp_headers(authenticator, cache, logger=logger)
+    extra_headers = await get_mcp_headers(authenticator, cache)
 
     try:
         mgr.initialize(extra_headers)
@@ -82,4 +86,7 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
         return mgr
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        logger.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        logger.warning(
+            "MCP manager initialization failed (tools may be unavailable): %s",
+            e,
+        )

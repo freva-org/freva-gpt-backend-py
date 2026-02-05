@@ -16,9 +16,15 @@ class DevAuthenticator(Authenticator):
 
         if request:
             self.username = request.headers.get("x-dev-user", "janedoe")
-            self.vault_url = request.headers.get("x-dev-vault-url", "http://dev-vault")
-            self.rest_url = request.headers.get("x-dev-rest-url", "http://dev-rest")
-            self.access_token = request.headers.get("Authorization", "Access-token")
+            self.vault_url = request.headers.get(
+                "x-dev-vault-url", "http://dev-vault"
+            )
+            self.rest_url = request.headers.get(
+                "x-dev-rest-url", "http://dev-rest"
+            )
+            self.access_token = request.headers.get(
+                "Authorization", "Access-token"
+            )
         else:
             self.username = "janedoe"
             self.vault_url = "http://dev-vault"
@@ -27,6 +33,10 @@ class DevAuthenticator(Authenticator):
 
         log.info(
             "DEV auth applied",
-            extra={"user_id": self.username, "vault_url": self.vault_url, "rest_url": self.rest_url},
+            extra={
+                "user_id": self.username,
+                "vault_url": self.vault_url,
+                "rest_url": self.rest_url,
+            },
         )
         return self

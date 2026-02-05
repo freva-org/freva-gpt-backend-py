@@ -10,9 +10,8 @@ router = APIRouter()
 
 @router.get("/stop", dependencies=[AuthRequired])
 async def stop_get(
-    thread_id: str | None = Query(
-        default=None, description="Thread to stop (optional)"
-    )
+    thread_id: str
+    | None = Query(default=None, description="Thread to stop (optional)")
 ):
     """
     Signal that a conversation should stop streaming and cancel in-flight tools.

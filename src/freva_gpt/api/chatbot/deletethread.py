@@ -23,7 +23,9 @@ async def delete_thread(
     Removes the thread from storage of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
-    logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
+    logger = configure_logging(
+        __name__, thread_id=thread_id, user_id=auth.username
+    )
 
     if not thread_id:
         raise HTTPException(
@@ -42,10 +44,16 @@ async def delete_thread(
     ok = await Storage.delete_thread(thread_id)
 
     if ok:
-        logger.info("Deleted thread from storage", extra={"thread_id": thread_id, "user_id": auth.username})
+        logger.info(
+            "Deleted thread from storage",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
         return {"ok": ok, "body": "Successfully removed thread from history."}
     else:
-        logger.warning("Failed to delete thread from storage", extra={"thread_id": thread_id, "user_id": auth.username})
+        logger.warning(
+            "Failed to delete thread from storage",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
         return {
             "ok": ok,
             "body": f"Failed to remove thread from storage: {thread_id}",

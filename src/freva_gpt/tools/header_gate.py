@@ -50,33 +50,53 @@ def make_header_gate(
 
             try:
                 for ctx, header_name in zip(ctx_list, header_name_list):
-
                     v = hdrs.get(header_name)
 
                     try:
-                        logger.info(f"Server header {header_name} (ASGI wrap): {v}")
+                        logger.info(
+                            f"Server header {header_name} (ASGI wrap): {v}"
+                        )
                     except Exception:
                         pass  # never fail on logging
 
                     # Enforce required conditions on header
                     # We do not do the same for CI because it doesn't have to be that strict, it can operate without freva access. We warn about this
-                    if header_name=="mongodb-uri" and (not v or not (v.startswith("mongodb://") or v.startswith("mongodb+srv://"))):
+                    if header_name == "mongodb-uri" and (
+                        not v
+                        or not (
+                            v.startswith("mongodb://")
+                            or v.startswith("mongodb+srv://")
+                        )
+                    ):
                         body = (
-                            b'event: message\r\n'
+                            b"event: message\r\n"
                             b'data: {"jsonrpc":"2.0","error":{"code":-32600,'
-                            b'"message":"Missing or invalid header \'' + header_name.encode("utf-8") + b'\' '
+                            b'"message":"Missing or invalid header \''
+                            + header_name.encode("utf-8")
+                            + b"' "
                             b'(expected mongodb:// or mongodb+srv://)"}}\r\n\r\n'
                         )
-                        await send({
-                            "type": "http.response.start",
-                            "status": 400,
-                            "headers": [
-                                (b"content-type", b"text/event-stream"),
-                                (b"cache-control", b"no-cache, no-transform"),
-                                (b"connection", b"keep-alive"),
-                            ],
-                        })
-                        await send({"type": "http.response.body", "body": body, "more_body": False})
+                        await send(
+                            {
+                                "type": "http.response.start",
+                                "status": 400,
+                                "headers": [
+                                    (b"content-type", b"text/event-stream"),
+                                    (
+                                        b"cache-control",
+                                        b"no-cache, no-transform",
+                                    ),
+                                    (b"connection", b"keep-alive"),
+                                ],
+                            }
+                        )
+                        await send(
+                            {
+                                "type": "http.response.body",
+                                "body": body,
+                                "more_body": False,
+                            }
+                        )
                         return
 
                     # Set ContextVars for downstream code

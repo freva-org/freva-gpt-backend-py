@@ -7,7 +7,10 @@ from freva_gpt.services.service_factory import AuthRequired
 
 router = APIRouter()
 
-@router.get("/availablechatbots", response_model=List[str], dependencies=[AuthRequired])
+
+@router.get(
+    "/availablechatbots", response_model=List[str], dependencies=[AuthRequired]
+)
 async def available_chatbots_endpoint(request: Request) -> List[str]:
     """
     Available Chatbots

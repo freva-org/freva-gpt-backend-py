@@ -19,10 +19,11 @@ from freva_gpt.services.streaming.tool_calls import run_tool_via_mcp
 
 DEFAULT_LOGGER = configure_logging(__name__)
 
+
 class ConversationState(str, Enum):
     STREAMING = "streaming"
-    STOPPING  = "stopping"
-    ENDED     = "ended"
+    STOPPING = "stopping"
+    ENDED = "ended"
 
 
 @dataclass
@@ -42,7 +43,9 @@ RegistryLock = asyncio.Lock()
 
 def _generate_id(length: int = 32) -> str:
     """Generate a random thread id candidate."""
-    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
+    return "".join(
+        random.choices(string.ascii_letters + string.digits, k=length)
+    )
 
 
 async def new_thread_id() -> str:
@@ -72,7 +75,9 @@ async def initialize_conversation(
     auth: Optional[Authenticator] = None,
     logger=None,
 ) -> ActiveConversation:
-    log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
+    log = logger or configure_logging(
+        __name__, thread_id=thread_id, user_id=user_id
+    )
 
     now = datetime.now(timezone.utc)
     if not await check_thread_exists(thread_id):
@@ -81,14 +86,16 @@ async def initialize_conversation(
         if auth:
             mcp_mgr = await get_mcp_manager(authenticator=auth)
         else:
-            log.warning(f"The conversation {thread_id} initialized without MCPManager! "
-                        "Please note that the MCP servers cannot be connected!")
+            log.warning(
+                f"The conversation {thread_id} initialized without MCPManager! "
+                "Please note that the MCP servers cannot be connected!"
+            )
 
         conv = ActiveConversation(
             thread_id=thread_id,
             user_id=user_id,
             state=ConversationState.STREAMING,
-            mcp_manager= mcp_mgr,
+            mcp_manager=mcp_mgr,
             messages=messages,
             last_activity=now,
         )
@@ -96,13 +103,17 @@ async def initialize_conversation(
         Registry[thread_id] = conv
 
         # send tool calls to MCP server if there are Code variants present in messages
-        if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
+        if mcp_mgr is not None and any(
+            isinstance(v, SVCode) for v in messages
+        ):
             loop = asyncio.get_running_loop()
             task = loop.create_task(_replay_code_history(thread_id))
             await register_tool_task(thread_id, task)
             task.add_done_callback(
                 # to be unregistered when done
-                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t))
+                lambda t: asyncio.create_task(
+                    unregister_tool_task(thread_id, t)
+                )
             )
 
     else:
@@ -123,13 +134,17 @@ async def add_to_conversation(
     async with RegistryLock:
         conv = Registry.get(thread_id)
         if conv is None:
-            raise ValueError("Conversation does not exist. Please initialize first!")
+            raise ValueError(
+                "Conversation does not exist. Please initialize first!"
+            )
         conv.messages.extend(messages)
         conv.last_activity = datetime.now(timezone.utc)
         return conv
 
 
-async def get_conversation_state(thread_id: str) -> Optional[ConversationState]:
+async def get_conversation_state(
+    thread_id: str,
+) -> Optional[ConversationState]:
     """
     Return the state of the conversation, or None if it is unknown.
     Does NOT create a conversation if missing.
@@ -191,13 +206,16 @@ async def end_and_save_conversation(
         conv.state = ConversationState.ENDED
         conv.last_activity = datetime.now(timezone.utc)
         # Save conversation
-        await Storage.save_thread(conv.thread_id, conv.user_id, conv.messages, append_to_existing=False)
+        await Storage.save_thread(
+            conv.thread_id,
+            conv.user_id,
+            conv.messages,
+            append_to_existing=False,
+        )
         return True
 
 
-async def remove_conversation(
-    thread_id: str
-) -> bool:
+async def remove_conversation(thread_id: str) -> bool:
     """
     Remove a conversation from the registry.
     Returns True if a conversation was removed, False if it didn't exist.
@@ -236,10 +254,14 @@ async def _replay_code_history(thread_id: str) -> None:
     ]
 
     if not code_blocks:
-        log.debug(f"No code blocks found in history for thread {thread_id}; nothing to replay.")
+        log.debug(
+            f"No code blocks found in history for thread {thread_id}; nothing to replay."
+        )
         return
 
-    log.info(f"Replaying {len(code_blocks)} code blocks to code_interpreter for thread {thread_id}")
+    log.info(
+        f"Replaying {len(code_blocks)} code blocks to code_interpreter for thread {thread_id}"
+    )
 
     for code in code_blocks:
         try:
@@ -292,8 +314,7 @@ async def cancel_tool_tasks(thread_id: str) -> None:
 
 
 async def cleanup_idle(
-    max_idle: timedelta,
-    Storage: Optional[ThreadStorage]
+    max_idle: timedelta, Storage: Optional[ThreadStorage]
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.

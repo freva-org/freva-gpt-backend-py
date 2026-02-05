@@ -1,5 +1,3 @@
-import logging
-
 from freva_gpt import __version__
 from freva_gpt.core.logging_setup import configure_logging
 from freva_gpt.core.settings import Settings
@@ -11,7 +9,6 @@ logger = configure_logging(__name__)
 
 
 def run_startup_checks(settings: Settings) -> None:
-
     # LITE_LLM_ADDRESS sanity note
     if not (
         settings.LITE_LLM_ADDRESS.startswith("http://")

@@ -24,7 +24,9 @@ async def set_thread_topic(
     Updates the thread topic with user-given str of the authenticated user.
     Requires x-freva-vault-url header for DB bootstrap.
     """
-    logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
+    logger = configure_logging(
+        __name__, thread_id=thread_id, user_id=auth.username
+    )
 
     if not thread_id:
         raise HTTPException(
@@ -43,8 +45,17 @@ async def set_thread_topic(
     ok = await Storage.update_thread_topic(thread_id, topic)
 
     if ok:
-        logger.info("Updated thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
+        logger.info(
+            "Updated thread topic",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
         return {"ok": ok, "body": "Successfully updated thread topic."}
     else:
-        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
-        return {"ok": ok, "body": f"Failed to update thread topic: {thread_id}"}
+        logger.warning(
+            "Failed to update thread topic",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
+        return {
+            "ok": ok,
+            "body": f"Failed to update thread topic: {thread_id}",
+        }

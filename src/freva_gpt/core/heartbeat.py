@@ -27,7 +27,9 @@ async def heartbeat_content():
 
     # --- CPU Info ---
     heartbeat["cpu_usage"] = psutil.cpu_percent(interval=None)
-    heartbeat["cpu_last_minute"] = psutil.getloadavg()[0]  # 1-minute load average
+    heartbeat["cpu_last_minute"] = psutil.getloadavg()[
+        0
+    ]  # 1-minute load average
 
     # --- Process Tree: include self and all descendants ---
     process_list = [pid]

@@ -60,8 +60,10 @@ TOOL_NAME_CODE = "code_interpreter"
 # StreamVariant classes (Pydantic v2, discriminated by `variant`)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class _SVBase(BaseModel):
     """Base for all StreamVariants."""
+
     model_config = ConfigDict(frozen=True)  # make instances hashable/immutable
 
 
@@ -69,7 +71,9 @@ class SVPrompt(_SVBase):
     # IMPORTANT: use string literals inside Literal[...] to satisfy type-checkers
     variant: Literal["Prompt"] = Field(default=PROMPT)
     # JSON string representing a list of chat messages (OpenAI format).
-    payload: str = Field(..., description="JSON string of ChatCompletion messages")
+    payload: str = Field(
+        ..., description="JSON string of ChatCompletion messages"
+    )
 
 
 class SVUser(_SVBase):
@@ -80,7 +84,9 @@ class SVUser(_SVBase):
 class SVAssistant(_SVBase):
     variant: Literal["Assistant"] = Field(default=ASSISTANT)
     text: str
-    name: str = Field(default=ASSISTANT_NAME, description="Assistant display name")
+    name: str = Field(
+        default=ASSISTANT_NAME, description="Assistant display name"
+    )
 
 
 class SVCode(_SVBase):
@@ -152,7 +158,10 @@ Conversation = List[StreamVariant]
 # Helpers: conversation normalization
 # ──────────────────────────────────────────────────────────────────────────────
 
-def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) -> Conversation:
+
+def cleanup_conversation(
+    conv: Conversation, append_stream_end: bool = False
+) -> Conversation:
     """
     Insert missing CodeOutput after Code and ensure StreamEnd at the end.
     Mirrors the spirit of Rust's cleanup_conversation with class-based variants.
@@ -173,7 +182,8 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
             if pending_code_id is not None and v.id != pending_code_id:
                 logger.warning(
                     "CodeOutput.id=%s does not match pending Code.id=%s.",
-                    v.id, pending_code_id
+                    v.id,
+                    pending_code_id,
                 )
             pending_code_id = None
 
@@ -186,11 +196,16 @@ def cleanup_conversation(conv: Conversation, append_stream_end: bool = False) ->
     # Ensure ends with StreamEnd (only if requested)
     if append_stream_end:
         if not out or not isinstance(out[-1], SVStreamEnd):
-            out.append(SVStreamEnd(message="Stream ended in a very unexpected manner"))
+            out.append(
+                SVStreamEnd(message="Stream ended in a very unexpected manner")
+            )
 
     return out
 
-def normalize_conv_for_prompt(conv: Conversation, include_meta: bool = True) -> Conversation:
+
+def normalize_conv_for_prompt(
+    conv: Conversation, include_meta: bool = True
+) -> Conversation:
     """
     Prepare a conversation for conversion into chat messages.
     - Applies cleanup_conversation
@@ -202,7 +217,16 @@ def normalize_conv_for_prompt(conv: Conversation, include_meta: bool = True) -> 
 
     filtered: Conversation = []
     for v in conv:
-        if isinstance(v, (SVServerHint, SVServerError, SVOpenAIError, SVCodeError, SVStreamEnd)):
+        if isinstance(
+            v,
+            (
+                SVServerHint,
+                SVServerError,
+                SVOpenAIError,
+                SVCodeError,
+                SVStreamEnd,
+            ),
+        ):
             # Drop meta if include_meta=False (Rust-like behavior)
             continue
         filtered.append(v)
@@ -212,6 +236,7 @@ def normalize_conv_for_prompt(conv: Conversation, include_meta: bool = True) -> 
 # ──────────────────────────────────────────────────────────────────────────────
 # Conversion to OpenAI Chat messages
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class OpenAIMessage(TypedDict, total=False):
     role: str
@@ -230,7 +255,9 @@ def _as_system(name: str, content: Union[str, dict, list]) -> OpenAIMessage:
     return {"role": ROLE_SYSTEM, "name": name, "content": content}
 
 
-def _tool_call_message(args: str, call_id: str, tool_name: str) -> OpenAIMessage:
+def _tool_call_message(
+    args: str, call_id: str, tool_name: str
+) -> OpenAIMessage:
     # Arguments should be a JSON string per OpenAI function-call schema.
     return {
         "role": ROLE_ASSISTANT,
@@ -246,7 +273,9 @@ def _tool_call_message(args: str, call_id: str, tool_name: str) -> OpenAIMessage
     }
 
 
-def _tool_result_message(output: str, call_id: str, tool_name: str) -> OpenAIMessage:
+def _tool_result_message(
+    output: str, call_id: str, tool_name: str
+) -> OpenAIMessage:
     return {
         "role": ROLE_TOOL,
         "name": tool_name,
@@ -293,7 +322,10 @@ def _extend_with_prompt_json(out: List[OpenAIMessage], json_str: str) -> None:
     try:
         data = json.loads(json_str)
     except Exception as e:
-        logger.warning("Failed to parse Prompt JSON payload: %s; skipping this Prompt variant.", e)
+        logger.warning(
+            "Failed to parse Prompt JSON payload: %s; skipping this Prompt variant.",
+            e,
+        )
         return
 
     if not isinstance(data, list):
@@ -306,7 +338,9 @@ def _extend_with_prompt_json(out: List[OpenAIMessage], json_str: str) -> None:
             continue
         role = msg.get("role")
         if role not in (ROLE_SYSTEM, ROLE_USER, ROLE_ASSISTANT, ROLE_TOOL):
-            logger.warning("Prompt message[%d] has invalid role=%r; skipping.", i, role)
+            logger.warning(
+                "Prompt message[%d] has invalid role=%r; skipping.", i, role
+            )
             continue
         out.append(msg)  # trust caller for deeper schema (tool_calls etc.)
 
@@ -332,19 +366,27 @@ def help_convert_sv_ccrm(
             out.append({"role": ROLE_USER, "content": v.text})
 
         elif isinstance(v, SVAssistant):
-            out.append({"role": ROLE_ASSISTANT, "name": v.name, "content": v.text})
+            out.append(
+                {"role": ROLE_ASSISTANT, "name": v.name, "content": v.text}
+            )
 
         elif isinstance(v, SVCode):
-            out.append(_tool_call_message(v.code, v.id, tool_name=TOOL_NAME_CODE))
+            out.append(
+                _tool_call_message(v.code, v.id, tool_name=TOOL_NAME_CODE)
+            )
 
         elif isinstance(v, SVCodeOutput):
-            out.append(_tool_result_message(v.output, v.id, tool_name=TOOL_NAME_CODE))
+            out.append(
+                _tool_result_message(v.output, v.id, tool_name=TOOL_NAME_CODE)
+            )
 
         elif isinstance(v, SVImage):
             if include_images:
                 out.append(_image_user_message(v.b64, v.mime))
             else:
-                logger.debug("Dropping Image variant in prompt (include_images=False).")
+                logger.debug(
+                    "Dropping Image variant in prompt (include_images=False)."
+                )
 
         elif isinstance(v, SVServerHint):
             if include_meta:
@@ -360,7 +402,11 @@ def help_convert_sv_ccrm(
 
         elif isinstance(v, SVCodeError):
             if include_meta and v.id:
-                out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
+                out.append(
+                    _tool_result_message(
+                        v.message, v.id, tool_name=TOOL_NAME_CODE
+                    )
+                )
             elif include_meta:
                 out.append(_as_system("code_error", v.message))
 
@@ -377,6 +423,7 @@ def help_convert_sv_ccrm(
 # ──────────────────────────────────────────────────────────────────────────────
 # JSON <-> Stream Variant class conversion + examples loader
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def from_json_to_sv(obj: dict) -> StreamVariant:
     """
@@ -412,10 +459,17 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
 
     if v == CODE:
         code_text, id = "", ""
-        if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
+        if (
+            isinstance(c, list) and len(c) >= 2
+        ):  # Legacy {"variant":"Code","content":["{\"code\":\"...\"}", "call_ABC"]}
             payload, id = c[0], c[1]
             if isinstance(payload, dict):
-                code_text = payload.get("code") or payload.get("python") or payload.get("text") or ""
+                code_text = (
+                    payload.get("code")
+                    or payload.get("python")
+                    or payload.get("text")
+                    or ""
+                )
             else:
                 code_text = str(payload)
         else:
@@ -424,7 +478,9 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
         return SVCode(code=code_text, id=str(id))
 
     if v == CODE_OUTPUT:
-        if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
+        if (
+            isinstance(c, list) and len(c) >= 2
+        ):  # Legacy {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
             output, id = c[0], c[1]
         else:
             output = c
@@ -457,7 +513,7 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == STREAM_END:
         return {"variant": STREAM_END, "content": d["message"]}
     if kind == IMAGE:
-        return {"variant": IMAGE, "content": d["b64"], "id":d["id"]}
+        return {"variant": IMAGE, "content": d["b64"], "id": d["id"]}
     if kind == CODE:
         return {"variant": CODE, "content": d["code"], "id": d["id"]}
     if kind == CODE_OUTPUT:
@@ -495,6 +551,7 @@ def parse_examples_jsonl(path: str | Path) -> list[StreamVariant]:
 # Minor utility from earlier dict-based API (kept for convenience)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def is_prompt(variant: Any) -> bool:
     """
     Return True if a variant represents a Prompt.
@@ -510,13 +567,21 @@ def is_prompt(variant: Any) -> bool:
 
     # Dict-shaped
     if isinstance(variant, dict):
-        name = variant.get("variant") or variant.get("type") or variant.get("kind")
+        name = (
+            variant.get("variant")
+            or variant.get("type")
+            or variant.get("kind")
+        )
         if isinstance(name, str) and name.strip().lower() == "prompt":
             return True
         return False
 
     # Object with attributes
-    name = getattr(variant, "variant", None) or getattr(variant, "type", None) or getattr(variant, "kind", None)
+    name = (
+        getattr(variant, "variant", None)
+        or getattr(variant, "type", None)
+        or getattr(variant, "kind", None)
+    )
     if isinstance(name, str) and name.strip().lower() == "prompt":
         return True
 
@@ -525,20 +590,45 @@ def is_prompt(variant: Any) -> bool:
     return cls.lower() in ("prompt", "svprompt")
 
 
-
 __all__ = [
     # Classes / types
-    "StreamVariant", "Conversation",
-    "SVPrompt", "SVUser", "SVAssistant", "SVCode", "SVCodeOutput",
-    "SVImage", "SVServerHint", "SVServerError", "SVOpenAIError",
-    "SVCodeError", "SVStreamEnd",
+    "StreamVariant",
+    "Conversation",
+    "SVPrompt",
+    "SVUser",
+    "SVAssistant",
+    "SVCode",
+    "SVCodeOutput",
+    "SVImage",
+    "SVServerHint",
+    "SVServerError",
+    "SVOpenAIError",
+    "SVCodeError",
+    "SVStreamEnd",
     # Constants / roles
-    "PROMPT", "USER", "ASSISTANT", "CODE", "CODE_OUTPUT", "IMAGE",
-    "SERVER_ERROR", "OPENAI_ERROR", "CODE_ERROR", "STREAM_END", "SERVER_HINT",
-    "ROLE_SYSTEM", "ROLE_USER", "ROLE_ASSISTANT", "ROLE_TOOL",
-    "ASSISTANT_NAME", "TOOL_NAME_CODE",
+    "PROMPT",
+    "USER",
+    "ASSISTANT",
+    "CODE",
+    "CODE_OUTPUT",
+    "IMAGE",
+    "SERVER_ERROR",
+    "OPENAI_ERROR",
+    "CODE_ERROR",
+    "STREAM_END",
+    "SERVER_HINT",
+    "ROLE_SYSTEM",
+    "ROLE_USER",
+    "ROLE_ASSISTANT",
+    "ROLE_TOOL",
+    "ASSISTANT_NAME",
+    "TOOL_NAME_CODE",
     # Functions
-    "cleanup_conversation", "normalize_conv_for_prompt",
-    "help_convert_sv_ccrm", "is_prompt",
-    "from_json_to_sv", "from_sv_to_json", "parse_examples_jsonl",
+    "cleanup_conversation",
+    "normalize_conv_for_prompt",
+    "help_convert_sv_ccrm",
+    "is_prompt",
+    "from_json_to_sv",
+    "from_sv_to_json",
+    "parse_examples_jsonl",
 ]

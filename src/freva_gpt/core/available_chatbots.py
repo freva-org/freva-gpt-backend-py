@@ -45,7 +45,9 @@ def _as_str_or_none(value: Any) -> Optional[str]:
     if isinstance(value, (int, float)):
         s = str(value).strip()
         if s:
-            logger.warning("Coercing non-string model_name=%r to string '%s'.", value, s)
+            logger.warning(
+                "Coercing non-string model_name=%r to string '%s'.", value, s
+            )
             return s
     return None
 
@@ -62,7 +64,10 @@ def _collect_model_names(node: Any, sink: List[str]) -> None:
             if name:
                 sink.append(name)
             else:
-                logger.warning("Ignoring non-string/empty model_name: %r", node.get("model_name"))
+                logger.warning(
+                    "Ignoring non-string/empty model_name: %r",
+                    node.get("model_name"),
+                )
 
         # Recurse into all values to catch nested occurrences.
         for v in node.values():
@@ -134,7 +139,9 @@ def available_chatbots() -> List[str]:
     filtered = [n for n in names if n]  # already warned on invalids
 
     if not filtered:
-        _fatal_no_models(f"No available chatbots found in LiteLLM file at {path}.")
+        _fatal_no_models(
+            f"No available chatbots found in LiteLLM file at {path}."
+        )
     logger.info("Available chatbots (%d): %s", len(filtered), filtered)
     return filtered
 
@@ -150,6 +157,7 @@ def default_chatbot() -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper predicates
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def model_is_reasoning(model: str) -> bool:
     """
@@ -169,7 +177,13 @@ def model_is_ollama(model: str) -> bool:
     """
     True for names starting with 'mistral', 'ministral', 'qwen', 'llama' or 'deepseek'.
     """
-    ollama_list = ('mistral', 'ministral', 'qwen', 'llama', 'deepseek',)
+    ollama_list = (
+        "mistral",
+        "ministral",
+        "qwen",
+        "llama",
+        "deepseek",
+    )
     return model.startswith(ollama_list)
 
 

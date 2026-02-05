@@ -45,7 +45,8 @@ def _is_type_annotation(annotation: Any, target_type: Type[Any]) -> bool:
 
     if origin is Union:
         return any(
-            _is_type_annotation(arg, target_type) for arg in get_args(annotation)
+            _is_type_annotation(arg, target_type)
+            for arg in get_args(annotation)
         )
 
     return origin is target_type or annotation is target_type
@@ -130,8 +131,12 @@ def cli_app(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(argv)
     # apply_verbosity(args.v)
     defaults = {}
-    defaults.setdefault(*Config.deduce_type("dev_mode", args.dev_mode).to_env())
-    defaults.setdefault(*Config.deduce_type("log_level", logger.level).to_env())
+    defaults.setdefault(
+        *Config.deduce_type("dev_mode", args.dev_mode).to_env()
+    )
+    defaults.setdefault(
+        *Config.deduce_type("log_level", logger.level).to_env()
+    )
     for cfg in Settings(
         **{k: v for k, v in args._get_kwargs() if parser.get_default(k) != v},
     ).model_fields:

@@ -1,44 +1,48 @@
 # tests/conftest.py
-import pytest
-import httpx
-
-import os, sys
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
+import pytest
 
 # Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from freva_gpt.services.mcp.client import McpClient
-
 # ──────────────────────────────────────────────────────────────────────────────
 # GLOBAL / COMMON
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def app():
     # Reload settings after environment patching
-    import freva_gpt.core.settings as settings
     import importlib
+
+    import freva_gpt.core.settings as settings
+
     importlib.reload(settings)
 
     # Reload service_factory so that get_authenticator picks up new settings.DEV
     import freva_gpt.services.service_factory as sf
+
     importlib.reload(sf)
 
     from freva_gpt.app import app as fastapi_app
+
     return fastapi_app
 
 
 @pytest.fixture
 def client(app):
     try:
-        transport = httpx.ASGITransport(app=app, lifespan="on")  # httpx >= 0.28
+        transport = httpx.ASGITransport(
+            app=app, lifespan="on"
+        )  # httpx >= 0.28
     except TypeError:
-        transport = httpx.ASGITransport(app=app)                 # older httpx
+        transport = httpx.ASGITransport(app=app)  # older httpx
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
@@ -69,21 +73,23 @@ def GOOD_HEADERS():
 # NETWORK STUBS
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def stub_resp(respx_mock):
     """
     Provide a default stub for the auth system call used in routes.
     Individual tests can override or add more routes to respx_mock.
     """
-    respx_mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(
-        200, json={"pw_name": "alice"}
-    )
+    respx_mock.get(
+        "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
+    ).respond(200, json={"pw_name": "alice"})
     return respx_mock
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MONGODB FAKES and PATCHES
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class DummyCollection:
     def __init__(self):
@@ -132,7 +138,9 @@ class DummyCollection:
         user_id = q.get("user_id")
         if user_id is None:
             return len(self.storage)
-        return sum(1 for doc in self.storage.values() if doc.get("user_id") == user_id)
+        return sum(
+            1 for doc in self.storage.values() if doc.get("user_id") == user_id
+        )
 
 
 class DummyDB:
@@ -187,11 +195,16 @@ def patch_mongo_uri(monkeypatch):
 def patch_read_thread(monkeypatch):
     async def _fake(thread_id: str, database):
         return [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {
+                "variant": "Prompt",
+                "text": "user prompt should be filtered out",
+            },
             {"variant": "User", "text": "kept"},
             {"variant": "Assistant", "text": "also kept"},
         ]
+
     import freva_gpt.services.storage.mongodb_storage as mongo_store
+
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
         "read_thread",
@@ -204,9 +217,13 @@ def patch_read_thread(monkeypatch):
 
 @pytest.fixture
 def patch_save_thread(monkeypatch):
-    async def _fake_append(database, thread_id: str, user_id: str, messages, append_to_existing):
+    async def _fake_append(
+        database, thread_id: str, user_id: str, messages, append_to_existing
+    ):
         return
+
     import freva_gpt.services.storage.mongodb_storage as mongo_store
+
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
         "save_thread",
@@ -250,14 +267,20 @@ def patch_user_threads(monkeypatch):
 
     return fake_get_user_threads
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # STREAM PATCH
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def patch_stream(monkeypatch):
     async def fake_run_stream(**kwargs):
-        from freva_gpt.services.streaming.stream_variants import SVAssistant, SVServerHint
+        from freva_gpt.services.streaming.stream_variants import (
+            SVAssistant,
+            SVServerHint,
+        )
+
         yield SVServerHint(data={"thread_id": "t-abc"})
         yield SVAssistant(text="hello")
         return
@@ -270,9 +293,11 @@ def patch_stream(monkeypatch):
     )
     return fake_run_stream
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP FAKES and PATCHES
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class DummyMcpManager:
     async def close(self) -> None:
@@ -281,6 +306,7 @@ class DummyMcpManager:
     # add any methods you might accidentally call, as no-ops
     async def ensure_connected(self) -> None:
         pass
+
 
 @pytest.fixture
 def patch_mcp_manager(monkeypatch):
@@ -294,5 +320,7 @@ def patch_mcp_manager(monkeypatch):
         # You can assert on authenticator if you want
         return DummyMcpManager()
 
-    monkeypatch.setattr(ac, "get_mcp_manager", fake_get_mcp_manager, raising=True)
+    monkeypatch.setattr(
+        ac, "get_mcp_manager", fake_get_mcp_manager, raising=True
+    )
     return fake_get_mcp_manager

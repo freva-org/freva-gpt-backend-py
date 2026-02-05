@@ -6,8 +6,8 @@ logger = configure_logging(__name__, named_log="code_server")
 
 
 def strip_ansi(text: str) -> str:
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 def sanitize_code(code: str) -> str:
@@ -39,7 +39,11 @@ def sanitize_code(code: str) -> str:
 
     # Comment out plt.close() calls
     # Matches "plt.close()" possibly with whitespace before/after
-    out = re.sub(r"(?m)^\s*(plt\.close\s*\(\s*\))", r"# \1  # commented out by sanitizer", out)
+    out = re.sub(
+        r"(?m)^\s*(plt\.close\s*\(\s*\))",
+        r"# \1  # commented out by sanitizer",
+        out,
+    )
     return out
 
 
@@ -77,7 +81,9 @@ def code_is_likely_safe(code: str) -> bool:
     # In the future, we may introduce a white list of packages that is allowed to be installed by the user.
     magic_pattern = re.compile(r"(?m)^\s*[!%]")
     if magic_pattern.search(code):
-        logger.warning("The code contains a Jupyter magic line or shell escape.")
+        logger.warning(
+            "The code contains a Jupyter magic line or shell escape."
+        )
         logger.debug(f"The code is: {code}")
         return False
 

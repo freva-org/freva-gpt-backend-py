@@ -1,7 +1,7 @@
 from pathlib import Path
-from textwrap import dedent
 
 from freva_gpt.core import prompting as P
+
 
 def test_get_entire_prompt_uses_assets_from_dir(tmp_path: Path, monkeypatch):
     # Create a fake prompt set
@@ -9,7 +9,7 @@ def test_get_entire_prompt_uses_assets_from_dir(tmp_path: Path, monkeypatch):
     (tmp_path / "summary_prompt.txt").write_text("END", encoding="utf-8")
     (tmp_path / "examples.jsonl").write_text(
         '{"variant":"User","content":"u"}\n{"variant":"Assistant","content":"a"}\n',
-        encoding="utf-8"
+        encoding="utf-8",
     )
     # Force baseline dirs to our tmp
     monkeypatch.setattr(P, "BASELINE_DIRS", [tmp_path])

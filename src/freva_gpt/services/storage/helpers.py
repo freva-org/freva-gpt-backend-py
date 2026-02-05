@@ -23,6 +23,7 @@ CACHE_ROOT = Path("./cache")
 
 # ──────────────────────────── Model ───────────────────────────────────
 
+
 @dataclass
 class Thread:
     user_id: str
@@ -31,12 +32,11 @@ class Thread:
     topic: str
     content: List[StreamVariant]
 
+
 # ──────────────────── Helper Functions ──────────────────────────────
 
-def create_dir_at_cache(
-    user_id: str,
-    thread_id: str
-) -> None:
+
+def create_dir_at_cache(user_id: str, thread_id: str) -> None:
     """
     Create cache/{user_id}/{thread_id}. On failure (e.g., non-alphanumeric user_id),
     retry with a sanitized user_id (keep only [A-Za-z0-9]). Logs but never raises.
@@ -47,10 +47,15 @@ def create_dir_at_cache(
         logger.debug("cache created or exists: %s", cache)
         return
     except Exception as e:
-        logger.debug("Failed to create cache=%s, err=%s -- retrying with sanitized user_id", cache, e)
+        logger.debug(
+            "Failed to create cache=%s, err=%s -- retrying with sanitized user_id",
+            cache,
+            e,
+        )
 
 
 # ──────────────────── Summarization for topic ────────────────────
+
 
 def _fallback_topic(raw: str | None) -> str:
     if not raw:
@@ -67,13 +72,16 @@ async def summarize_topic(content: List[Dict]) -> str:
     """
     if isinstance(content[0], Dict):
         topic = next(
-            (item.get("content", "") for item in content if item.get("variant") == "user"),
-            "Untitled"
+            (
+                item.get("content", "")
+                for item in content
+                if item.get("variant") == "user"
+            ),
+            "Untitled",
         )
     else:
         topic = next(
-            (sv.text for sv in content if isinstance(sv, SVUser)),
-            "Untitled"
+            (sv.text for sv in content if isinstance(sv, SVUser)), "Untitled"
         )
 
     prompt = (
@@ -96,6 +104,7 @@ async def summarize_topic(content: List[Dict]) -> str:
 
 # ──────────────────── Connection ──────────────────────────────
 
+
 async def get_mongodb_uri(vault_url: str) -> str:
     # 1) GET vault_url
     try:
@@ -103,47 +112,56 @@ async def get_mongodb_uri(vault_url: str) -> str:
             r = await client.get(vault_url)
     except Exception:
         # 503 ServiceUnavailable
-        raise HTTPException(status_code=503, detail="Error sending request to vault.")
+        raise HTTPException(
+            status_code=503, detail="Error sending request to vault."
+        )
     if not r.is_success:
         # 502 BadGateway
-        raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to get MongoDB URL. Is Nginx running correctly?",
+        )
 
     # 2) Parse JSON and extract key
     try:
         data = r.json()
     except Exception:
         # 502 BadGateway
-        raise HTTPException(status_code=502, detail="Vault response was malformed.")
+        raise HTTPException(
+            status_code=502, detail="Vault response was malformed."
+        )
 
     uri = data.get("mongodb.url") or data.get("mongo.url")
     if not uri:
         # 502 BadGateway
-        raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
+        raise HTTPException(
+            status_code=502, detail="MongoDB URL not found in vault response."
+        )
     return uri.strip()
 
 
-async def get_database(
-        vault_url: str
-    ) -> AsyncMongoClient:
-        """
-        Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
-        If connection fails, retry once without URI options (strip trailing ?query).
-        """
-        mongodb_uri = await get_mongodb_uri(vault_url)
+async def get_database(vault_url: str) -> AsyncMongoClient:
+    """
+    Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
+    If connection fails, retry once without URI options (strip trailing ?query).
+    """
+    mongodb_uri = await get_mongodb_uri(vault_url)
 
-        try:
-            client = AsyncMongoClient(mongodb_uri)
-            return client[MONGODB_DATABASE_NAME]
-        except Exception:
-            # Rust-style fallback: strip query options and retry once
-            if "?" in mongodb_uri:
-                stripped = mongodb_uri.rsplit("?", 1)[0]
-                try:
-                    client = AsyncMongoClient(stripped)
-                    return client[MONGODB_DATABASE_NAME]
-                except Exception:
-                    pass
-            raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")
+    try:
+        client = AsyncMongoClient(mongodb_uri)
+        return client[MONGODB_DATABASE_NAME]
+    except Exception:
+        # Rust-style fallback: strip query options and retry once
+        if "?" in mongodb_uri:
+            stripped = mongodb_uri.rsplit("?", 1)[0]
+            try:
+                client = AsyncMongoClient(stripped)
+                return client[MONGODB_DATABASE_NAME]
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=503, detail="Failed to connect to MongoDB"
+        )
 
 
 # ──────────────────── Search threads ──────────────────────────────
@@ -153,19 +171,40 @@ Variant = Literal["User", "Assistant", "Code", "CodeOutput"]
 
 PREFIX_MAP: Dict[str, Variant] = {
     # user variants
-    "user": "User", "u": "User", "input": "User", "me": "User", "question": "User",
-    "request": "User", "i": "User", "benutzer": "User", "eingabe": "User",
+    "user": "User",
+    "u": "User",
+    "input": "User",
+    "me": "User",
+    "question": "User",
+    "request": "User",
+    "i": "User",
+    "benutzer": "User",
+    "eingabe": "User",
     # assistant variants
-    "ai": "Assistant", "a": "Assistant", "assistant": "Assistant",
-    "frevagpt": "Assistant", "freva-gpt": "Assistant", "freva_gpt": "Assistant",
-    "answer": "Assistant", "ki": "Assistant", "assistent": "Assistant",
+    "ai": "Assistant",
+    "a": "Assistant",
+    "assistant": "Assistant",
+    "frevagpt": "Assistant",
+    "freva-gpt": "Assistant",
+    "freva_gpt": "Assistant",
+    "answer": "Assistant",
+    "ki": "Assistant",
+    "assistent": "Assistant",
     "computer": "Assistant",
     # code input variants
-    "code_input": "Code", "ci": "Code", "code": "Code", "codeinput": "Code",
-    "python": "Code", "py": "Code",
+    "code_input": "Code",
+    "ci": "Code",
+    "code": "Code",
+    "codeinput": "Code",
+    "python": "Code",
+    "py": "Code",
     # code output variants
-    "code_output": "CodeOutput", "co": "CodeOutput", "codeoutput": "CodeOutput",
-    "output": "CodeOutput", "ausgabe": "CodeOutput", "ergebnis": "CodeOutput",
+    "code_output": "CodeOutput",
+    "co": "CodeOutput",
+    "codeoutput": "CodeOutput",
+    "output": "CodeOutput",
+    "ausgabe": "CodeOutput",
+    "ergebnis": "CodeOutput",
 }
 
 VARIANT_FIELD: Dict[Variant, str] = {

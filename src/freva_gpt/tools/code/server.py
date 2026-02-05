@@ -17,14 +17,22 @@ from freva_gpt.tools.server_auth import jwt_verifier
 
 logger = configure_logging(__name__, named_log="code_server")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
-mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
+_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+mcp = FastMCP(
+    "code-interpreter-server", auth=None if _disable_auth else jwt_verifier
+)
 
 _KERNEL_REGISTRY: dict[str, KernelManager] = {}
 # TODO: remove kernel from registry when session is closed
 
 # ── Config ───────────────────────────────────────────────────────────────────
-EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in case the kernel hangs or runs forever
+EXEC_TIMEOUT = int(
+    os.getenv("MCP_EXEC_TIMEOUT_SEC", "300")
+)  # soft guard in case the kernel hangs or runs forever
 
 # ── Header helpers ────────────────────────────────────────────────────────────
 # Per-request header context
@@ -35,17 +43,22 @@ cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
 def _get_cwd():
     cwd = cwd_ctx.get()
     if not cwd:
-        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
-                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
+        logger.warning(
+            f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "
+            "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data."
+        )
         return
     else:
         return cwd
 
+
 # ── Execution helpers ─────────────────────────────────────────────────────────
+
 
 def _current_sid() -> str:
     ctx = get_context()
     return (getattr(ctx, "session_id"), "")
+
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)
@@ -53,10 +66,17 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
         # We preserve the env variables set in Dockerfile
         env = os.environ.copy()
         km = KernelManager()
-        km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
+        km.kernel_cmd = [
+            sys.executable,
+            "-m",
+            "ipykernel",
+            "-f",
+            "{connection_file}",
+        ]  # Otherwise "No such kernel named python3"
         km.start_kernel(env=env, cwd=cwd_str)
         _KERNEL_REGISTRY[sid] = km
     return km
+
 
 def _run_cell(sid: str, code: str) -> dict:
     working_dir = _get_cwd() or os.getcwd()
@@ -64,8 +84,16 @@ def _run_cell(sid: str, code: str) -> dict:
     kc = km.client()
     kc.start_channels()
     try:
-        msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
-        stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
+        msg_id = kc.execute(
+            code, store_history=True, allow_stdin=False, stop_on_error=False
+        )
+        stdout_parts, stderr_parts, display_data, result_repr, error = (
+            [],
+            [],
+            [],
+            None,
+            None,
+        )
         # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data".
         # For these, we keep only the last updated version.
         display_data_dict = {}
@@ -80,21 +108,40 @@ def _run_cell(sid: str, code: str) -> dict:
                 continue
 
             msg_type = msg["header"]["msg_type"]
-            if msg_type == "status" and msg["content"]["execution_state"] == "idle":
+            if (
+                msg_type == "status"
+                and msg["content"]["execution_state"] == "idle"
+            ):
                 break
             elif msg_type == "stream":
-                (stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts).append(msg["content"]["text"])
-            elif msg_type in ("display_data", "update_display_data"): # Jupyter also returns rich outputs (image/png, text/html, etc.)
-                display_id = msg["content"].get("transient", {}).get("display_id", "")
+                (
+                    stdout_parts
+                    if msg["content"]["name"] == "stdout"
+                    else stderr_parts
+                ).append(msg["content"]["text"])
+            elif msg_type in (
+                "display_data",
+                "update_display_data",
+            ):  # Jupyter also returns rich outputs (image/png, text/html, etc.)
+                display_id = (
+                    msg["content"].get("transient", {}).get("display_id", "")
+                )
                 if display_id:
-                    display_data_dict.update({display_id: msg["content"].get("data", {})})
+                    display_data_dict.update(
+                        {display_id: msg["content"].get("data", {})}
+                    )
                 else:
                     display_data.append(msg["content"].get("data", {}))
             elif msg_type == "execute_result":
                 result_repr = msg["content"].get("data", {}).get("text/plain")
-            elif msg_type == "error":  # Present only if an exception occurred. We record non-exception in stderr
+            elif (
+                msg_type == "error"
+            ):  # Present only if an exception occurred. We record non-exception in stderr
                 tb = "\n".join(msg["content"].get("traceback", []))
-                error = tb or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+                error = (
+                    tb
+                    or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+                )
 
         # If we got any updated display in dict, we append them to the list.
         # Here, we are sending a list of unique output
@@ -110,6 +157,7 @@ def _run_cell(sid: str, code: str) -> dict:
         }
     finally:
         kc.stop_channels()
+
 
 @mcp.tool()
 def code_interpreter(code: str) -> dict:
@@ -128,7 +176,9 @@ def code_interpreter(code: str) -> dict:
             logger.exception("code_interpreter: unhandled execution error")
             raise Exception(f"Execution failed: {type(e).__name__}: {e}")
     else:
-        logger.warning("Code is not executed due to potential safety concerns!")
+        logger.warning(
+            "Code is not executed due to potential safety concerns!"
+        )
         return
 
 
@@ -138,8 +188,13 @@ if __name__ == "__main__":
     port = int(os.getenv("MCP_PORT", "8051"))
     path = os.getenv("MCP_PATH", "/mcp")  # standard path
 
-    logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
-                host, port, path, "off" if _disable_auth else "on")
+    logger.info(
+        "Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
+        host,
+        port,
+        path,
+        "off" if _disable_auth else "on",
+    )
 
     # Start the MCP server using Streamable HTTP transport
     wrapped_app = make_header_gate(
@@ -151,4 +206,5 @@ if __name__ == "__main__":
     )
 
     import uvicorn
+
     uvicorn.run(wrapped_app, host=host, port=port)

@@ -7,6 +7,7 @@ from freva_gpt.services.storage.helpers import get_mongodb_uri
 
 # DEPRECATED
 
+
 def session_key_from_request(request: Request) -> str:
     """
     Choose a stable key per conversation/thread. Replace this with your real ID.

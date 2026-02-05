@@ -37,13 +37,20 @@ async def search_threads(
         )
 
     if not auth.vault_url:
-        raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+        raise HTTPException(
+            status_code=503,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
+        )
 
     if not query:
         raise HTTPException(
             status_code=HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Missing query parameter.",
         )
+
+    logger.info(
+        f"Searching threads for user {auth.username} with query string: {query}"
+    )
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
@@ -53,9 +60,13 @@ async def search_threads(
     try:
         if mode == "variant":
             variant, content = _query
-            total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads)
+            total_num_threads, threads = await Storage.query_by_variant(
+                auth.username, variant, content, num_threads
+            )
         else:
-            total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads)
+            total_num_threads, threads = await Storage.query_by_topic(
+                auth.username, _query, num_threads
+            )
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to query threads.")
 
@@ -70,7 +81,7 @@ async def search_threads(
             }
             for t in threads
         ],
-        total_num_threads
+        total_num_threads,
     ]
 
 
@@ -81,7 +92,7 @@ def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
       - (variant, content) if prefix is recognized
     If prefix is unknown, sliently falls back to plain query search.
     """
-    q = query.strip().lower() # case-insensitive search
+    q = query.strip().lower()  # case-insensitive search
     if ":" not in q:
         return "topic", q
 

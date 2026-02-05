@@ -26,16 +26,20 @@ class McpCallResult:
     status_code: Optional[int] = None
 
 
-class McpError(Exception): ...
+class McpError(Exception):
+    ...
 
 
-class McpUnauthorized(McpError): ...
+class McpUnauthorized(McpError):
+    ...
 
 
-class McpBadRequest(McpError): ...
+class McpBadRequest(McpError):
+    ...
 
 
-class McpInvalidParams(McpError): ...
+class McpInvalidParams(McpError):
+    ...
 
 
 class McpClient:
@@ -44,7 +48,11 @@ class McpClient:
     """
 
     def __init__(
-        self, base_url: str, *, default_headers: Optional[Dict[str, str]] = None, logger=None
+        self,
+        base_url: str,
+        *,
+        default_headers: Optional[Dict[str, str]] = None,
+        logger=None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.default_headers = default_headers or {}
@@ -87,7 +95,9 @@ class McpClient:
         }
         self._session_id = None
         init_resp = self._http.post(
-            "/mcp", headers=self._headers(include_session=False), json=init_body
+            "/mcp",
+            headers=self._headers(include_session=False),
+            json=init_body,
         )
         init_payload, sid = self._extract_payload_and_session(init_resp)
 
@@ -214,7 +224,9 @@ class McpClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         }
-        r = self._http.post("/mcp", headers=self._headers(extra_headers), json=body)
+        r = self._http.post(
+            "/mcp", headers=self._headers(extra_headers), json=body
+        )
         res = self._rpc_result(r, rpc_id)
         if res.ok and isinstance(res.result, dict):
             return res.result
@@ -227,7 +239,9 @@ class McpClient:
             "method": "tools.call",
             "params": {"name": name, "arguments": args},
         }
-        r2 = self._http.post("/mcp", headers=self._headers(extra_headers), json=body2)
+        r2 = self._http.post(
+            "/mcp", headers=self._headers(extra_headers), json=body2
+        )
         res2 = self._rpc_result(r2, rpc_id2)
         if res2.ok and isinstance(res2.result, dict):
             return res2.result
@@ -246,7 +260,9 @@ class McpClient:
 
     # ────────── rpc result helper ──────────
 
-    def _rpc_result(self, response: httpx.Response, rpc_id: str) -> McpCallResult:
+    def _rpc_result(
+        self, response: httpx.Response, rpc_id: str
+    ) -> McpCallResult:
         payload, session_id = self._extract_payload_and_session(response)
         if session_id:
             self._session_id = session_id
@@ -264,9 +280,19 @@ class McpClient:
                 if code == -32602:
                     raise McpInvalidParams(msg or str(err))
                 raise McpError(msg or str(err))
-            return McpCallResult(ok=True, id=rpc_id, result=payload.get("result"), status_code=response.status_code)
+            return McpCallResult(
+                ok=True,
+                id=rpc_id,
+                result=payload.get("result"),
+                status_code=response.status_code,
+            )
 
-        return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)
+        return McpCallResult(
+            ok=True,
+            id=rpc_id,
+            result=payload,
+            status_code=response.status_code,
+        )
 
     # ────────── convenience ──────────
 
@@ -278,6 +304,7 @@ class McpClient:
 
 
 # ──────────────────── Helper functions ──────────────────────────────
+
 
 def drop_none(d: dict) -> None:
     """Remove keys from d whose value is None."""

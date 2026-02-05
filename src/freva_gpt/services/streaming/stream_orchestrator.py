@@ -54,11 +54,12 @@ class StreamState:
 # Streaming with tools
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 async def stream_with_tools(
     *,
     model: str,
     thread_id: str,
-    messages: List[Dict[str, Any]], # system_prompt
+    messages: List[Dict[str, Any]],  # system_prompt
     acomplete_func=acomplete,
     stream_state: StreamState = None,
     logger=None,
@@ -67,7 +68,11 @@ async def stream_with_tools(
 
     # Append the conversation history to system prompt
     conv_sv = await get_conv_messages(thread_id)
-    msg_hist = help_convert_sv_ccrm(conv_sv, include_images=model_supports_images(model), include_meta=False)
+    msg_hist = help_convert_sv_ccrm(
+        conv_sv,
+        include_images=model_supports_images(model),
+        include_meta=False,
+    )
     messages.extend(msg_hist)
 
     # Get MCPManager of the conversation
@@ -88,7 +93,6 @@ async def stream_with_tools(
     if hasattr(resp, "__aiter__"):
         call_id = ""
         async for chunk in resp:  # type: ignore
-
             choice = (chunk.get("choices") or [{}])[0]
             delta = choice.get("delta") or {}
 
@@ -101,13 +105,19 @@ async def stream_with_tools(
             # tool call: stream code chunks live and accumulate deltas
             tc_list = delta.get("tool_calls") or []
             if tc_list:
-                accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
-                tool_name = tool_agg.get("by_index")[0].get("function").get("name") if tool_agg else None
+                accumulate_tool_calls(
+                    {"choices": [{"delta": delta}]}, tool_agg
+                )
+                tool_name = (
+                    tool_agg.get("by_index")[0].get("function").get("name")
+                    if tool_agg
+                    else None
+                )
                 for tc in tc_list:
                     fn = tc.get("function") or {}
                     call_id = tc.get("id", call_id)
                     args_chunk = fn.get("arguments", "")
-                    if args_chunk and tool_name=="code_interpreter":
+                    if args_chunk and tool_name == "code_interpreter":
                         # stream arguments chunk immediately
                         yield SVCode(code=args_chunk, id=call_id)
 
@@ -139,16 +149,23 @@ async def stream_with_tools(
     # 3) Run tools
     id = ""
     for tc in tool_calls:
-        messages.append({"role": "assistant", "content": "", "tool_calls": [tc]})
+        messages.append(
+            {"role": "assistant", "content": "", "tool_calls": [tc]}
+        )
         name = (tc.get("function") or {}).get("name", "")
         id = tc.get("id", id)
         args_txt = (tc.get("function") or {}).get("arguments", "")
 
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
-            tool_task = asyncio.create_task(run_tool_via_mcp(
-                mcp=mcp, tool_name=name, arguments_json=args_txt, logger=logger,
-            ))
+            tool_task = asyncio.create_task(
+                run_tool_via_mcp(
+                    mcp=mcp,
+                    tool_name=name,
+                    arguments_json=args_txt,
+                    logger=logger,
+                )
+            )
 
             await register_tool_task(thread_id, tool_task)
 
@@ -157,7 +174,9 @@ async def stream_with_tools(
                 while not tool_task.done():
                     hb = await heartbeat_content()
                     yield hb
-                    await asyncio.sleep(3)  # adjust heartbeat interval (seconds)
+                    await asyncio.sleep(
+                        3
+                    )  # adjust heartbeat interval (seconds)
 
                 # When done, return the final result text
                 result_text = await tool_task
@@ -168,7 +187,7 @@ async def stream_with_tools(
                 tool_task.cancel()
                 raise
 
-            except Exception as e:
+            except Exception:
                 tool_task.cancel()
                 raise
 
@@ -191,7 +210,7 @@ async def stream_with_tools(
             result_text = json.dumps({"error": str(e)})
 
         # We will collect tool input and output as Stream Variants and append to thread
-        tc_variants : List[StreamVariant] = []
+        tc_variants: List[StreamVariant] = []
 
         if name == "code_interpreter":
             # We append accumulated code text to thread
@@ -201,9 +220,17 @@ async def stream_with_tools(
         tool_out_v: List[StreamVariant] = []
         tool_msgs: List[Dict[str, Any]] = []
         # Parsing tool call output as StreamVariants and messages to model
-        for r in parse_tool_result(result_text, tool_name=name, call_id=id, logger=logger):
+        for r in parse_tool_result(
+            result_text, tool_name=name, call_id=id, logger=logger
+        ):
             if isinstance(r, FinalSummary):
-                tool_out_v, tool_msgs, = r.var_block, r.tool_messages
+                (
+                    tool_out_v,
+                    tool_msgs,
+                ) = (
+                    r.var_block,
+                    r.tool_messages,
+                )
                 break
             else:
                 yield r  # Streaming the result to endpoint
@@ -218,6 +245,7 @@ async def stream_with_tools(
 # ──────────────────────────────────────────────────────────────────────────────
 # High-level orchestrator (storage-agnostic)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def run_stream(
     *,
@@ -278,7 +306,7 @@ async def prepare_for_stream(
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False,
     logger=None,
-) :
+):
     """
     Preparations for the streaming, read history (if needed), add to Registry and
     set conversation state to "streaming
@@ -291,17 +319,20 @@ async def prepare_for_stream(
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages
-    await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=logger)
-
+    await initialize_conversation(
+        thread_id, user_id, messages=messages, auth=Auth, logger=logger
+    )
 
 
 async def get_conversation_history(
     thread_id: Optional[str],
     Storage: ThreadStorage,
-    ):
+):
     # Build messages for ongoing conversation
     prior_json: List[dict] = await Storage.read_thread(thread_id)
-    prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]
+    prior_sv: List[StreamVariant] = [
+        from_json_to_sv(item) for item in prior_json
+    ]
     return prior_sv
 
 

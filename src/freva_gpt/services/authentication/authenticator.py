@@ -19,7 +19,7 @@ class Authenticator(ABC):
       are populated (or HTTPException is raised).
     """
 
-    def __init__(self, request: Request):
+    def __init__(self, request: Request) -> None:
         self.request = request
         self.settings = get_settings()
 

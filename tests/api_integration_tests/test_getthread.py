@@ -10,7 +10,7 @@ async def test_getthread_returns_404_when_thread_missing(
     patch_mcp_manager,
     GOOD_HEADERS,
     monkeypatch,
-):
+) -> None:
     async def _raise_not_found(*args, **kwargs):
         raise FileNotFoundError("missing")
 
@@ -41,7 +41,7 @@ async def test_getthread_returns_500_when_history_invalid(
     patch_mcp_manager,
     GOOD_HEADERS,
     monkeypatch,
-):
+) -> None:
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("broken history")
 

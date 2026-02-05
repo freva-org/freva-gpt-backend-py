@@ -12,7 +12,7 @@ def make_header_gate(
     *,
     ctx_list: List[ContextVar[str | None]],
     header_name_list: List[str],
-    logger: logging.Logger | None = None,
+    logger: logging.LoggerAdapter[Any] | None = None,
     mcp_path: str = "/mcp",
 ):
     """
@@ -23,7 +23,7 @@ def make_header_gate(
     logger = logger or DEFAULT_LOGGER
 
     class HeaderCaptureASGI:
-        def __init__(self, app):
+        def __init__(self, app) -> None:
             self.app = app
 
         async def __call__(

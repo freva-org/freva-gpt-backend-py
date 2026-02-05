@@ -7,7 +7,7 @@ from freva_gpt.services.streaming.litellm_client import acomplete, first_text
 
 
 class FakeResp:
-    def __init__(self, status_code=200, json_body=None, text=""):
+    def __init__(self, status_code=200, json_body=None, text="") -> None:
         self.status_code = status_code
         self._json = json_body
         self.text = text
@@ -32,7 +32,7 @@ class FakeResp:
 
 
 @pytest.mark.asyncio
-async def test_acomplete_success_roundtrip(monkeypatch):
+async def test_acomplete_success_roundtrip(monkeypatch) -> None:
     fake = FakeResp(
         status_code=200,
         json_body={"choices": [{"message": {"content": "hello world"}}]},
@@ -54,7 +54,7 @@ async def test_acomplete_success_roundtrip(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_acomplete_includes_error_body(monkeypatch):
+async def test_acomplete_includes_error_body(monkeypatch) -> None:
     fake = FakeResp(
         status_code=500,
         json_body={"error": {"message": "bad"}},

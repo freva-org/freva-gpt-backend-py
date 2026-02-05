@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Dict, Any
 
 import httpx
 import pytest
@@ -92,11 +93,11 @@ def stub_resp(respx_mock):
 
 
 class DummyCollection:
-    def __init__(self):
-        self.storage = {}
+    def __init__(self) -> None:
+        self.storage: Dict[Any, Any] = {}
 
     class _Cursor:
-        def __init__(self, docs):
+        def __init__(self, docs) -> None:
             self._docs = docs
             self._limit = None
 
@@ -144,7 +145,7 @@ class DummyCollection:
 
 
 class DummyDB:
-    def __init__(self):
+    def __init__(self) -> None:
         self._coll = DummyCollection()
 
     def __getitem__(self, name):
@@ -173,7 +174,7 @@ def patch_db(monkeypatch, dummy_db, GOOD_HEADERS):
 
 @pytest.fixture
 def patch_mongo_uri(monkeypatch):
-    async def fake_mongodb_uri(vault_url: str):
+    async def fake_mongodb_uri(vault_url: str) -> str:
         # Assert the vault_url was propagated correctly
         assert vault_url == GOOD_HEADERS["x-freva-vault-url"]
         # Return a dummy MongoDB URI; it will be consumed by get_database
@@ -219,7 +220,7 @@ def patch_read_thread(monkeypatch):
 def patch_save_thread(monkeypatch):
     async def _fake_append(
         database, thread_id: str, user_id: str, messages, append_to_existing
-    ):
+    ) -> None:
         return
 
     import freva_gpt.services.storage.mongodb_storage as mongo_store

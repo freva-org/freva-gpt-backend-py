@@ -29,8 +29,8 @@ loader_kwargs_dict = {
 }
 
 
-class CustomDirectoryLoader(DirectoryLoader):
-    def __init__(self, path: str, **kwargs):
+class CustomDirectoryLoader(DirectoryLoader):  # type: ignore[misc]
+    def __init__(self, path: str, **kwargs) -> None:
         super().__init__(path, kwargs)
         self.dir_name = path.split("/")[-1]
         self.extensions = self.list_extensions()

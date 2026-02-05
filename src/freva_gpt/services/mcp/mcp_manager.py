@@ -56,7 +56,7 @@ class McpManager:
 
     # ────────── lifecycle ──────────
 
-    def close(self):
+    def close(self) -> None:
         with self._lock:
             for s in self._servers:
                 if self._clients.get(s):

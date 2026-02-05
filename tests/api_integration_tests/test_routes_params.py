@@ -2,7 +2,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_getthread_requires_thread_id(stub_resp, client, GOOD_HEADERS):
+async def test_getthread_requires_thread_id(
+    stub_resp, client, GOOD_HEADERS
+) -> None:
     with stub_resp:
         async with client:
             r = await client.get(
@@ -23,7 +25,7 @@ async def test_getthread_ok_with_thread_id(
     patch_read_thread,
     patch_mcp_manager,
     GOOD_HEADERS,
-):
+) -> None:
     with stub_resp:
         async with client:
             r = await client.get(
@@ -51,7 +53,7 @@ async def test_streamresponse_accepts_params_and_headers(
     patch_save_thread,
     patch_mcp_manager,
     GOOD_HEADERS,
-):
+) -> None:
     with stub_resp:
         async with client:
             r = await client.get(

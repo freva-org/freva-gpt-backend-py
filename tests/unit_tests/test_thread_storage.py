@@ -14,8 +14,10 @@ from freva_gpt.services.streaming.stream_variants import (
 
 
 @pytest.mark.asyncio
-async def test_save_and_read_thread(monkeypatch, patch_db, GOOD_HEADERS):
-    async def fake_topic(content):
+async def test_save_and_read_thread(
+    monkeypatch, patch_db, GOOD_HEADERS
+) -> None:
+    async def fake_topic(content) -> str:
         return "topic"
 
     monkeypatch.setattr(

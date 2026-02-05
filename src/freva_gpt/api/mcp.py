@@ -12,7 +12,7 @@ router = APIRouter()
 async def rag_endpoint(
     request: Request, question: str, resource: str, thread_id: str
 ):
-    txt = await call_rag(request, question, resource, thread_id)
+    txt = await call_rag(request, question, resource)
     return {"ok": True, "text": txt}
 
 

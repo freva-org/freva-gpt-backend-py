@@ -1,6 +1,7 @@
 # Python-generated files
 __pycache__/
 .pytest_cache/
+.mypy_cache/
 .vscode/
 *.py[oc]
 build/

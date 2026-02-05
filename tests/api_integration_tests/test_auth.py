@@ -4,7 +4,7 @@ import respx
 
 
 @pytest.mark.asyncio
-async def test_auth_missing_headers_returns_401(client):
+async def test_auth_missing_headers_returns_401(client) -> None:
     async with client:
         r = await client.get("/api/chatbot/heartbeat")
         assert r.status_code == 401
@@ -14,7 +14,7 @@ async def test_auth_missing_headers_returns_401(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_non_bearer_header_422(client):
+async def test_auth_non_bearer_header_422(client) -> None:
     async with client:
         r = await client.get(
             "/api/chatbot/heartbeat",
@@ -31,7 +31,7 @@ async def test_auth_non_bearer_header_422(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_missing_rest_url_400(client):
+async def test_auth_missing_rest_url_400(client) -> None:
     async with client:
         r = await client.get(
             "/api/chatbot/heartbeat",
@@ -45,7 +45,7 @@ async def test_auth_missing_rest_url_400(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_token_check_network_error_503(client):
+async def test_auth_token_check_network_error_503(client) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
@@ -66,7 +66,7 @@ async def test_auth_token_check_network_error_503(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_token_check_http_401_like_401_message(client):
+async def test_auth_token_check_http_401_like_401_message(client) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
@@ -87,7 +87,7 @@ async def test_auth_token_check_http_401_like_401_message(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_token_check_malformed_json_502(client):
+async def test_auth_token_check_malformed_json_502(client) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
@@ -108,7 +108,9 @@ async def test_auth_token_check_malformed_json_502(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_token_check_json_missing_username_detail_502(client):
+async def test_auth_token_check_json_missing_username_detail_502(
+    client,
+) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
@@ -129,7 +131,7 @@ async def test_auth_token_check_json_missing_username_detail_502(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_token_check_json_detail_401(client):
+async def test_auth_token_check_json_detail_401(client) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"
@@ -147,7 +149,7 @@ async def test_auth_token_check_json_detail_401(client):
 
 
 @pytest.mark.asyncio
-async def test_auth_success_200(client):
+async def test_auth_success_200(client) -> None:
     with respx.mock(assert_all_called=True) as mock:
         mock.get(
             "http://rest.example/api/freva-nextgen/auth/v2/systemuser"

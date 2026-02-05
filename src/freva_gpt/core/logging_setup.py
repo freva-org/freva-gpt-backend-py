@@ -149,14 +149,14 @@ def configure_logging(
     )
 
 
-def silence_logger():
+def silence_logger() -> None:
     global _SILENCED
     if not _SILENCED:
         logging.disable(logging.CRITICAL)
         _SILENCED = True
 
 
-def undo_silence_logger():
+def undo_silence_logger() -> None:
     global _SILENCED
     if _SILENCED:
         logging.disable(logging.NOTSET)

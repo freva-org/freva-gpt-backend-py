@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,16 +25,18 @@ logger = configure_logging()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> Any:
     # Startup (was @app.on_event("startup"))
     run_startup_checks(get_settings())
 
-    async def periodic_cleanup_task():
+    async def periodic_cleanup_task() -> None:
         while True:
             try:
                 await asyncio.sleep(60 * 60)  # check every hour
                 # Storage is not needed here, conversation must have been saved when it was last used
-                evicted = await cleanup_idle(max_idle=timedelta(days=1))
+                evicted = await cleanup_idle(
+                    max_idle=timedelta(days=1), Storage=None
+                )
                 if evicted:
                     print("Evicted idle > 1 day:", evicted)
             except asyncio.CancelledError:
@@ -80,6 +83,6 @@ app.include_router(chatbot.router, prefix="/api/chatbot", tags=["chatbot"])
 
 
 @app.get("/healthz")
-def _healthz():
+def _healthz() -> Dict[str, str]:
     # Simple liveness probe
     return {"status": "ok", "version": get_settings().VERSION}

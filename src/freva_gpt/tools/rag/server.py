@@ -104,7 +104,7 @@ def create_db_entry_for_document(document):
     return entry
 
 
-def store_documents_in_mongodb(documents):
+def store_documents_in_mongodb(documents) -> None:
     """Create and store embeddings for the provided documents."""
     col = _collection()
     new_documents = get_new_or_changes_documents(documents, col)
@@ -216,7 +216,7 @@ def get_context_from_resources(
     return context
 
 
-def debug():
+def debug() -> None:
     resources_to_retrieve_from = "stableclimgen"
     question = "Get global temperature data from February 2nd 1940"
 

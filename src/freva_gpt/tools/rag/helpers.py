@@ -18,10 +18,10 @@ def json_to_str(data) -> str:
 
 def compute_hash(doc):
     """Compute a hash for the document based on its content and source."""
-    if type(doc.page_content) == list or str:
+    if type(doc.page_content) in [list, str]:
         content = (
             doc.page_content.strip()
-            if type(doc.page_content) == str
+            if type(doc.page_content) is str
             else json_to_str(doc.page_content)
         )
     else:
@@ -32,7 +32,7 @@ def compute_hash(doc):
     return hashlib.sha256((source + content).encode("utf-8")).hexdigest()
 
 
-def clear_embeddings_collection(collection):
+def clear_embeddings_collection(collection) -> None:
     """Clear the embeddings collection in MongoDB."""
     collection.drop()
     logger.info("Cleared embeddings collection.")
@@ -40,7 +40,7 @@ def clear_embeddings_collection(collection):
 
 def add_vector_search_index_to_db(
     collection, embedding_length=1024, similarity_metric="cosine"
-):
+) -> None:
     """Create a vector search index in MongoDB."""
     logger.info(
         "Checking if vector search index already exists in database..."

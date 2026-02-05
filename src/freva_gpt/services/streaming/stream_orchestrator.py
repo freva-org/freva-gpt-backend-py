@@ -306,7 +306,7 @@ async def prepare_for_stream(
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False,
     logger=None,
-):
+) -> None:
     """
     Preparations for the streaming, read history (if needed), add to Registry and
     set conversation state to "streaming

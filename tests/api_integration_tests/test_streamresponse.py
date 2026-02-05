@@ -9,8 +9,8 @@ async def test_streamresponse_returns_500_on_prepare_failure(
     patch_mongo_uri,
     GOOD_HEADERS,
     monkeypatch,
-):
-    async def _raise_error(**kwargs):
+) -> None:
+    async def _raise_error(**kwargs) -> RuntimeError:
         raise RuntimeError("prep failed")
 
     monkeypatch.setattr(

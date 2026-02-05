@@ -3,7 +3,9 @@ from pathlib import Path
 from freva_gpt.core import prompting as P
 
 
-def test_get_entire_prompt_uses_assets_from_dir(tmp_path: Path, monkeypatch):
+def test_get_entire_prompt_uses_assets_from_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
     # Create a fake prompt set
     (tmp_path / "starting_prompt.txt").write_text("START", encoding="utf-8")
     (tmp_path / "summary_prompt.txt").write_text("END", encoding="utf-8")

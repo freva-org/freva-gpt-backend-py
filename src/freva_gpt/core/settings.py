@@ -205,7 +205,7 @@ class BootstrapConfig:
         self,
         config_path: Optional[Union[str, Path]] = None,
         **extra_config: ConfigValue,
-    ):
+    ) -> None:
         self.config_path = config_path or self.get_default_config_path()
         try:
             cfg = toml.loads(self.config_path.read_text())
@@ -313,7 +313,7 @@ def get_settings() -> Settings:
 
 
 def get_server_url_dict(server_list):
-    url_dict: Dict[str:str] = {}
+    url_dict: Dict[str, str] = {}
     for s in server_list:
         s_url = os.getenv(f"{s.upper()}_SERVER_URL", "")
         if s_url:

@@ -23,7 +23,7 @@ from freva_gpt.services.service_factory import (
 )
 from freva_gpt.services.streaming.active_conversations import (
     new_thread_id,
-    save_conversation,
+    end_and_save_conversation,
 )
 from freva_gpt.services.streaming.stream_orchestrator import (
     prepare_for_stream,
@@ -70,7 +70,9 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
     async with sem:
         thread_id = new_thread_id()
 
-        Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
+        Storage = await get_thread_storage(
+            user_name=USER_ID, thread_id=thread_id
+        )
         Auth = get_authenticator()
 
         await prepare_for_stream(thread_id, USER_ID, Auth)
@@ -86,7 +88,6 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
             async for variant in run_stream(
                 model=MODEL,
                 thread_id=(None if NEW_THREAD_PER_RUN else thread_id),
-                user_id=USER_ID,
                 user_input=PROMPT,
                 system_prompt=system_prompt,  # ← reuse single McpManager
             ):
@@ -105,7 +106,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
                         )
                     )
 
-            await save_conversation(thread_id, Storage)
+            await end_and_save_conversation(thread_id, Storage)
 
         except asyncio.CancelledError:
             status = "Cancelled"

@@ -14,7 +14,7 @@ from freva_gpt.services.streaming.stream_variants import (
 )
 
 
-def test_cleanup_inserts_codeoutput_and_end():
+def test_cleanup_inserts_codeoutput_and_end() -> None:
     conv = [SVUser(text="hi"), SVCode(code="print(1)", id="call_1")]
     out = cleanup_conversation(
         conv, append_stream_end=True
@@ -28,7 +28,7 @@ def test_cleanup_inserts_codeoutput_and_end():
     assert out[2].output == ""
 
 
-def test_cleanup_no_extra_end_if_existing():
+def test_cleanup_no_extra_end_if_existing() -> None:
     conv = [
         SVUser(text="hi"),
         SVCode(code="print(1)", id="call_1"),
@@ -41,7 +41,7 @@ def test_cleanup_no_extra_end_if_existing():
     assert kinds == ["User", "Code", "CodeOutput", "StreamEnd"]
 
 
-def test_normalize_conv_for_prompt_filters_meta():
+def test_normalize_conv_for_prompt_filters_meta() -> None:
     conv = [
         SVServerHint(data={"thread_id": "abc"}),
         SVUser(text="hi"),
@@ -55,7 +55,7 @@ def test_normalize_conv_for_prompt_filters_meta():
     assert kinds == ["User", "Assistant"]
 
 
-def test_ccrm_conversion_basic():
+def test_ccrm_conversion_basic() -> None:
     conv = [
         SVUser(text="hi"),
         SVAssistant(text="hello"),
@@ -67,7 +67,7 @@ def test_ccrm_conversion_basic():
     assert "stream_end" not in (m.get("name") for m in msgs if "name" in m)
 
 
-def test_wire_roundtrip():
+def test_wire_roundtrip() -> None:
     original = SVCode(code="x=1", id="cid")
     wire = from_sv_to_json(original)
     assert wire == {"variant": "Code", "content": "x=1", "id": "cid"}

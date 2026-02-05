@@ -1,7 +1,0 @@
-# SPDX-FileCopyrightText: 2025 Climate Service Center Germany (GERICS)
-#
-# SPDX-License-Identifier: CC0-1.0
-
-[flake8]
-extend-ignore =
-    E501

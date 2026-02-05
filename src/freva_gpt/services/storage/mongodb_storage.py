@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from pymongo import AsyncMongoClient
 
@@ -148,7 +148,7 @@ class ThreadStorage:
         user_id: str,
         topic: str,
         num_threads: int,
-    ) -> Dict[str, Any]:
+    ) -> tuple[int, List[Thread]]:
         """
         Search in the topic field.
         """
@@ -179,7 +179,7 @@ class ThreadStorage:
         variant: Variant,
         content: str,
         num_threads: int,
-    ) -> Dict[str, Any]:
+    ) -> tuple[int, List[Thread]]:
         """
         Search in a specific variant field (user/assistant/code/code_output).
         """

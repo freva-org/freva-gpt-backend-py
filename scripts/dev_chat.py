@@ -64,9 +64,7 @@ USER_ID = "dev_user"
 PRINT_DEBUG = True  # Print non-Assistant stream variants (ServerHint, etc.)
 SHOW_STATS = True  # Show per-turn simple stats
 
-THREAD_ID = (
-    None  # It can be set to a prev thread_id to continue the conversation
-)
+THREAD_ID = ""  # can be set to a prev thread_id to continue the conversation
 
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -171,8 +169,8 @@ async def main() -> None:
             continue
         if user_input.lower().startswith("/new"):
             # Optional prefix: "/new"
-            thread_id = new_thread_id()
-            prepare_for_stream(thread_id, Auth)
+            thread_id = await new_thread_id()
+            await prepare_for_stream(thread_id, Auth)
             print(f"Started new conversation. Thread: {thread_id}")
             continue
 

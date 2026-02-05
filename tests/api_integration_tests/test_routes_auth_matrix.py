@@ -7,7 +7,7 @@ ENDPOINTS_GET = [
 
 
 @pytest.mark.asyncio
-async def test_all_get_routes_require_auth(client):
+async def test_all_get_routes_require_auth(client) -> None:
     async with client:
         for ep in ENDPOINTS_GET + [
             "/api/chatbot/getthread",
@@ -32,7 +32,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
     patch_mongo_uri,
     patch_stream,
     patch_mcp_manager,
-):
+) -> None:
     # Mock the REST call the auth layer uses to resolve a username
     with stub_resp:
         async with client:

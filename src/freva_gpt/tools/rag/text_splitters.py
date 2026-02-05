@@ -1,21 +1,26 @@
+from __future__ import annotations
+
+from typing import Any, Iterable, Sequence
+
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-class CustomDocumentSplitter(RecursiveCharacterTextSplitter):
+class CustomDocumentSplitter(RecursiveCharacterTextSplitter):  # type: ignore[misc]
     def __init__(
         self,
-        documents,
-        separators=None,
-        keep_separator=False,
-        is_separator_regex=False,
-        **kwargs,
-    ):
-        self.documents = documents
+        documents: Iterable[Document],
+        separators: Sequence[str] | None = None,
+        keep_separator: bool = False,
+        is_separator_regex: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        self.documents = list(documents)
         super().__init__(
             separators, keep_separator, is_separator_regex, **kwargs
         )
 
-    def split(self):
+    def split(self) -> list[Document]:
         splitted_docs = []
         for doc in self.documents:
             embedded_text = doc.metadata["embedded_content"]

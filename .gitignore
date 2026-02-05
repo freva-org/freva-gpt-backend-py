@@ -12,6 +12,7 @@ wheels/
 .coverage
 
 .env
+uv.lock
 
 # Virtual environments
 .venv

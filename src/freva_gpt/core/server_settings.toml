@@ -26,17 +26,17 @@ default = []
 description = "Set the mcp servers."
 type = "string[]"
 
-[mongo_db_uri]
+[mongodb_uri]
 default =  "mongodb://mongodb-dev"
 description = "Set the url to the mongodb server."
 type = "string"
 
-[mongo_db_database_name]
+[mongodb_database_name]
 default = "chatbot"
 description = "Name of the mongo database to store user data."
 type = "string"
 
-[mongo_db_collection_name]
+[mongodb_collection_name]
 default = "threads"
 description = "Name of the mongo collection to store user data."
 type = "string"
@@ -46,7 +46,7 @@ default = "embeddings"
 description = "Name of the embeddings collection."
 type = "string"
 
-[mongo_db_clear_embeddings]
+[mongodb_clear_embeddings]
 default = false
 description = "Auto clear embeddings"
 type = "bool"

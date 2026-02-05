@@ -21,8 +21,8 @@ CACHE_ROOT = Path("./cache")
 
 def get_authenticator() -> Authenticator:
     if settings.DEV:
-        return DevAuthenticator
-    return FullAuthenticator
+        return DevAuthenticator  # type:ignore
+    return FullAuthenticator  # type:ignore
 
 
 async def auth_dependency(
@@ -35,7 +35,7 @@ async def auth_dependency(
     - returns the authenticated object (or raises HTTPException)
     """
     AuthCls = get_authenticator()
-    auth = AuthCls(request)
+    auth: Authenticator = AuthCls(request)
     await auth.run()
     return auth
 
@@ -51,12 +51,13 @@ async def get_thread_storage(
 ) -> ThreadStorage:
     if user_name and thread_id:
         create_dir_at_cache(user_name, thread_id)
-    return await ThreadStorage.create(vault_url=vault_url)
+    Storage: ThreadStorage = await ThreadStorage.create(vault_url=vault_url)
+    return Storage
 
 
 async def get_mcp_manager(
     authenticator: Authenticator, thread_id: str
-) -> McpManager:
+) -> McpManager | None:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -90,3 +91,7 @@ async def get_mcp_manager(
             "MCP manager initialization failed (tools may be unavailable): %s",
             e,
         )
+        return None
+
+
+__all__ = ["Authenticator", "ThreadStorage", "McpManager"]

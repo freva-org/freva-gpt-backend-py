@@ -21,7 +21,7 @@ class FullAuthenticator(Authenticator):
       - else 422/400/401/502/503 same as Rust
     """
 
-    async def run(self) -> "FullAuthenticator":
+    async def run(self) -> Authenticator:
         request = self.request
         headers = request.headers
 

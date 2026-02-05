@@ -69,7 +69,7 @@ def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
     if not tc_list:
         return
 
-    store: Dict[int, Dict[str, Any]] = agg.setdefault("by_index", {})  # type: ignore
+    store: Dict[int, Dict[str, Any]] = agg.setdefault("by_index", {})
     for item in tc_list:
         idx = item.get("index")
         if idx is None:
@@ -109,8 +109,8 @@ def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
 # ──────────────────────────────────────────────────────────────────────────────
 @dataclass
 class FinalSummary:
-    var_block: list
-    tool_messages: list
+    var_block: list[Any]
+    tool_messages: list[Any]
     is_error: bool
 
 
@@ -132,7 +132,7 @@ def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
     logger = logger or DEFAULT_LOGGER
 
     code_block: List[StreamVariant] = []
-    code_msgs: List[Dict] = []
+    code_msgs: List[dict[str, Any]] = []
 
     # Code output: structured dict of displayed data, image or error
     result_json = json.loads(result_txt)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
@@ -27,7 +27,7 @@ router = APIRouter()
 def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
     items = [item for item in v if not is_prompt(item)]
-    cleaned: List[Dict] = []
+    cleaned: List[Dict[str, Any]] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = i == len(items) - 1

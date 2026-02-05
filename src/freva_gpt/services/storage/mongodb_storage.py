@@ -27,12 +27,12 @@ MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 class ThreadStorage:
     """Store threads in MongoDB."""
 
-    def __init__(self, vault_url: str) -> None:
+    def __init__(self, vault_url: str | None) -> None:
         self.vault_url = vault_url
         self.db = None
 
     @classmethod
-    async def create(cls, vault_url: str):
+    async def create(cls, vault_url: str | None):
         self = cls(vault_url)
         if settings.DEV:
             self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[

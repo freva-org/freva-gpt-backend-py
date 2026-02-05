@@ -22,7 +22,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, List, Optional
 
-import yaml  # type: ignore
+import yaml
 
 from freva_gpt.core.logging_setup import configure_logging
 
@@ -205,7 +205,7 @@ def refresh_cache() -> None:
     """
     Clear memoized results (useful in tests or after config changes).
     """
-    available_chatbots.cache_clear()  # type: ignore[attr-defined]
+    available_chatbots.cache_clear()
 
 
 __all__ = [

@@ -85,7 +85,7 @@ def create_arg_parser() -> argparse.ArgumentParser:
     """Create the cli parser."""
     parser = argparse.ArgumentParser(
         prog="freva-rest-server",
-        description=Markdown(__doc__),  # type: ignore
+        description=Markdown(__doc__),
         formatter_class=ArgumentDefaultsRichHelpFormatter,
     )
     parser.add_argument(

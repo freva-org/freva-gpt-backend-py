@@ -118,15 +118,13 @@ def _load_examples_as_messages(examples_path: str | Path) -> list[dict]:
     )
 
 
-def get_entire_prompt(
-    user_id: str, thread_id: str, model: str
-) -> List[Dict[str, Any]]:
+def get_entire_prompt(model: str) -> List[Any]:
     """
     Build the full, ordered message list for a completion request (non-streaming).
     Order: [ System(starting), *examples, System(summary) ]
     """
     assets = _load_prompts(model)
-    messages: List[Dict[str, Any]] = []
+    messages: List[Any] = []
     messages.append(_as_system_message(assets["starting"]))
     messages.extend(_load_examples_as_messages(assets["examples_path"]))
     messages.append(_as_system_message(assets["summary"]))

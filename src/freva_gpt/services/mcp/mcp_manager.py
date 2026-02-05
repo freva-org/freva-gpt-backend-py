@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 from freva_gpt.core.logging_setup import configure_logging
@@ -65,7 +66,7 @@ class McpManager:
 
     # ────────── internal clients ──────────
 
-    def _build_client(self, target: Target) -> McpClient:
+    def _build_client(self, target: Target):
         with self._lock:
             if not self._clients.get(target):
                 self._clients.update(
@@ -110,7 +111,7 @@ class McpManager:
                 # build OpenAI tool list (merged)
                 self._openai_tools_cache = []
                 for tgt in self._servers:
-                    for t in self._tools_by_target[tgt]:  # type: ignore[index]
+                    for t in self._tools_by_target[tgt]:
                         self._openai_tools_cache.append(
                             mcp_tool_to_openai_function(t)
                         )
@@ -229,7 +230,7 @@ class McpManager:
 # ──────────────────── Helper functions ──────────────────────────────
 
 
-async def get_mcp_headers(auth: Authenticator, cache: str) -> Dict[str, str]:
+async def get_mcp_headers(auth: Authenticator, cache: Path) -> Dict[str, str]:
     mongodb_uri = (
         await get_mongodb_uri(auth.vault_url)
         if not settings.DEV

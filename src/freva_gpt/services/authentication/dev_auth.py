@@ -6,7 +6,7 @@ log = configure_logging()
 
 
 class DevAuthenticator(Authenticator):
-    async def run(self) -> "DevAuthenticator":
+    async def run(self) -> Authenticator:
         """
         DEV mode:
         - no real token validation

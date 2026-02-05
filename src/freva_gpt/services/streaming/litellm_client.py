@@ -44,12 +44,14 @@ async def _post_json(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     async with httpx.AsyncClient(timeout=timeout) as client:
         r = await client.post(url, json=payload, headers=_headers())
         r.raise_for_status()
-        return r.json()
+        data: dict[str, Any] = r.json()
+        return data
 
 
 def _extract_text(resp: Any) -> str:
     try:
-        return resp["choices"][0]["message"]["content"]
+        text: str = resp["choices"][0]["message"]["content"]
+        return text
     except Exception:
         return ""
 
@@ -139,7 +141,7 @@ def tool_calls(resp: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
-def first_message(resp: Dict[str, Any]) -> Dict[str, Any] | None:
+def first_message(resp: Dict[str, Any]) -> Any:
     """
     Convenience: return the first assistant message dict or None.
     """

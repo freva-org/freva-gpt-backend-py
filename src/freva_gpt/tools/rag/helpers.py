@@ -107,7 +107,7 @@ def get_new_or_changes_documents(documents, db):
     return new_docs
 
 
-def postprocessing_query_result(query_results):
+def postprocessing_query_result(query_results) -> str:
     context = ""
     for result in query_results:
         resource_type = result[0].get("resource_type")

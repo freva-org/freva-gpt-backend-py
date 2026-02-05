@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple, Union
+from typing import Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
@@ -54,18 +54,26 @@ async def search_threads(
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
+    q = query.strip().lower()  # case-insensitive search
+
     # Decide search mode (topic vs variant)
-    mode, _query = parse_query_mode(query)
+    mode = check_query_mode(q)
 
     try:
         if mode == "variant":
-            variant, content = _query
+            try:
+                variant, content = parse_variant_content(q)
+            except ValueError:
+                raise HTTPException(
+                    status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Unknown prefix! Try one of the following: user, assistant, code, output",
+                )
             total_num_threads, threads = await Storage.query_by_variant(
                 auth.username, variant, content, num_threads
             )
         else:
             total_num_threads, threads = await Storage.query_by_topic(
-                auth.username, _query, num_threads
+                auth.username, q, num_threads
             )
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to query threads.")
@@ -85,24 +93,25 @@ async def search_threads(
     ]
 
 
-def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
+def check_query_mode(query: str) -> str:
     """
     Returns:
-      - query string OR
-      - (variant, content) if prefix is recognized
+      - query_mode
     If prefix is unknown, sliently falls back to plain query search.
     """
-    q = query.strip().lower()  # case-insensitive search
-    if ":" not in q:
-        return "topic", q
+    if ":" not in query:
+        return "topic"
+    else:
+        return "variant"
 
-    prefix, content = q.split(":", 1)
+
+def parse_variant_content(query: str) -> Tuple[Variant, str]:
+    prefix, content = query.split(":", 1)
     prefix = prefix.strip()
     content = content.strip()
 
     variant = PREFIX_MAP.get(prefix)
     if variant:
-        return "variant", (variant, content)
-
-    # unknown prefix falls back to topic query, not error
-    return "topic", q
+        return variant, content
+    else:
+        raise ValueError

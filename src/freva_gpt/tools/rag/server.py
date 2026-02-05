@@ -122,7 +122,7 @@ def store_documents_in_mongodb(documents) -> None:
         col.insert_many(new_entries)
 
 
-def get_query_results(query: str, resource_name):
+def get_query_results(query: str, resource_name) -> str:
     """Gets results from a vector search query."""
     col = _collection()
     add_vector_search_index_to_db(col, EMBEDDING_LENGTH)

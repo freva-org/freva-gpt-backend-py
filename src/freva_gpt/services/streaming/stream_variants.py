@@ -349,7 +349,7 @@ def help_convert_sv_ccrm(
     conversation: Conversation,
     include_images: bool = False,
     include_meta: bool = False,
-) -> List[OpenAIMessage]:
+) -> List[Any]:
     """
     Convert a StreamVariant conversation to OpenAI ChatCompletion messages.
     • include_images: whether to include Image variants (Rust passes false for prompting)
@@ -490,7 +490,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     raise ValueError(f"unsupported variant: {obj!r}")
 
 
-def from_sv_to_json(v: StreamVariant) -> dict:
+def from_sv_to_json(v: StreamVariant) -> dict[str, Any]:
     """
     Convert Pydantic class back to json/dict.
     """

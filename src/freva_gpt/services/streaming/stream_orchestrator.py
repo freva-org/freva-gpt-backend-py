@@ -9,7 +9,11 @@ from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from freva_gpt.core.available_chatbots import model_supports_images
 from freva_gpt.core.heartbeat import heartbeat_content
 from freva_gpt.core.logging_setup import configure_logging
-from freva_gpt.services.service_factory import Authenticator, ThreadStorage
+from freva_gpt.services.service_factory import (
+    Authenticator,
+    McpManager,
+    ThreadStorage,
+)
 from freva_gpt.services.streaming.active_conversations import (
     ConversationState,
     add_to_conversation,
@@ -59,15 +63,15 @@ async def stream_with_tools(
     *,
     model: str,
     thread_id: str,
-    messages: List[Dict[str, Any]],  # system_prompt
+    messages: List[Any],  # system_prompt
+    stream_state: StreamState,
     acomplete_func=acomplete,
-    stream_state: StreamState = None,
     logger=None,
 ) -> AsyncIterator[StreamVariant]:
     logger = logger or DEFAULT_LOGGER
 
     # Append the conversation history to system prompt
-    conv_sv = await get_conv_messages(thread_id)
+    conv_sv = await get_conv_messages(thread_id) or []
     msg_hist = help_convert_sv_ccrm(
         conv_sv,
         include_images=model_supports_images(model),
@@ -80,7 +84,7 @@ async def stream_with_tools(
 
     # 1) First request
     tool_agg: Dict[str, Any] = {}
-    tools = mcp.openai_tools() if hasattr(mcp, "openai_tools") else []
+    tools = mcp.openai_tools() if isinstance(mcp, McpManager) else []
     kwargs = {"model": model, "messages": messages, "stream": True}
     if tools:
         kwargs["tools"] = tools
@@ -92,7 +96,7 @@ async def stream_with_tools(
 
     if hasattr(resp, "__aiter__"):
         call_id = ""
-        async for chunk in resp:  # type: ignore
+        async for chunk in resp:
             choice = (chunk.get("choices") or [{}])[0]
             delta = choice.get("delta") or {}
 
@@ -109,7 +113,9 @@ async def stream_with_tools(
                     {"choices": [{"delta": delta}]}, tool_agg
                 )
                 tool_name = (
-                    tool_agg.get("by_index")[0].get("function").get("name")
+                    tool_agg.get("by_index")[0]  # type:ignore
+                    .get("function")
+                    .get("name")
                     if tool_agg
                     else None
                 )
@@ -160,7 +166,7 @@ async def stream_with_tools(
             """Run the tool while periodically sending heartbeats."""
             tool_task = asyncio.create_task(
                 run_tool_via_mcp(
-                    mcp=mcp,
+                    mcp=mcp,  # type:ignore
                     tool_name=name,
                     arguments_json=args_txt,
                     logger=logger,
@@ -196,7 +202,7 @@ async def stream_with_tools(
                 await unregister_tool_task(thread_id, tool_task)
 
         try:
-            result_text = None
+            result_text: str = ""
             heartbeats_v: List[StreamVariant] = []
             async for item in run_with_heartbeat():
                 if isinstance(item, SVServerHint):
@@ -250,9 +256,9 @@ async def stream_with_tools(
 async def run_stream(
     *,
     model: str,
-    thread_id: Optional[str],
+    thread_id: str,
     user_input: str,
-    system_prompt: List[Dict[str, Any]],
+    system_prompt: List[Any],
     logger=None,
 ) -> AsyncGenerator[StreamVariant, None]:
     """
@@ -313,7 +319,7 @@ async def prepare_for_stream(
     """
     logger = logger or DEFAULT_LOGGER
 
-    messages: List[Dict[str, Any]] = []
+    messages: List[StreamVariant] = []
     if read_history and Storage:
         messages = await get_conversation_history(thread_id, Storage)
 
@@ -327,9 +333,9 @@ async def prepare_for_stream(
 async def get_conversation_history(
     thread_id: Optional[str],
     Storage: ThreadStorage,
-):
+) -> List[StreamVariant]:
     # Build messages for ongoing conversation
-    prior_json: List[dict] = await Storage.read_thread(thread_id)
+    prior_json: List[dict[str, Any]] = await Storage.read_thread(thread_id)
     prior_sv: List[StreamVariant] = [
         from_json_to_sv(item) for item in prior_json
     ]

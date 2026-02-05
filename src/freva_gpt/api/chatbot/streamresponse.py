@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.responses import StreamingResponse
@@ -42,9 +42,9 @@ router = APIRouter()
 CHECK_INTERVAL = 3  # seconds, the interval to wait before check STOP request
 
 
-def _sse_data(obj: dict):
+def _sse_data(obj: Dict[str, str]):
     if obj.get("variant") == IMAGE:
-        image_b64 = obj.get("content")
+        image_b64 = obj.get("content", "")
         id = obj.get("id")
         CHUNK_SIZE = 16_384  # 16 KiB per JSON line
 
@@ -94,7 +94,7 @@ async def streamresponse(
 
     model_name = chatbot or default_chatbot()
 
-    user_name = Auth.username
+    user_name = Auth.username or ""
     logger = configure_logging(
         __name__, thread_id=thread_id, user_id=user_name
     )
@@ -110,7 +110,7 @@ async def streamresponse(
         vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id
     )
 
-    system_prompt = get_entire_prompt(user_name, thread_id, model_name)
+    system_prompt = get_entire_prompt(model_name)
 
     logger.info(
         "Streaming response",

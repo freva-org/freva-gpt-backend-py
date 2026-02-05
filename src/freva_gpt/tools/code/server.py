@@ -55,7 +55,7 @@ def _get_cwd():
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
 
-def _current_sid() -> str:
+def _current_sid() -> tuple[str, str]:
     ctx = get_context()
     return (getattr(ctx, "session_id"), "")
 
@@ -78,7 +78,7 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     return km
 
 
-def _run_cell(sid: str, code: str) -> dict:
+def _run_cell(sid: str, code: str) -> dict[str, str]:
     working_dir = _get_cwd() or os.getcwd()
     km = _get_or_start_kernel(sid, cwd_str=working_dir)
     kc = km.client()
@@ -179,7 +179,7 @@ def code_interpreter(code: str) -> dict:
         logger.warning(
             "Code is not executed due to potential safety concerns!"
         )
-        return
+        return {}
 
 
 if __name__ == "__main__":

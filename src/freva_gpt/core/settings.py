@@ -103,8 +103,6 @@ class Types(Enum):
             return f"{_type}[{length}]"
         return _type
 
-        return mapping[t]
-
 
 class ParseType(TypedDict):
     base: str

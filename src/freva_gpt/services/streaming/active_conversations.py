@@ -31,9 +31,9 @@ class ActiveConversation:
     thread_id: str
     user_id: str
     state: ConversationState
-    mcp_manager: McpManager
-    tool_tasks: set[asyncio.Task] = field(default_factory=set)
-    messages: List[StreamVariant] = field(default_factory=list)
+    mcp_manager: McpManager | None
+    tool_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
+    messages: List[StreamVariant] | None = field(default_factory=list)
     last_activity: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -71,10 +71,10 @@ async def check_thread_exists(thread_id: str) -> bool:
 async def initialize_conversation(
     thread_id: str,
     user_id: str,
-    messages: Optional[List[Dict[str, Any]]] = [],
+    messages: Optional[List[StreamVariant]] = [],
     auth: Optional[Authenticator] = None,
     logger=None,
-) -> ActiveConversation:
+) -> None:
     log = logger or configure_logging(
         __name__, thread_id=thread_id, user_id=user_id
     )
@@ -84,7 +84,9 @@ async def initialize_conversation(
         log.debug("Initializing the conversation and saving it to Registry...")
 
         if auth:
-            mcp_mgr = await get_mcp_manager(authenticator=auth)
+            mcp_mgr = await get_mcp_manager(
+                authenticator=auth, thread_id=thread_id
+            )
         else:
             log.warning(
                 f"The conversation {thread_id} initialized without MCPManager! "
@@ -103,18 +105,19 @@ async def initialize_conversation(
         Registry[thread_id] = conv
 
         # send tool calls to MCP server if there are Code variants present in messages
-        if mcp_mgr is not None and any(
-            isinstance(v, SVCode) for v in messages
-        ):
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(_replay_code_history(thread_id))
-            await register_tool_task(thread_id, task)
-            task.add_done_callback(
-                # to be unregistered when done
-                lambda t: asyncio.create_task(
-                    unregister_tool_task(thread_id, t)
+        if messages:
+            if mcp_mgr is not None and any(
+                isinstance(v, SVCode) for v in messages
+            ):
+                loop = asyncio.get_running_loop()
+                task = loop.create_task(_replay_code_history(thread_id))
+                await register_tool_task(thread_id, task)
+                task.add_done_callback(
+                    # to be unregistered when done
+                    lambda t: asyncio.create_task(
+                        unregister_tool_task(thread_id, t)
+                    )
                 )
-            )
 
     else:
         async with RegistryLock:
@@ -126,7 +129,7 @@ async def initialize_conversation(
 async def add_to_conversation(
     thread_id: str,
     messages: List[StreamVariant],
-) -> ActiveConversation:
+) -> None:
     """
     Check if an ActiveConversation exists for thread_id and append new variants.
     Updates last_activity and returns the updated conversation object.
@@ -139,7 +142,6 @@ async def add_to_conversation(
             )
         conv.messages.extend(messages)
         conv.last_activity = datetime.now(timezone.utc)
-        return conv
 
 
 async def get_conversation_state(
@@ -244,7 +246,7 @@ async def _replay_code_history(thread_id: str) -> None:
         if conv is None:
             return
         mcp = conv.mcp_manager
-        messages = list(conv.messages)
+        messages = conv.messages
 
     # Extract all code blocks in chronological order
     code_blocks: list[str] = [

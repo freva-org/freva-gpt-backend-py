@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage, ThreadStorage
+from src.services.streaming.active_conversations import save_feedback_to_registry
 
 router = APIRouter()
 
@@ -46,19 +47,33 @@ async def user_feedback(
         )
 
     if feedback != "remove":
-        ok = await Storage.save_feedback(thread_id, auth.username, content_json, feedback_at_index, feedback)
-        if ok:
-            return {"ok": ok, "body": "Successfully saved user feedback."}
-        else:
-            return {"ok": ok, "body": f"Failed to save user feedback: {thread_id}"}
+        try:
+            await save_feedback(Storage, thread_id, auth.username, content_json, feedback_at_index, feedback)
+            return {"Successfully saved user feedback."}
+        except:
+            raise HTTPException(status_code=500, detail="Failed to save user feedback: {thread_id}")
     else:
         # TODO: delete feedback when user deletes thread?
-
         if "feedback" not in content_json[feedback_at_index].keys():
-            return {"ok": False, "body": f"Feedback not found at index {feedback_at_index}: {thread_id}"}
-        else:
-            ok = await Storage.delete_feedback(thread_id, auth.username, content_json, feedback_at_index)
-            if ok:
-                return {"ok": ok, "body": "Successfully removed user feedback."}
-            else:
-                return {"ok": False, "body": f"Failed to delete user feedback: {thread_id}"}
+            raise HTTPException(status_code=404, detail=f"Feedback not found at index {feedback_at_index}: {thread_id}")
+        try:
+            await delete_feedback(Storage, thread_id, auth.username, content_json, feedback_at_index)
+            return {"Successfully removed user feedback."}
+        except:
+            raise HTTPException(status_code=500, detail=f"Failed to delete user feedback: {thread_id}")
+
+
+async def save_feedback(storage: ThreadStorage, thread_id, user_id, content, f_ind, feedback):
+    try:
+        await storage.save_feedback(thread_id, user_id, content, f_ind, feedback)
+        await save_feedback_to_registry(thread_id, f_ind, feedback)
+    except:
+        raise
+
+
+async def delete_feedback(storage: ThreadStorage, thread_id, user_id, content, f_ind):
+    try:
+        await storage.delete_feedback(thread_id, user_id, content, f_ind)
+        await save_feedback_to_registry(thread_id, f_ind, "remove")
+    except:
+        raise

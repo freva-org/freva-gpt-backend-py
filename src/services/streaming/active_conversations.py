@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import asyncio
 
 from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_variants import StreamVariant, SVCode
+from src.services.streaming.stream_variants import StreamVariant, SVCode, from_json_to_sv, from_sv_to_json
 from src.services.service_factory import (
     Authenticator, ThreadStorage, McpManager,
     get_mcp_manager
@@ -108,7 +108,6 @@ async def initialize_conversation(
         async with RegistryLock:
             conv = Registry.get(thread_id)
             conv.state = ConversationState.STREAMING
-            conv.messages = messages
             conv.last_activity = datetime.now(timezone.utc)
         
 
@@ -290,6 +289,20 @@ async def cancel_tool_tasks(thread_id: str) -> None:
         tasks = Registry.get(thread_id).tool_tasks or ()
     for t in tasks:
         t.cancel()
+
+
+async def save_feedback_to_registry(thread_id: str, f_ind: int, feedback: str) -> None:
+    async with RegistryLock:
+        conv = Registry.get(thread_id)
+        msg = conv.messages
+        conv.last_activity = datetime.now(timezone.utc)
+        msg_ind = from_sv_to_json(msg[f_ind])
+        if feedback != "remove":
+            msg_ind.update({"feedback": feedback})
+        else:
+            msg_ind.pop("feedback")
+        msg[f_ind] = from_json_to_sv(msg_ind)
+        conv.messages = msg
 
 
 async def cleanup_idle(

@@ -70,7 +70,15 @@ async def test_userfeedback_save_success(
     patch_db,
     patch_read_thread,
     patch_save_thread,
+    patch_registry
 ):
+    patch_registry({
+        "t-2": [
+            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {"variant": "User", "text": "kept"},
+            {"variant": "Assistant", "text": "also kept"},
+        ]
+    })
     with stub_resp:
         async with client:
             r = await client.get(
@@ -79,7 +87,7 @@ async def test_userfeedback_save_success(
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 200
-            assert r.json() == {"ok": True, "body": "Successfully saved user feedback."}
+            assert r.json() == ["Successfully saved user feedback."]
 
 
 @pytest.mark.asyncio
@@ -88,8 +96,10 @@ async def test_userfeedback_remove_success(
     client,
     GOOD_HEADERS,
     patch_db,
+    patch_read_thread,
     patch_save_thread,
-    monkeypatch,
+    patch_registry,
+    monkeypatch
 ):
     async def _fake(self, thread_id: str):
         return [
@@ -100,12 +110,19 @@ async def test_userfeedback_remove_success(
     import src.services.storage.mongodb_storage as mongo_store
     
     monkeypatch.setattr(
-        mongo_store.MongoThreadStorage,
+        mongo_store.ThreadStorage,
         "read_thread",
         _fake,
         raising=False,
     )
 
+    patch_registry({
+        "t-3": [
+            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {"variant": "User", "text": "kept"},
+            {"variant": "Assistant", "text": "also kept", "feedback":"up"},
+        ]
+    })
     with stub_resp:
         async with client:
             r = await client.get(
@@ -114,7 +131,7 @@ async def test_userfeedback_remove_success(
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 200
-            assert r.json() == {"ok": True, "body": "Successfully removed user feedback."}
+            assert r.json() == ["Successfully removed user feedback."]
 
 
 @pytest.mark.asyncio
@@ -133,5 +150,5 @@ async def test_userfeedback_remove_failure_not_found(
                 params={"thread_id": "t-3", "feedback_at_index": 1, "feedback": "remove"},
                 headers=GOOD_HEADERS,
             )
-            assert r.status_code == 200
-            assert r.json() == {"ok": False, "body": "Feedback not found at index 1: t-3"}
+            assert r.status_code == 404
+            assert r.json() == {"detail": "Feedback not found at index 1: t-3"}

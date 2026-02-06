@@ -9,6 +9,7 @@ from .searchthreads import router as searchthreads_router
 from .streamresponse import router as streamresponse_router
 from .stop import router as stop_router
 from .heartbeat import router as heartbeat_router
+from .editthread import router as editthread_router
 from .userfeedback import router as userfeedback_router
 
 router = APIRouter()
@@ -23,4 +24,5 @@ router.include_router(searchthreads_router)
 router.include_router(streamresponse_router)
 router.include_router(stop_router)
 router.include_router(heartbeat_router)
+router.include_router(editthread_router)
 router.include_router(userfeedback_router)

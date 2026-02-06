@@ -248,7 +248,7 @@ async def _replay_code_history(thread_id: str) -> None:
             await run_tool_via_mcp(
                 mcp=mcp,
                 tool_name="code_interpreter",
-                arguments_json=json.dumps({"code": code}),
+                arguments_json=code,
                 logger=log,
             )
 

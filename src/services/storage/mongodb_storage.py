@@ -41,6 +41,9 @@ class ThreadStorage():
         thread_id: str,
         user_id: str,
         content: List[StreamVariant],
+        root_thread_id: Optional[str] = None,
+        parent_thread_id: Optional[str] = None,
+        fork_from_index: Optional[int] = None,
         append_to_existing: Optional[bool] = False,
     ) -> None:
         logger = configure_logging(__name__, thread_id=thread_id, user_id=user_id)
@@ -72,6 +75,9 @@ class ThreadStorage():
             "date": datetime.now(timezone.utc),
             "topic": topic,
             "content": all_stream, 
+            "root_thread_id": thread_id or root_thread_id,
+            "parent_thread_id": thread_id or parent_thread_id,
+            "fork_from_index": 0 or fork_from_index,
         }
 
         if existing:

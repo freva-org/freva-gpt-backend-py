@@ -211,6 +211,10 @@ def patch_save_thread(monkeypatch):
         thread_id: str,
         user_id: str,
         content,
+        root_thread_id=None,
+        parent_thread_id=None,
+        fork_from_index=None,
+        append_to_existing=False,
         **kwargs,
     ):
         calls.append(
@@ -218,6 +222,10 @@ def patch_save_thread(monkeypatch):
                 "thread_id": thread_id,
                 "user_id": user_id,
                 "content": content,
+                "root_thread_id": root_thread_id,
+                "parent_thread_id": parent_thread_id,
+                "fork_from_index": fork_from_index,
+                "append_to_existing": append_to_existing,
             }
         )
         return 
@@ -230,7 +238,6 @@ def patch_save_thread(monkeypatch):
     )
 
     return calls 
-
 
 
 @pytest.fixture

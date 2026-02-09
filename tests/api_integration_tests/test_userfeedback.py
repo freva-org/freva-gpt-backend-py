@@ -15,7 +15,7 @@ async def test_userfeedback_missing_vault_header_returns_503(
                 params={"thread_id": "t-1", "feedback_at_index": 0, "feedback": "hi"},
                 headers=headers,
             )
-            assert r.status_code == 503
+            assert r.status_code == 422
             assert (
                 r.json()["detail"]
                 == "Vault URL not found. Please provide a non-empty vault URL in the headers, of type String."

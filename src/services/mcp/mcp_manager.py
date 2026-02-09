@@ -209,7 +209,7 @@ async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[
             "Authorization": auth_header,
             "working-dir": str(cache),
         },
-        "web-search": {
+        "web_search": {
             "Authorization": auth_header,
         },
     }

@@ -133,20 +133,8 @@ async def get_database(
         """
         mongodb_uri = await get_mongodb_uri(vault_url)
 
-        try:
-            client = AsyncMongoClient(mongodb_uri)
-            return client[MONGODB_DATABASE_NAME]
-        except Exception:
-            # Rust-style fallback: strip query options and retry once
-            if "?" in mongodb_uri:
-                stripped = mongodb_uri.rsplit("?", 1)[0]
-                try:
-                    client = AsyncMongoClient(stripped)
-                    return client[MONGODB_DATABASE_NAME]
-                except Exception:
-                    pass
-            raise HTTPException(status_code=503, detail="Failed to connect to MongoDB")
-
+        client = AsyncMongoClient(mongodb_uri)
+        return client[MONGODB_DATABASE_NAME]
 
 # ──────────────────── Search threads ──────────────────────────────
 

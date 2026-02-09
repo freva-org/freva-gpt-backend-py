@@ -105,4 +105,4 @@ async def test_auth_success_200(client):
                 headers={"Authorization": "Bearer good", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 200
-            assert r.json() == {"ok": True}
+            assert r.json() == {'status': 'ok'}

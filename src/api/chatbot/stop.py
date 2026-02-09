@@ -29,7 +29,6 @@ async def stop_get(
     logger.debug("Initiated stop request", extra={"thread_id": thread_id})
 
     if ok:
-        return {"ok": ok, "body": "Conversation stopped."}
+        return {"Conversation stopped."}
     else:
-        return {"ok": True, "body": "Conversation with given thread-id was never registered."}
-        # raise ValueError(f"Conversation with given thread ID not found: {thread_id}")
+        raise HTTPException(status_code=500, detail="Conversation with given thread-id not found.")

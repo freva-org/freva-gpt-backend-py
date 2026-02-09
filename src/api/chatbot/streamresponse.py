@@ -9,7 +9,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_503_SERVICE_UNAVAILABLE
 
 from src.core.logging_setup import configure_logging
 from src.core.available_chatbots import default_chatbot
@@ -73,7 +72,7 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT, 
+            status_code=422, 
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
             )
 
@@ -84,12 +83,15 @@ async def streamresponse(
 
     if not Auth.vault_url:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=422,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
     
-    # Get thread storage
-    Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
+    try:
+        # Get thread storage
+        Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
+    except:
+        raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 

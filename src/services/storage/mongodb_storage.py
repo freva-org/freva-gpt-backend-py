@@ -129,35 +129,21 @@ class ThreadStorage():
         self,
         thread_id: str,
         topic: str
-    ) -> bool:
-        try:
-            logger = configure_logging(__name__, thread_id=thread_id)
-            coll = self.db[MONGODB_COLLECTION_NAME]
-            update_op = { '$set' :  { 'topic' : topic } }
-            await coll.update_one({"thread_id": thread_id}, update_op)
-            logger.info("Updated topic in MongoDB", extra={"thread_id": thread_id})
-            return True
-        except:
-            logger = configure_logging(__name__, thread_id=thread_id)
-            logger.exception("Failed to update topic in MongoDB", extra={"thread_id": thread_id})
-            return False
-        
+    ):
+        logger = configure_logging(__name__, thread_id=thread_id)
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        update_op = { '$set' :  { 'topic' : topic } }
+        await coll.update_one({"thread_id": thread_id}, update_op)
+        logger.info("Updated topic in MongoDB", extra={"thread_id": thread_id})
+
 
     async def delete_thread(
         self,
         thread_id: str,
-    ) -> bool:
-        try:
-            logger = configure_logging(__name__, thread_id=thread_id)
-            coll = self.db[MONGODB_COLLECTION_NAME]
-            await coll.delete_one({"thread_id": thread_id})
-            #TODO check the return
-            logger.info("Deleted thread in MongoDB", extra={"thread_id": thread_id})
-            return True
-        except:
-            logger = configure_logging(__name__, thread_id=thread_id)
-            logger.exception("Failed to delete thread in MongoDB", extra={"thread_id": thread_id})
-            return False
+    ):
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        await coll.delete_one({"thread_id": thread_id})
+        
 
 
     async def save_feedback(

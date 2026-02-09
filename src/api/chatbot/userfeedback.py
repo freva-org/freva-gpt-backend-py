@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage, ThreadStorage
 from src.services.streaming.active_conversations import save_feedback_to_registry
@@ -22,14 +21,20 @@ async def user_feedback(
     """
     if not thread_id:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="Thread ID not found. Please provide thread_id in the query parameters.",
         )
 
     if not auth.vault_url:
-        raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+        raise HTTPException(
+            status_code=422, 
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
 
-    Storage = await get_thread_storage(vault_url=auth.vault_url)
+    try:
+        # Thread storage 
+        Storage = await get_thread_storage(vault_url=auth.vault_url)
+    except:
+        raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Load the thread content
     try:
@@ -42,7 +47,7 @@ async def user_feedback(
     # Check if index within bounds
     if feedback_at_index < 0 or feedback_at_index >= len(content_json):
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="feedback_at_index outside content range! Please review query parameters!",
         )
 

@@ -7,4 +7,4 @@ router = APIRouter()
 @router.get("/heartbeat", dependencies=[AuthRequired])
 async def heartbeat():
     # Simple liveness probe
-    return {"ok": True}
+    return {"status": "ok"}

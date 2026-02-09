@@ -36,6 +36,8 @@ USER = "User"
 ASSISTANT = "Assistant"
 CODE = "Code"
 CODE_OUTPUT = "CodeOutput"
+TOOL_CALL = "ToolCall"
+TOOL_OUTPUT = "ToolOutput"
 IMAGE = "Image"
 SERVER_ERROR = "ServerError"
 OPENAI_ERROR = "OpenAIError"
@@ -101,6 +103,17 @@ class SVImage(_SVBase):
     id: str
     mime: str = Field(default="image/png")
 
+class SVToolCall(_SVBase):
+    variant: Literal["ToolCall"] = Field(default=TOOL_CALL)
+    arg: str
+    tool_name: str
+    id: str
+
+class SVToolOutput(_SVBase):
+    variant: Literal["ToolOutput"] = Field(default=TOOL_OUTPUT)
+    output: str
+    tool_name: str
+    id: str
 
 class SVServerHint(_SVBase):
     variant: Literal["ServerHint"] = Field(default=SERVER_HINT)
@@ -340,6 +353,12 @@ def help_convert_sv_ccrm(
         elif isinstance(v, SVCodeOutput):
             out.append(_tool_result_message(v.output, v.id, tool_name=TOOL_NAME_CODE))
 
+        elif isinstance(v, SVToolCall):
+            out.append(_tool_call_message(v.arg, v.id, tool_name=v.tool_name))
+
+        elif isinstance(v, SVToolOutput):
+            out.append(_tool_result_message(v.output, v.id, tool_name=v.tool_name))
+
         elif isinstance(v, SVImage):
             if include_images:
                 out.append(_image_user_message(v.b64, v.mime))
@@ -431,6 +450,18 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
             output = c
             id = obj.get("id")
         return SVCodeOutput(output=str(output), id=str(id))
+    
+    if v == TOOL_CALL:
+        arg = c
+        id = obj.get("id")
+        tool_name = obj.get("tool_name")
+        return SVToolCall(arg=str(arg), id=str(id), tool_name=tool_name)
+
+    if v == TOOL_OUTPUT or v == TOOL_CALL:
+        output = c
+        id = obj.get("id")
+        tool_name = obj.get("tool_name")
+        return SVToolOutput(output=str(output), id=str(id), tool_name=tool_name)
 
     raise ValueError(f"unsupported variant: {obj!r}")
 
@@ -469,6 +500,10 @@ def from_sv_to_json(v: StreamVariant) -> dict:
             return {"variant": CODE, "content": d["code"], "id": d["id"]}
     if kind == CODE_OUTPUT:
         return {"variant": CODE_OUTPUT, "content": d["output"], "id": d["id"]}
+    if kind == TOOL_CALL:
+        return {"variant": TOOL_CALL, "content": d["arg"], "tool_name":d["tool_name"], "id": d["id"]}
+    if kind == TOOL_OUTPUT:
+        return {"variant": TOOL_OUTPUT, "content": d["output"], "tool_name":d["tool_name"], "id": d["id"]}
     return d
 
 

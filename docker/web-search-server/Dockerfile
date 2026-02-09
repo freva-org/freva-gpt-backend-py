@@ -1,0 +1,56 @@
+# Pull from fedora because alpine and ubuntu both have issues with python env or podman
+FROM fedora:latest
+
+# ---------------------
+# General installs
+# ---------------------
+
+# Install necessary dependencies for miniconda
+RUN dnf install -y curl bzip2 awk git
+
+RUN mkdir /app
+
+# -------------------
+# Conda setup
+# -------------------
+
+# Download and install Miniconda (Miniforge)
+RUN curl -Lo /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh && \
+    bash /tmp/miniforge.sh -b -p /opt/conda && \
+    rm /tmp/miniforge.sh
+
+ENV PATH="/opt/conda/bin:$PATH"
+
+# Create environment
+RUN conda create --name env "python>=3.11.10,<3.12"
+RUN conda init bash
+RUN echo "conda activate env" >> ~/.bashrc
+
+WORKDIR /app
+
+# -----------------
+# uv and deps
+# -----------------
+
+RUN pip install uv
+
+COPY docker/rag-server/pyproject.toml /app/pyproject.toml
+
+# Export from pyproject and install into the current interpreter (Conda)
+# --system is required when mutating a non-venv interpreter
+RUN source activate env && uv export --format requirements-txt \
+    | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
+
+# Python env paths
+ENV PYTHONUSERBASE /opt/conda/envs/env
+ENV PYTHONPATH=/opt/conda/envs/env/lib/python3.11/site-packages
+ENV PATH /opt/conda/envs/env/bin/:$PATH
+ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+EXPOSE 8052
+
+COPY src /app/src
+
+# Launch server
+CMD ["python","-m","src.tools.web_search.server"]

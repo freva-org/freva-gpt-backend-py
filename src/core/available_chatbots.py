@@ -21,19 +21,14 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, List, Optional
+from typing import Any, List, Optional
 
 import yaml  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-ENV_CONFIG_PATH = "LITELLM_CONFIG"
+FREVAGPT_LITELLM_CONFIG_PATH = "LITELLM_CONFIG"
 DEFAULT_CONFIG_BASENAME = "litellm_config.yaml"
-
-
-def _fatal_no_models(msg: str) -> None:
-    logger.error(msg)
-    raise SystemExit(1)
 
 
 def _as_str_or_none(value: Any) -> Optional[str]:
@@ -81,7 +76,7 @@ def _discover_config_path() -> Path:
     3) Walk parents from this file and the CWD to find the first litellm_config.yaml
     """
     # 1) ENV override
-    env_path = os.environ.get(ENV_CONFIG_PATH)
+    env_path = os.environ.get(FREVAGPT_LITELLM_CONFIG_PATH)
     if env_path:
         p = Path(env_path).expanduser().resolve()
         if p.is_file():
@@ -108,14 +103,17 @@ def _load_yaml(path: Path) -> Any:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        _fatal_no_models(f"LiteLLM config not found at: {path}")
+        logger.error(f"LiteLLM config not found at: {path}")
+        raise
     except Exception as e:
-        _fatal_no_models(f"Failed to read LiteLLM config at {path}: {e}")
+        logger.exception(f"Failed to read LiteLLM config at {path}: {e}")
+        raise
 
     try:
         return yaml.safe_load(text)
     except Exception as e:
-        _fatal_no_models(f"Failed to parse YAML at {path}: {e}")
+        logger.exception(f"Failed to parse YAML at {path}: {e}")
+        raise 
 
 
 @lru_cache(maxsize=1)
@@ -133,7 +131,9 @@ def available_chatbots() -> List[str]:
     filtered = [n for n in names if n]  # already warned on invalids
 
     if not filtered:
-        _fatal_no_models(f"No available chatbots found in LiteLLM file at {path}.")
+        logger.error(f"No available chatbots found in LiteLLM file at {path}.")
+        raise ValueError(f"No available chatbots found in LiteLLM file at {path}.")
+    
     logger.info("Available chatbots (%d): %s", len(filtered), filtered)
     return filtered
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Union, Tuple
 
 from fastapi import APIRouter, HTTPException, Depends
-from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.services.storage.helpers import Variant, PREFIX_MAP
@@ -27,20 +26,26 @@ async def search_threads(
 
     if not auth.username:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=422,
             detail="Missing user_id (auth).",
         )
 
     if not auth.vault_url:
-        raise HTTPException(status_code=503, detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+        raise HTTPException(
+            status_code=422, 
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
     
     if not query:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=422,
             detail="Missing query parameter.",
         )
         
-    Storage = await get_thread_storage(vault_url=auth.vault_url)
+    try:
+        # Thread storage 
+        Storage = await get_thread_storage(vault_url=auth.vault_url)
+    except:
+        raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Decide search mode (topic vs variant)
     mode, _query = parse_query_mode(query)
@@ -90,5 +95,3 @@ def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
 
     # unknown prefix falls back to topic query, not error
     return "topic", q
-
-

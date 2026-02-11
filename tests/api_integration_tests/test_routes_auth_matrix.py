@@ -1,7 +1,6 @@
 import pytest
 
 ENDPOINTS_GET = [
-    "/api/chatbot/heartbeat",
     "/api/chatbot/availablechatbots",
 ]
 

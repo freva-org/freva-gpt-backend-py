@@ -32,12 +32,38 @@ async def get_thread(
     Auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Returns the content of a thread as list of JSON.
-    Rust parity:
-    - Requires query param thread_id
-    - Requires header x-freva-vault-url
-    - Removes Prompt variants
+    Retrieve a Chat Thread.
+
+    Returns the full conversation content of a specific thread as a list
+    of JSON objects.
+    Requires a valid authenticated user and vault-url.
+
+    Parameters:
+        thread_id (str | None):
+            The unique identifier of the thread to retrieve. Must be provided
+            as a query parameter.
+
+    Dependencies:
+        Auth (Authenticator): Injected authentication object containing 
+            username and vault_url 
+
+    Returns:
+        List[dict]:
+            A list of conversation message objects representing the thread
+            history after post-processing.
+
+    Raises:
+        HTTPException (422):
+            - If `thread_id` is missing or empty.
+            - If the vault URL header is missing or empty.
+        HTTPException (503):
+            - If the storage backend (e.g., MongoDB) connection fails.
+        HTTPException (404):
+            - If the requested thread does not exist.
+        HTTPException (500):
+            - If an error occurs while reading or processing the thread.
     """
+
     if not thread_id:
         raise HTTPException(
             status_code=422,

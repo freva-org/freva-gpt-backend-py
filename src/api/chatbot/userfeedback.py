@@ -16,9 +16,58 @@ async def user_feedback(
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Updates the thread topic with user-given str of the authenticated user.
-    Requires x-freva-vault-url header for DB bootstrap.
+    Add or remove user feedback for a specific message within a thread.
+
+    This endpoint allows an authenticated user to attach feedback to a
+    specific entry (by index) in an existing conversation thread.
+    If `feedback` is set to `"remove"`, the feedback at the given index
+    will be deleted instead.
+    Requires a valid authenticated user and vault-url.
+
+    Parameters:
+        thread_id (str):
+            Unique identifier of the thread containing the content.
+            Must correspond to an existing stored thread.
+
+        feedback_at_index (int):
+            Zero-based index of the message within the thread content
+            where feedback should be added or removed.
+            Must be within the bounds of the thread content list.
+
+        feedback (str):
+            The feedback value to store (e.g., "up", "down", text note).
+            If set to the literal string `"remove"`, the existing feedback
+            at the specified index will be deleted.
+
+    Dependencies:
+        auth (Authenticator):
+            Injected authentication object containing:
+            - username (used as user_id)
+            - vault_url (used to resolve thread storage)
+
+    Returns:
+        dict:
+            - {"Successfully saved user feedback."} on successful save.
+            - {"Successfully removed user feedback."} on successful deletion.
+
+    Raises:
+        HTTPException (422):
+            - Missing thread_id
+            - Missing vault_url
+            - feedback_at_index out of bounds
+
+        HTTPException (404):
+            - Thread not found
+            - Feedback not found at specified index (on removal)
+
+        HTTPException (500):
+            - Error reading thread file
+            - Failure while saving or deleting feedback
+
+        HTTPException (503):
+            - Failure connecting to thread storage (MongoDB)
     """
+
     if not thread_id:
         raise HTTPException(
             status_code=422,

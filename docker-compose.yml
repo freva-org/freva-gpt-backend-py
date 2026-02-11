@@ -52,7 +52,6 @@ services:
     networks:
       - freva-gpt
   web-search:
-    platform: linux/amd64
     image: localhost/web-search-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .

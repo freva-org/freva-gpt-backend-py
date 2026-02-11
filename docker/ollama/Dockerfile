@@ -1,4 +1,4 @@
-FROM ollama/ollama:0.13.1
+FROM ollama/ollama:0.15.2
 
 # Start Ollama server in background and wait for it to become ready
 RUN nohup ollama serve > /tmp/ollama.log 2>&1 & \

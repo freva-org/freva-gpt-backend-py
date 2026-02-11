@@ -142,6 +142,10 @@ def configure_logging(
         if handler not in logger.handlers:
             logger.addHandler(handler)
 
+    logging.getLogger("fakeredis").setLevel(logging.WARNING)
+    logging.getLogger("docket").setLevel(logging.WARNING)
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+
     return logging.LoggerAdapter(logger, {"thread_id": thread_id or "-", "user_id": user_id or "-"})
 
 

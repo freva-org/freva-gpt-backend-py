@@ -6,7 +6,9 @@ FROM fedora:latest
 # ---------------------
 
 # Install necessary dependencies for miniconda
-RUN dnf install -y curl bzip2 awk git
+RUN dnf install -y curl bzip2 awk git \
+    gcc gcc-c++ make python3-devel \
+    && dnf clean all
 
 RUN mkdir /app
 
@@ -15,9 +17,17 @@ RUN mkdir /app
 # -------------------
 
 # Download and install Miniconda (Miniforge)
-RUN curl -Lo /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh && \
-    bash /tmp/miniforge.sh -b -p /opt/conda && \
-    rm /tmp/miniforge.sh
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) MINIFORGE_ARCH="x86_64" ;; \
+      arm64) MINIFORGE_ARCH="aarch64" ;; \
+      *) echo "Unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/miniforge.sh \
+      "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-${MINIFORGE_ARCH}.sh"; \
+    bash /tmp/miniforge.sh -b -p /opt/conda; \
+    rm -f /tmp/miniforge.sh
 
 ENV PATH="/opt/conda/bin:$PATH"
 

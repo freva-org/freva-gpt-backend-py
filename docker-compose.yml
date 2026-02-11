@@ -1,6 +1,5 @@
 services:
   freva-gpt-backend:
-    platform: linux/amd64 # We need this, otherwise it defaults to arm64 base image and has mismatch for miniforge installer when built on mac
     image: localhost/freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
@@ -17,7 +16,6 @@ services:
     networks:
       - freva-gpt
   rag:
-    platform: linux/amd64
     image: localhost/rag-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
@@ -34,7 +32,6 @@ services:
     networks:
       - freva-gpt
   code:
-    platform: linux/amd64
     image: localhost/code-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
@@ -52,7 +49,6 @@ services:
     networks:
       - freva-gpt
   litellm:
-    platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${FREVAGPT_INSTANCE_NAME}
     volumes:

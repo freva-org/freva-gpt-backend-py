@@ -13,8 +13,40 @@ async def get_user_threads(
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Returns the latest 10 threads of the authenticated user.
-    Requires x-freva-vault-url header for DB bootstrap.
+    Retrieve Recent User Threads.
+
+    Returns the most recent conversation threads of the authenticated user,
+    limited by the requested number.
+    Requires a valid authenticated user and vault-url.
+
+    Parameters:
+        num_threads (int):
+            The maximum number of recent threads to return.
+
+    Dependencies:
+        auth (Authenticator): Injected authentication object containing 
+            username and vault_url 
+
+    Returns:
+        List[Any]:
+            A two-element list containing:
+                1. A list of thread metadata dictionaries, each including:
+                   - user_id (str)
+                   - thread_id (str)
+                   - date (datetime | str)
+                   - topic (str)
+                   - content (Any)
+                2. The total number of threads available for the user
+                   (int), independent of the requested limit.
+
+    Raises:
+        HTTPException (422):
+            - If the authenticated user ID is missing.
+            - If the vault URL header is missing or empty.
+        HTTPException (503):
+            - If the storage backend (e.g., MongoDB) connection fails.
+        HTTPException (500):
+            - If fetching the user's thread history fails.
     """
     logger = configure_logging(__name__, user_id=auth.username)
 

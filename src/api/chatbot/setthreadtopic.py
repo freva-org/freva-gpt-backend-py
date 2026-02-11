@@ -15,8 +15,35 @@ async def set_thread_topic(
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Updates the thread topic with user-given str of the authenticated user.
-    Requires x-freva-vault-url header for DB bootstrap.
+    Update Thread Topic.
+
+    Updates the topic/title of a specific conversation thread belonging
+    to the authenticated user.
+    Requires a valid authenticated user and vault-url.
+
+    Parameters:
+        thread_id (str):
+            The unique identifier of the thread to update. Must be provided
+            as a query parameter.
+        topic (str):
+            The new topic/title string to assign to the thread.
+    
+    Dependencies:
+        auth (Authenticator): Injected authentication object containing 
+            username and vault_url 
+
+    Returns:
+        dict:
+            A success confirmation message if the thread topic was updated.
+
+    Raises:
+        HTTPException (422):
+            - If `thread_id` is missing or empty.
+            - If the vault URL header is missing or empty.
+        HTTPException (503):
+            - If the storage backend (e.g., MongoDB) connection fails.
+        HTTPException (500):
+            - If updating the thread topic fails due to an internal error.
     """
     if not thread_id:
         raise HTTPException(

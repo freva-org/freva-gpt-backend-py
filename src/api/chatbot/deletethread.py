@@ -14,8 +14,30 @@ async def delete_thread(
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Removes the thread from storage of the authenticated user.
-    Requires x-freva-vault-url header for DB bootstrap.
+    Delete a Chat Thread.
+
+    Deletes a conversation thread from storage.
+    Requires a valid authenticated user and vault-url.
+
+    Parameters:
+        thread_id (str):
+            The unique identifier of the thread to delete. Must be provided
+            as a query parameter.
+
+    Dependencies:
+        auth (Authenticator): Injected authentication object containing 
+            username and vault_url
+
+    Returns:
+        dict:
+            A confirmation message if the thread was deleted.
+
+    Raises:
+        HTTPException (422):
+            - If `thread_id` is missing or empty.
+            - If the vault URL header is missing or empty.
+        HTTPException (500):
+            - If deletion fails due to an internal storage error.
     """
     logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
 

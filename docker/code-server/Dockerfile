@@ -6,7 +6,9 @@ FROM fedora:latest
 # ---------------------
 
 # Install necessary dependencies for miniconda
-RUN dnf install -y curl bzip2 awk git
+RUN dnf install -y curl bzip2 awk git \
+    gcc gcc-c++ make python3-devel \
+    && dnf clean all
 
 RUN mkdir /app
 

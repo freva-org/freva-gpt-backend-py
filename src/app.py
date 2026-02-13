@@ -53,9 +53,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FrevaGPT Backend (Python)",
     version=get_settings().VERSION,
-    docs_url="/docs", # exposing FasAPI docs
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/api/chatbot/docs", # exposing FasAPI docs
+    redoc_url="/api/chatbot/redoc",
+    openapi_url="/api/chatbot/openapi.json",
     lifespan=lifespan,  
 )
 

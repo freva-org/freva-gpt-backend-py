@@ -251,6 +251,7 @@ async def run_stream(
         except asyncio.CancelledError:
             end_v = SVStreamEnd(message="Cancelled.")
             log.error("Stream is cancelled.")
+            stream_state.finished = True
         except Exception as e:
             log.exception("Stream error: %s", e)
             err_v = SVServerError(message=str(e))

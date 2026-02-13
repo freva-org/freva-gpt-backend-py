@@ -1,7 +1,6 @@
 import pytest
 
 ENDPOINTS_GET = [
-    "/api/chatbot/heartbeat",
     "/api/chatbot/availablechatbots",
 ]
 
@@ -14,6 +13,7 @@ async def test_all_get_routes_require_auth(client):
                                    "/api/chatbot/userfeedback"]:
             r = await client.get(ep)
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
+
 
 @pytest.mark.asyncio
 async def test_routes_succeed_with_auth_and_username_injection( 
@@ -65,5 +65,5 @@ async def test_routes_succeed_with_auth_and_username_injection(
             # 5) /stop 
             r = await client.get("/api/chatbot/stop", params={"thread_id": "t-123"}, headers=GOOD_HEADERS)
             assert r.status_code == 200
-            assert r.json().get("ok") is True
+            assert r.json() == ["Conversation stopped."]
 

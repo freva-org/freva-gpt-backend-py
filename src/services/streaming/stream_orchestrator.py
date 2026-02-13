@@ -226,9 +226,7 @@ async def run_stream(
     Orchestrate a single turn, yielding StreamVariant objects.
     """
     log = logger or DEFAULT_LOGGER
-    # Append ServerHint with thread_id
-    hint = SVServerHint(data={"thread_id": thread_id})
-    yield hint
+
     # Append user content
     user_v = SVUser(text=user_input or "")
     await add_to_conversation(thread_id, [user_v])

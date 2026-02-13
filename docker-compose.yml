@@ -1,6 +1,6 @@
 services:
   freva-gpt-backend:
-    image: localhost/freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
+    image: freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
       dockerfile: docker/freva-gpt-backend/Dockerfile
@@ -16,7 +16,7 @@ services:
     networks:
       - freva-gpt
   rag:
-    image: localhost/rag-server-${FREVAGPT_INSTANCE_NAME}
+    image: rag-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/rag-server/Dockerfile
@@ -30,7 +30,7 @@ services:
     networks:
       - freva-gpt
   code:
-    image: localhost/code-server-${FREVAGPT_INSTANCE_NAME}
+    image: code-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/code-server/Dockerfile

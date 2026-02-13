@@ -81,12 +81,14 @@ class SVAssistant(_SVBase):
     variant: Literal["Assistant"] = Field(default=ASSISTANT)
     text: str
     name: str = Field(default=ASSISTANT_NAME, description="Assistant display name")
+    feedback: str = Field(default="", description="User feedback")
 
 
 class SVCode(_SVBase):
     variant: Literal["Code"] = Field(default=CODE)
     code: str
     id: str
+    feedback: str = Field(default="", description="User feedback")
 
 
 class SVCodeOutput(_SVBase):
@@ -407,9 +409,10 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     """
     v = obj.get("variant")
     c = obj.get("content")
+    f = obj.get("feedback")
 
     if v == ASSISTANT:
-        return SVAssistant(text="" if c is None else str(c))
+        return SVAssistant(text="" if c is None else str(c), feedback="" if f is None else str(f))
     if v == USER:
         return SVUser(text="" if c is None else str(c))
     if v == PROMPT:
@@ -438,7 +441,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
         else:
             code_text = str(c)
             id = obj.get("id")
-        return SVCode(code=code_text, id=str(id))
+        return SVCode(code=code_text, id=str(id), feedback="" if f is None else str(f))
 
     if v == CODE_OUTPUT:
         if isinstance(c, list) and len(c) >= 2: # Legacy {"variant":"CodeOutput","content":["<repr>", "call_ABC"]}
@@ -472,7 +475,10 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == USER:
         return {"variant": USER, "content": d["text"]}
     if kind == ASSISTANT:
-        return {"variant": ASSISTANT, "content": d["text"]}
+        if d.get("feedback"):
+            return {"variant": ASSISTANT, "content": d["text"], "feedback": d.get("feedback")}
+        else:
+            return {"variant": ASSISTANT, "content": d["text"]}
     if kind == PROMPT:
         return {"variant": PROMPT, "content": d["payload"]}
     if kind == SERVER_HINT: 
@@ -488,7 +494,10 @@ def from_sv_to_json(v: StreamVariant) -> dict:
     if kind == IMAGE:
         return {"variant": IMAGE, "content": d["b64"], "id":d["id"]} 
     if kind == CODE: 
-        return {"variant": CODE, "content": d["code"], "id": d["id"]}
+        if d.get("feedback"):
+            return {"variant": CODE, "content": d["code"], "id": d["id"], "feedback": d.get("feedback", "")}
+        else:
+            return {"variant": CODE, "content": d["code"], "id": d["id"]}
     if kind == CODE_OUTPUT:
         return {"variant": CODE_OUTPUT, "content": d["output"], "id": d["id"]}
     if kind == TOOL_CALL:

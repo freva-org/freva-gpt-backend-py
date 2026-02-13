@@ -45,7 +45,7 @@ services:
     networks:
       - freva-gpt
   web-search:
-    image: localhost/web-search-server-${FREVAGPT_INSTANCE_NAME}
+    image: web-search-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/web-search-server/Dockerfile
@@ -53,8 +53,6 @@ services:
     environment:
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8052
-    ports: 
-      - "8052:8052"
     networks: 
       - freva-gpt
     volumes:

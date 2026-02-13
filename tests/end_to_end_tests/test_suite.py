@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 import os
 
-target_remote_url = "https://freva.dkrz.de/api/chatbot"
+target_remote_url = "http://0.0.0.0:8502"
 
 # The list of chatbots to try, in order of preference. The first chatbot which the server accepts will be used for testing.
 preferred_chatbots = [
@@ -52,7 +52,7 @@ def set_globals(request: pytest.FixtureRequest):
         headers["x-freva-rest-url"] = "http://localhost:5001"
 
 
-auth_key = os.getenv("AUTH_KEY")
+auth_key = os.getenv("AUTH_KEY", "no_auth_key")
 global_user_id = "testing"
 auth_string = "&auth_key=" + auth_key + "&user_id=" + global_user_id  # Only for testing
 # In Version 1.6.1, the freva_config also needs to be set to a specific path. We won't be using this for now.

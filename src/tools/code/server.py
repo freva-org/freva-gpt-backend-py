@@ -131,9 +131,9 @@ def code_interpreter(code: str) -> dict:
 
 if __name__ == "__main__":
     # Configure Streamable HTTP transport 
-    host = os.getenv("MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("MCP_PORT", "8051"))
-    path = os.getenv("MCP_PATH", "/mcp")  # standard path
+    host = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
+    path = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
     logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
                 host, port, path, "off" if _disable_auth else "on")

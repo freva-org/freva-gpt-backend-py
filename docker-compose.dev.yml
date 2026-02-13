@@ -97,6 +97,7 @@ services:
     hostname: mongodb
     ports:
       - "27016:27017"
+    command: --quiet --logpath /dev/null 
 
 networks:
   freva-gpt:

@@ -6,7 +6,7 @@ import respx
 @pytest.mark.asyncio
 async def test_auth_missing_headers_returns_401(client):
     async with client:
-        r = await client.get("/api/chatbot/heartbeat")
+        r = await client.get("/api/chatbot/availablechatbots")
         assert r.status_code == 401
         detail = r.json()["detail"]
         assert "Some necessary field weren't found" in detail
@@ -17,7 +17,7 @@ async def test_auth_missing_headers_returns_401(client):
 async def test_auth_non_bearer_header_422(client):
     async with client:
         r = await client.get(
-            "/api/chatbot/heartbeat",
+            "/api/chatbot/availablechatbots",
             headers={"Authorization": "Token abc", "x-freva-rest-url": "http://rest.example"},
         )
         assert r.status_code == 422
@@ -28,7 +28,7 @@ async def test_auth_non_bearer_header_422(client):
 async def test_auth_missing_rest_url_400(client):
     async with client:
         r = await client.get(
-            "/api/chatbot/heartbeat",
+            "/api/chatbot/availablechatbots",
             headers={"Authorization": "Bearer abc"},
         )
         assert r.status_code == 400
@@ -41,7 +41,7 @@ async def test_auth_token_check_network_error_503(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").side_effect = httpx.ConnectError("boom")
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer abc", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 503
@@ -53,7 +53,7 @@ async def test_auth_token_check_http_401_like_401_message(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(401, json={"whatever":"x"})
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer abc", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 401
@@ -65,7 +65,7 @@ async def test_auth_token_check_malformed_json_502(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, content=b"not-json")
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer abc", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 502
@@ -77,7 +77,7 @@ async def test_auth_token_check_json_missing_username_detail_502(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"foo":"bar"})
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer abc", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 502
@@ -89,7 +89,7 @@ async def test_auth_token_check_json_detail_401(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"detail":"Expired token"})
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer abc", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 401
@@ -101,8 +101,7 @@ async def test_auth_success_200(client):
         mock.get("http://rest.example/api/freva-nextgen/auth/v2/systemuser").respond(200, json={"pw_name":"alice"})
         async with client:
             r = await client.get(
-                "/api/chatbot/heartbeat",
+                "/api/chatbot/availablechatbots",
                 headers={"Authorization": "Bearer good", "x-freva-rest-url": "http://rest.example"},
             )
             assert r.status_code == 200
-            assert r.json() == {"ok": True}

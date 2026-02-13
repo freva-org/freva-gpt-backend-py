@@ -1,7 +1,6 @@
 services:
   freva-gpt-backend:
-    platform: linux/amd64 # We need this, otherwise it defaults to arm64 base image and has mismatch for miniforge installer when built on mac
-    image: localhost/freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
+    image: freva-gpt-backend-${FREVAGPT_INSTANCE_NAME:?Instance name must be set in the .env file to differentiate between instances}
     build:
       context: .
       dockerfile: docker/freva-gpt-backend/Dockerfile
@@ -16,13 +15,11 @@ services:
       - "${FREVAGPT_DEBUG_PORT:-5678}:${FREVAGPT_DEBUG_PORT:-5678}" # Port for debugpy
     volumes: 
       - ./cache/:/app/cache
-      - ./threads/:/app/threads
       - ./logs/:/app/logs
     networks: 
       - freva-gpt
   rag:
-    platform: linux/amd64
-    image: localhost/rag-server-${FREVAGPT_INSTANCE_NAME}
+    image: rag-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/rag-server/Dockerfile
@@ -41,8 +38,7 @@ services:
     networks: 
       - freva-gpt
   code:
-    platform: linux/amd64
-    image: localhost/code-server-${FREVAGPT_INSTANCE_NAME}
+    image: code-server-${FREVAGPT_INSTANCE_NAME}
     build:
       context: .
       dockerfile: docker/code-server/Dockerfile
@@ -53,8 +49,6 @@ services:
       FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8051
-    ports: 
-      - "8051:8051"
     volumes:
       - ./cache/:/app/cache
       - ./logs/:/app/logs
@@ -80,7 +74,6 @@ services:
     volumes:
       - ./logs/:/app/logs
   litellm:
-    platform: linux/amd64
     image: ghcr.io/berriai/litellm:main-stable
     hostname: litellm-instance-${FREVAGPT_INSTANCE_NAME}
     volumes: 
@@ -109,12 +102,9 @@ services:
     hostname: mongodb
     ports:
       - "27016:27017"
-    command: --quiet --logpath /dev/null 
-
 
 networks:
   freva-gpt:
     driver: bridge
 # The subnet is not set to avoid conflicts with other potentially running networks on the same machine.
 # Note: Named networks by default aren't shared between different docker-compose projects, even if they have the same name, as long as they are in separate directories.
-

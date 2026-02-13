@@ -8,14 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-import src.services.streaming.active_conversations as act_conv
-from src.services.streaming.stream_variants import from_json_to_sv
-
-
 # Ensure project root on sys.path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+import src.services.streaming.active_conversations as act_conv
+from src.services.streaming.stream_variants import from_json_to_sv
 
 from src.services.mcp.client import McpClient
 

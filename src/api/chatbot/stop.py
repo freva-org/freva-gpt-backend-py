@@ -13,8 +13,28 @@ async def stop_get(
     thread_id: str | None = Query(default=None, description="Thread to stop (optional)")
 ):  
     """
-    Signal that a conversation should stop streaming and cancel in-flight tools.
-    Returns True if the conversation was found and updated.
+    Stop Active Conversation Streaming.
+
+    Signals that an active conversation associated with the given thread
+    should stop streaming and cancels any in-flight tool executions.
+    Requires a valid authenticated user.
+
+    Parameters:
+        thread_id (str | None):
+            The unique identifier of the thread whose streaming process
+            should be stopped. Must be provided as a query parameter.
+
+    Returns:
+        dict:
+            A confirmation message if the stop signal was successfully
+            issued for the specified thread.
+
+    Raises:
+        HTTPException (422):
+            - If `thread_id` is missing or empty.
+        HTTPException (500):
+            - If no active conversation with the given thread ID was found
+              or the stop request failed.
     """
 
     if not thread_id:
@@ -29,7 +49,6 @@ async def stop_get(
     logger.debug("Initiated stop request", extra={"thread_id": thread_id})
 
     if ok:
-        return {"ok": ok, "body": "Conversation stopped."}
+        return {"Conversation stopped."}
     else:
-        return {"ok": True, "body": "Conversation with given thread-id was never registered."}
-        # raise ValueError(f"Conversation with given thread ID not found: {thread_id}")
+        raise HTTPException(status_code=500, detail="Conversation with given thread-id not found.")

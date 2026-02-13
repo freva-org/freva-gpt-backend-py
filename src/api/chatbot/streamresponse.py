@@ -9,7 +9,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT, HTTP_503_SERVICE_UNAVAILABLE
 
 from src.core.logging_setup import configure_logging
 from src.core.available_chatbots import default_chatbot
@@ -54,7 +53,52 @@ async def streamresponse(
     Auth: Authenticator = Depends(auth_dependency),
 ):
     """
-    Thin HTTP wrapper that delegates streaming to the orchestrator.
+    Stream Chatbot Response.
+
+    Streams a chatbot response for a given user input using Server-Sent
+    Events (NDJSON format). Acts as a HTTP wrapper delegating the actual 
+    orchestration and model execution to the streaming backend.
+    Requires a valid authenticated user and vault-url.
+
+    Behavior:
+        - Creates a new thread if `thread_id` is not provided.
+        - Resumes an existing thread if `thread_id` is provided.
+        - Reads thread history if the thread exists in storage but is not
+          registered in the in-memory registry.
+        - Selects the specified chatbot model or falls back to the default.
+        - Persists the conversation after completion.
+        - Periodically checks for stop requests and cancels streaming
+          and in-flight tool executions if requested.
+
+    Parameters:
+        thread_id (Optional[str]):
+            The unique identifier of the conversation thread. If not provided,
+            a new thread ID is generated.
+        input (Optional[str]):
+            The user input message to send to the chatbot. Must be provided.
+        chatbot (Optional[str]):
+            The model name to use for the response. If not provided,
+            the default chatbot model is selected.
+    
+    Dependencies:
+        Auth (Authenticator): Injected authentication object containing 
+            username and vault_url 
+
+    Returns:
+        StreamingResponse:
+            A streaming HTTP response with media type
+            ``application/x-ndjson`` containing incremental chatbot output.
+            Response buffering is disabled.
+
+    Raises:
+        HTTPException (422):
+            - If the user input is missing or empty.
+            - If the vault URL header is missing or empty.
+        HTTPException (503):
+            - If the storage backend (e.g., MongoDB) connection fails.
+        HTTPException (500):
+            - If stream preparation fails or an internal server error occurs
+              before streaming begins.
     """
     logger = configure_logging(__name__)
     read_history=False
@@ -73,7 +117,7 @@ async def streamresponse(
     user_input = input or None
     if user_input is None:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT, 
+            status_code=422, 
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
             )
 
@@ -84,12 +128,15 @@ async def streamresponse(
 
     if not Auth.vault_url:
         raise HTTPException(
-            status_code=HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=422,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
     
-    # Get thread storage
-    Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
+    try:
+        # Get thread storage
+        Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
+    except:
+        raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 

@@ -32,6 +32,7 @@ class ThreadStorage():
             self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
         else:
             self.db = await get_database(self.vault_url)
+        await self.db[MONGODB_COLLECTION_NAME].create_index([("thread_id", 1)])
         return self
 
 

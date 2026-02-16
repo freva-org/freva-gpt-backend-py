@@ -307,7 +307,7 @@ async def save_feedback_to_registry(thread_id: str, f_ind: int, feedback: str) -
 
 async def cleanup_idle(
     max_idle: timedelta,
-    Storage: Optional[ThreadStorage]
+    Storage: Optional[ThreadStorage] = None,
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.

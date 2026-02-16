@@ -7,11 +7,13 @@ ENDPOINTS_GET = [
 @pytest.mark.asyncio
 async def test_all_get_routes_require_auth(client):
     async with client:
-        for ep in ENDPOINTS_GET + ["/api/chatbot/getthread",
-                                   "/api/chatbot/getuserthreads",
-                                   "/api/chatbot/streamresponse",
-                                   "/api/chatbot/editthread",
-                                   "/api/chatbot/userfeedback"]:
+        for ep in ENDPOINTS_GET + ["/api/chatbot/getthread", 
+                                   
+                                   "/api/chatbot/getuserthreads", 
+                                   
+                                   "/api/chatbot/streamresponse", 
+                                   "/api/chatbot/userfeedback", 
+                                   "/api/chatbot/editthread"]:
             r = await client.get(ep)
             assert r.status_code == 401, f"{ep} should be protected (missing headers)"
 

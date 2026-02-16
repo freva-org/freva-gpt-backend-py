@@ -79,9 +79,9 @@ def debug():
     
 if __name__ == "__main__":
     # Configure Streamable HTTP transport 
-    host = os.getenv("MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("MCP_PORT", "8052"))
-    path = os.getenv("MCP_PATH", "/mcp")  # standard path
+    host = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("FREVAGPT_MCP_PORT", "8052"))
+    path = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
     logger.info("Starting Web-Search MCP server on %s:%s%s (auth=%s)",
                 host, port, path, "off" if _disable_auth else "on")
@@ -96,4 +96,4 @@ if __name__ == "__main__":
     )
 
     import uvicorn
-    uvicorn.run(wrapped_app, host=host, port=port)
+    uvicorn.run(wrapped_app, host=host, port=port, ws="websockets-sansio",)

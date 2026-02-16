@@ -223,6 +223,6 @@ if __name__ == "__main__":
     )
 
     import uvicorn
-    uvicorn.run(wrapped_app, host=host, port=port)
+    uvicorn.run(wrapped_app, host=host, port=port, ws="websockets-sansio",)
 
     # debug()

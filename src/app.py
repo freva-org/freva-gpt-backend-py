@@ -15,6 +15,7 @@ from src.core.runtime_checks import run_startup_checks
 from src.services.streaming.active_conversations import cleanup_idle
 
 settings = get_settings()
+logger = configure_logging(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
@@ -33,12 +34,12 @@ async def lifespan(app: FastAPI):
                 # Storage is not needed here, conversation must have been saved when it was last used
                 evicted = await cleanup_idle(max_idle=timedelta(days=1))
                 if evicted:
-                    print("Evicted idle > 1 day:", evicted)
+                    logger.info("Evicted idle > 1 day:", evicted)
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 # Don’t crash the task; log and continue
-                print("Daily cleanup failed:", e)
+                logger.warning("Daily cleanup failed:", e)
                 
     # Launch background task
     app.state.periodic_cleanup = asyncio.create_task(periodic_cleanup_task())

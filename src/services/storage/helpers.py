@@ -131,9 +131,9 @@ async def get_database(
         Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
         If connection fails, retry once without URI options (strip trailing ?query).
         """
-        mongodb_uri = await get_mongodb_uri(vault_url, connectTimeoutMS=30000)
+        mongodb_uri = await get_mongodb_uri(vault_url)
 
-        client = AsyncMongoClient(mongodb_uri)
+        client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
         return client[MONGODB_DATABASE_NAME]
 
 # ──────────────────── Search threads ──────────────────────────────

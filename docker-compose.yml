@@ -61,13 +61,8 @@ services:
     hostname: ollama-instance-${FREVAGPT_INSTANCE_NAME}
     networks:
       - freva-gpt
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    devices:
+      - nvidia.com/gpu=all
 
 networks:
   freva-gpt:

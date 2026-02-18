@@ -133,7 +133,7 @@ async def get_database(
         """
         mongodb_uri = await get_mongodb_uri(vault_url)
 
-        client = AsyncMongoClient(mongodb_uri)
+        client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
         return client[MONGODB_DATABASE_NAME]
 
 # ──────────────────── Search threads ──────────────────────────────

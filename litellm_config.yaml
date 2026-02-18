@@ -10,13 +10,13 @@ model_list:
       api_key: "os.environ/FREVAGPT_OPENAI_API_KEY" 
   - model_name: "ministral-3:14b"
     litellm_params:
-      model: "ollama/ministral-3:14b"
+      model: "ollama_chat/ministral-3:14b"
       api_base: "http://ollama:11434"
     model_info:
       supports_function_calling: true
   - model_name: "qwen2.5:3b"
     litellm_params:
-      model: "ollama/qwen2.5:3b"
+      model: "ollama_chat/qwen2.5:3b"
       api_base: "http://ollama:11434" 
     model_info:
       supports_function_calling: true

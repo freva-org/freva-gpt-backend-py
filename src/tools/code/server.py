@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from contextvars import ContextVar
 import threading
 from queue import Empty
@@ -25,9 +26,13 @@ KERNEL_LOCKS: dict[str, threading.Lock] = {}
 KERNEL_LOCKS_GUARD = threading.Lock()
 # TODO: remove kernel from registry when session is closed
 
-# ── Config ───────────────────────────────────────────────────────────────────
 
-EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in case the kernel hangs or runs forever
+# ── Config ───────────────────────────────────────────────────────────────────
+REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "300"))
+
+# We leave 5 seconds buffer so server responds before client timeout
+EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
+
 
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
@@ -40,11 +45,13 @@ def _get_sid_lock(sid: str) -> threading.Lock:
             KERNEL_LOCKS[sid] = lock
         return lock
 
+
 def _current_sid() -> str:
     ctx = get_context()
     s_id = getattr(ctx, "session_id", "")
     logger.info(f"Current session id:{s_id}")
     return s_id
+
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = KERNEL_REGISTRY.get(sid)
@@ -57,48 +64,94 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
         KERNEL_REGISTRY[sid] = km
     return km
 
+
+def _drain_iopub(kc, max_msgs=50):
+    for _ in range(max_msgs):
+        try:
+            kc.get_iopub_msg(timeout=0.01)
+        except Empty:
+            break
+
+
 def _run_cell(sid: str, code: str) -> dict:
     working_dir = _get_cwd() or os.getcwd()
     km = _get_or_start_kernel(sid, cwd_str=working_dir)
     kc = km.client()
     kc.start_channels()
+    kc.wait_for_ready(timeout=10)
+    _drain_iopub(kc) # removes stale queued messages from earlier runs
+
+    deadline = time.time() + EXEC_TIMEOUT
+
     try:
         msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
+
         stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
         # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
         # For these, we keep only the last updated version.
         display_data_dict = {} 
 
-        # Since Jupyter kernel runs asynchronously, it streams outputs, errors, and state messages while it executes the code.
-        # We loop to collect them in real time until the status is "idle".
-        while True:
-            msg = kc.get_iopub_msg(timeout=EXEC_TIMEOUT)
-            # We check if the msg is from the cell we just executed, just in case there are idle cells still emitting.
-            # old/stale/background messages vs current cell
-            if msg["parent_header"].get("msg_id") != msg_id:
+        got_any_for_msg = False
+
+        while time.time() < deadline:
+            # Since Jupyter kernel runs asynchronously, it streams outputs, errors, and state messages while it executes the code.
+            # We loop to collect them in real time until the status is "idle".
+            try:
+                # short-poll messages
+                msg = kc.get_iopub_msg(timeout=1)
+            except Empty:
                 continue
 
-            msg_type = msg["header"]["msg_type"]
-            if msg_type == "status" and msg["content"]["execution_state"] == "idle":
-                break
-            elif msg_type == "stream":
-                (stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts).append(msg["content"]["text"])
-            elif msg_type in ("display_data", "update_display_data"): # Jupyter also returns rich outputs (image/png, text/html, etc.)
-                display_id = msg["content"].get("transient", {}).get("display_id", "")
+            content = msg.get("content", {})
+
+            # We check if the msg is from the cell we just executed, just in case there are idle cells still emitting.
+            # old/stale/background messages vs current cell
+            parent_id = (msg.get("parent_header") or {}).get("msg_id")
+            msg_type = (msg.get("header") or {}).get("msg_type")
+
+            if parent_id == msg_id:
+                got_any_for_msg = True # we saw a message associated with this execution
+
+            if msg_type == "status" and content.get("execution_state") == "idle":
+                if parent_id == msg_id or got_any_for_msg:
+                    break
+                else:
+                    continue
+
+            # Ignore unrelated messages except for idle
+            if parent_id != msg_id:
+                continue
+
+            if msg_type == "stream":
+                (stdout_parts if content.get("name", "") == "stdout" else stderr_parts).append(
+                    content.get("text", "")
+                    )
+            elif msg_type in ("display_data", "update_display_data"): 
+                # Jupyter also returns rich outputs (image/png, text/html, etc.)
+                display_id = content.get("transient", {}).get("display_id", "")
                 if display_id: 
-                    display_data_dict.update({display_id: msg["content"].get("data", {})})
+                    display_data_dict[display_id] = content.get("data", {})
                 else: 
-                    display_data.append(msg["content"].get("data", {}))
+                    display_data.append(content.get("data", {}))
             elif msg_type == "execute_result":
-                result_repr = msg["content"].get("data", {}).get("text/plain")
-            elif msg_type == "error":  # Present only if an exception occurred. We record non-exception in stderr
-                tb = "\n".join(msg["content"].get("traceback", []))
-                error = tb or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+                result_repr = content.get("data", {}).get("text/plain")
+            elif msg_type == "error":  
+                # Present only if an exception occurred. We record non-exception in stderr
+                tb = "\n".join(content.get("traceback", []))
+                error = tb or f"{content.get('ename')}: {content.get('evalue')}"
+
+        else:
+            # deadline exceeded (hard limit)
+            try:
+                km.interrupt_kernel()
+            except Exception:
+                logger.exception("Failed to interrupt kernel after timeout")
+            raise TimeoutError(f"Execution exceeded {EXEC_TIMEOUT}s")
 
         # If we got any updated display in dict, we append them to the list.
         # Here, we are sending a list of unique output
         if display_data_dict:
-            display_data.append(list(display_data_dict.values()))
+            display_data.extend(list(display_data_dict.values()))
 
         return {
             "stdout": strip_ansi("".join(stdout_parts)),
@@ -109,6 +162,7 @@ def _run_cell(sid: str, code: str) -> dict:
         }
     finally:
         kc.stop_channels()
+
 
 @mcp.tool()
 def code_interpreter(code: str) -> dict:
@@ -129,16 +183,6 @@ def code_interpreter(code: str) -> dict:
                 sanitized_code = sanitize_code(code)
                 out = _run_cell(sid, sanitized_code) 
             return out
-        except Empty:
-            msg = f"Execution failed: IOPub timeout after {EXEC_TIMEOUT}s (no messages received)."
-            logger.exception("code_interpreter: iopub timeout")
-            return {
-                "stdout": "",
-                "stderr": "",
-                "result_repr": "",
-                "display_data": [],
-                "error": msg,
-            }
         except TimeoutError as e:
             msg = f"Execution failed: {e}"
             logger.exception("code_interpreter: execution timeout")

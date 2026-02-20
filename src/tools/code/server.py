@@ -10,7 +10,8 @@ from jupyter_client import KernelManager
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
-from src.tools.code.helpers import strip_ansi, code_is_likely_safe, sanitize_code
+from src.tools.code.helpers import strip_ansi, sanitize_code
+from src.tools.code.safety_check import check_code_safety
 
 logger = configure_logging(__name__, named_log="code_server")
 
@@ -119,7 +120,9 @@ def code_interpreter(code: str) -> dict:
     sid = _current_sid()
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
-    if code_is_likely_safe(code):
+    
+    safe, violation = check_code_safety(code)
+    if safe:
         sanitized_code = sanitize_code(code)
         try:
             return _run_cell(sid, sanitized_code)
@@ -127,8 +130,16 @@ def code_interpreter(code: str) -> dict:
             logger.exception("code_interpreter: unhandled execution error")
             raise Exception(f"Execution failed: {type(e).__name__}: {e}")
     else:
-        logger.warning("Code is not executed due to potential safety concerns!")
-        return 
+        msg = f"Code execution blocked by safety rule '{violation.rule_id}': " \
+            f"{violation.description} (matched: {violation.match!r})"
+        logger.warning(msg)
+        return {
+            "stdout": "",
+            "stderr": "",
+            "result_repr": "",
+            "display_data": [],
+            "error": msg,
+        }
         
 
 if __name__ == "__main__":

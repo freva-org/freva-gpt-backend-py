@@ -1,6 +1,7 @@
 import os
 import sys
 from contextvars import ContextVar
+import threading
 from queue import Empty
 
 from fastmcp import FastMCP
@@ -19,28 +20,25 @@ logger = configure_logging(__name__, named_log="code_server")
 _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
-_KERNEL_REGISTRY: dict[str, KernelManager] = {} 
+KERNEL_REGISTRY: dict[str, KernelManager] = {} 
+KERNEL_LOCKS: dict[str, threading.Lock] = {}
+KERNEL_LOCKS_GUARD = threading.Lock()
 # TODO: remove kernel from registry when session is closed
 
 # ── Config ───────────────────────────────────────────────────────────────────
+
 EXEC_TIMEOUT = int(os.getenv("MCP_EXEC_TIMEOUT_SEC", "300"))  # soft guard in case the kernel hangs or runs forever
 
-# ── Header helpers ────────────────────────────────────────────────────────────
-# Per-request header context
-CODE_INTERPRETER_CWD_HDR = "working-dir"
-cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
-
-    
-def _get_cwd():
-    cwd = cwd_ctx.get()
-    if not cwd:
-        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
-                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
-        return
-    else:
-        return cwd
-    
 # ── Execution helpers ─────────────────────────────────────────────────────────
+
+def _get_sid_lock(sid: str) -> threading.Lock:
+    # Make lock creation thread-safe
+    with KERNEL_LOCKS_GUARD:
+        lock = KERNEL_LOCKS.get(sid)
+        if lock is None:
+            lock = threading.Lock()
+            KERNEL_LOCKS[sid] = lock
+        return lock
 
 def _current_sid() -> str:
     ctx = get_context()
@@ -49,14 +47,14 @@ def _current_sid() -> str:
     return s_id
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
-    km = _KERNEL_REGISTRY.get(sid)
+    km = KERNEL_REGISTRY.get(sid)
     if km is None:
         # We preserve the env variables set in Dockerfile
         env = os.environ.copy()
         km = KernelManager()
         km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
         km.start_kernel(env=env, cwd=cwd_str)
-        _KERNEL_REGISTRY[sid] = km
+        KERNEL_REGISTRY[sid] = km
     return km
 
 def _run_cell(sid: str, code: str) -> dict:
@@ -124,9 +122,13 @@ def code_interpreter(code: str) -> dict:
     
     safe, violation = check_code_safety(code)
     if safe:
-        sanitized_code = sanitize_code(code)
         try:
-            return _run_cell(sid, sanitized_code)
+            lock = _get_sid_lock(sid) 
+            # Allowing only one _run_cell() at a time per sid 
+            with lock: 
+                sanitized_code = sanitize_code(code)
+                out = _run_cell(sid, sanitized_code) 
+            return out
         except Empty:
             msg = f"Execution failed: IOPub timeout after {EXEC_TIMEOUT}s (no messages received)."
             logger.exception("code_interpreter: iopub timeout")
@@ -168,7 +170,23 @@ def code_interpreter(code: str) -> dict:
             "display_data": [],
             "error": msg,
         }
-        
+
+
+# ── Header helpers ────────────────────────────────────────────────────────────
+# Per-request header context
+CODE_INTERPRETER_CWD_HDR = "working-dir"
+cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
+
+    
+def _get_cwd():
+    cwd = cwd_ctx.get()
+    if not cwd:
+        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
+                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
+        return
+    else:
+        return cwd
+
 
 if __name__ == "__main__":
     # Configure Streamable HTTP transport 

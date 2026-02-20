@@ -42,7 +42,9 @@ def _get_cwd():
 
 def _current_sid() -> str:
     ctx = get_context()
-    return (getattr(ctx, "session_id"), "")
+    s_id = getattr(ctx, "session_id", "")
+    logger.info(f"Current session id:{s_id}")
+    return s_id
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)

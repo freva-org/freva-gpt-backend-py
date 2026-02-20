@@ -1,6 +1,7 @@
 import os
 import sys
 from contextvars import ContextVar
+from queue import Empty
 
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
@@ -126,9 +127,36 @@ def code_interpreter(code: str) -> dict:
         sanitized_code = sanitize_code(code)
         try:
             return _run_cell(sid, sanitized_code)
+        except Empty:
+            msg = f"Execution failed: IOPub timeout after {EXEC_TIMEOUT}s (no messages received)."
+            logger.exception("code_interpreter: iopub timeout")
+            return {
+                "stdout": "",
+                "stderr": "",
+                "result_repr": "",
+                "display_data": [],
+                "error": msg,
+            }
+        except TimeoutError as e:
+            msg = f"Execution failed: {e}"
+            logger.exception("code_interpreter: execution timeout")
+            return {
+                "stdout": "",
+                "stderr": "",
+                "result_repr": "",
+                "display_data": [],
+                "error": msg,
+            }
         except Exception as e:
+            msg = f"Execution failed: {type(e).__name__}: {e}"
             logger.exception("code_interpreter: unhandled execution error")
-            raise Exception(f"Execution failed: {type(e).__name__}: {e}")
+            return {
+                "stdout": "",
+                "stderr": "",
+                "result_repr": "",
+                "display_data": [],
+                "error": msg,
+            }
     else:
         msg = f"Code execution blocked by safety rule '{violation.rule_id}': " \
             f"{violation.description} (matched: {violation.match!r})"

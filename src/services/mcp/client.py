@@ -10,8 +10,10 @@ import threading
 import httpx
 
 from src.core.logging_setup import configure_logging
+from src.core.settings import get_settings
 
 DEFAULT_LOGGER = configure_logging(__name__)
+settings = get_settings()
 
 MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
@@ -46,7 +48,7 @@ class McpClient:
         self.log = logger or DEFAULT_LOGGER
 
         # simple shared client
-        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(300.0))
+        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(settings.MCP_REQUEST_TIMEOUT_SEC))
 
     # ────────── session ──────────
 

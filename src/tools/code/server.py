@@ -55,12 +55,34 @@ def _current_sid() -> str:
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = KERNEL_REGISTRY.get(sid)
+
+    # Check existing kernel state
+    if km is not None and not km.is_alive():
+        # Handling dead kernel
+        logger.warning("Kernel for sid=%s is dead; restarting", sid)
+        try:
+            km.shutdown_kernel(now=True)
+        except Exception:
+            logger.exception("Failed to shutdown dead kernel cleanly")
+        KERNEL_REGISTRY.pop(sid, None)
+        km = None
+    elif km and km.is_alive():
+        # Report alive kernel
+        logger.warning("Kernel for sid=%s is alive and ready", sid)
+
     if km is None:
         # We preserve the env variables set in Dockerfile
         env = os.environ.copy()
         km = KernelManager()
         km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
         km.start_kernel(env=env, cwd=cwd_str)
+
+        # Check for ready
+        kc = km.client()
+        kc.start_channels()
+        kc.wait_for_ready(timeout=10)
+
+        # Register
         KERNEL_REGISTRY[sid] = km
     return km
 
@@ -78,18 +100,18 @@ def _run_cell(sid: str, code: str) -> dict:
     km = _get_or_start_kernel(sid, cwd_str=working_dir)
     kc = km.client()
     kc.start_channels()
-    kc.wait_for_ready(timeout=10)
-    _drain_iopub(kc) # removes stale queued messages from earlier runs
-
-    deadline = time.time() + EXEC_TIMEOUT
 
     try:
+        _drain_iopub(kc) # removes stale queued messages from earlier runs
         msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
 
         stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
         # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
         # For these, we keep only the last updated version.
         display_data_dict = {} 
+
+        start = time.time()
+        dealine = start + EXEC_TIMEOUT
 
         got_any_for_msg = False
 

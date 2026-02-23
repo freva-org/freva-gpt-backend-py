@@ -26,13 +26,8 @@ logger = configure_logging(__name__, named_log="code_server")
 _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
-# ── Kernel persistence ───────────────────────────────────────────────────────
-KERNEL_REGISTRY: dict[str, KernelManager] = {} 
-KERNEL_LOCKS: dict[str, threading.Lock] = {}
-KERNEL_LOCKS_GUARD = threading.Lock()
-# TODO: remove kernel from registry when session is closed
-
 # ── Config ───────────────────────────────────────────────────────────────────
+
 REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "300"))
 
 # We leave 5 seconds buffer so server responds before client timeout
@@ -44,6 +39,30 @@ SHELL_POLL = 0.1
 
 # Recovery tuning
 MAX_RECOVERY_RETRIES = 1  # extra fresh-client attempt (no restart)
+
+# ── Kernel persistence ───────────────────────────────────────────────────────
+
+KERNEL_REGISTRY: dict[str, KernelManager] = {} 
+KERNEL_LOCKS: dict[str, threading.Lock] = {}
+KERNEL_LOCKS_GUARD = threading.Lock()
+
+
+def cleanup_mcp_session(sid: str) -> None:
+    """
+    Best-effort cleanup for one MCP session.
+    Removes the kernel and kernel lock from registry is session is closed 
+    by MCP client
+    """
+    if not sid:
+        return
+
+    km = KERNEL_REGISTRY.pop(sid, None)
+    if km is not None:
+        logger.info("Cleaning up kernel for closed session sid=%s", sid)
+        shutdown_kernel(km) 
+
+    with KERNEL_LOCKS_GUARD:
+        KERNEL_LOCKS.pop(sid, None)
 
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
@@ -70,6 +89,8 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     # Check existing kernel state
     if km is not None and not km.is_alive():
         # Dead kernel, discard it
+        # NOTE: This restart may break persistance, it is not handled
+        # TODO: maybe we should have a code history registry?
         logger.warning("Kernel for sid=%s is dead; restarting", sid)
         shutdown_kernel(km)
         KERNEL_REGISTRY.pop(sid, None) # discard
@@ -368,6 +389,7 @@ if __name__ == "__main__":
         header_name_list=[CODE_INTERPRETER_CWD_HDR],
         logger=logger,       
         mcp_path=path,  
+        on_session_close=cleanup_mcp_session,
     )
 
     import uvicorn

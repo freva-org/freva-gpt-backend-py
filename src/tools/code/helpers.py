@@ -76,3 +76,10 @@ def shutdown_kernel(km: KernelManager) -> None:
         km.shutdown_kernel(now=True)
     except Exception:
         logger.exception("Failed to shutdown dead kernel cleanly")
+
+# ── exit() / quit() handling ────────────────────────────────────────────────
+
+EXIT_RE = re.compile(r"(?m)^\s*(exit|quit)\s*\(\s*\)\s*(#.*)?$")
+
+def should_restart_after(code: str) -> bool:
+    return bool(EXIT_RE.search(code))

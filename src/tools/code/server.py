@@ -256,13 +256,20 @@ def _execute_code(sid: str, code: str) -> dict:
             # retry with a new client
             continue
 
-    # Here, fresh-client attempts failed => kernel likely wedged/unresponsive.
-    # IMPORTANT: we do not restart silently (persistence contract).
-    # Another option: restart kernel and re-attempt, return a warning to client
-    raise RuntimeError(
-        f"Kernel is unresponsive for session {sid}. "
-        f"Session state may be corrupted. Root error: {type(last_exc).__name__}: {last_exc}"
-    )
+    else:
+        # Here, fresh-client attempts failed => kernel likely wedged/unresponsive.
+        # IMPORTANT: we do not restart silently (persistence contract).
+        # Another option: restart kernel and re-attempt, return a warning to client
+        # For now shutdown the kernel and warn the client
+        shutdown_kernel(km)
+        KERNEL_REGISTRY.pop(sid, None)
+        root = f"{type(last_exc).__name__}: {last_exc}" if last_exc else "unknown"
+        raise RuntimeError(
+            "KERNEL_RESTARTED: execution kernel became unresponsive and was restarted.\n"
+            "PERSISTENCE_LOST: session state/variables were reset.\n"
+            "ACTION_REQUIRED: re-send required setup code (and any prior tool-call context) in the next request.\n"
+            f"DETAILS: {root}"
+        )
 
 
 @mcp.tool()

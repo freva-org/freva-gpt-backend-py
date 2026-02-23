@@ -137,16 +137,16 @@ def test_persistency(mcp_client_CI):
     result = _execute_code_via_mcp(mcp_client_CI, code)
     assert result.get("stdout", "") == "2\n3\n"
 
-def test_soft_crash(mcp_client_CI):
+def test_exception(mcp_client_CI):
     code = {"code":"1/0"}
     error = _exec_and_get_error_value(mcp_client_CI, code)
     assert "ZeroDivisionError: division by zero" in error
     
-def test_hard_crash(mcp_client_CI):
+def test_exit_shutdowns_kernel_and_server_recovers(mcp_client_CI):
     result = _execute_code_via_mcp(mcp_client_CI, {"code": "exit()"})
     assert list(result.values()) == ['', '', '', [], '']
-    code = {"code": "print('Code interpreter functions normally after hard crash!')"}
-    assert _exec_and_get_printed_value(mcp_client_CI, code) == 'Code interpreter functions normally after hard crash!\n'
+    code = {"code": "print('Code interpreter functions normally after exit!')"}
+    assert _exec_and_get_printed_value(mcp_client_CI, code) == 'Code interpreter functions normally after exit!\n'
 
 def test_syntax_error(mcp_client_CI):
     code = {"code": "dsa=na034ß94?ß"}
@@ -214,4 +214,4 @@ def test_indentation(mcp_client_CI):
 def test_unsafe_code(mcp_client_CI):
     code = {"code": "!pip install abc"}
     result = _execute_code_via_mcp(mcp_client_CI, code)
-    assert result == {}
+    assert "Code execution blocked by safety rule" in result.get("error")

@@ -303,8 +303,8 @@ def code_interpreter(code: str) -> dict:
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
     
-    logger.info(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
-    logger.info(f"Input code:'{code}'")
+    logger.debug(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
+    logger.debug(f"Input code:'{code}'")
     
     safe, violation = check_code_safety(code)
     if safe:

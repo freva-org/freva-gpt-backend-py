@@ -1,4 +1,7 @@
 import re
+import os, sys
+
+from jupyter_client import KernelManager
 
 from src.core.logging_setup import configure_logging
 
@@ -41,3 +44,35 @@ def sanitize_code(code: str) -> str:
     # Matches "plt.close()" possibly with whitespace before/after
     out = re.sub(r"(?m)^\s*(plt\.close\s*\(\s*\))", r"# \1  # commented out by sanitizer", out)
     return out
+
+
+# ── Kernel lifecycle ─────────────────────────────────────────────────────────
+
+def _kernel_ready_handshake(km: KernelManager, timeout: int = 10) -> None:
+    kc = km.client()
+    kc.start_channels()
+    try:
+        kc.wait_for_ready(timeout=timeout)
+    finally:
+        kc.stop_channels()
+
+
+def start_kernel(cwd_str: str) -> KernelManager:
+    env = os.environ.copy()
+    km = KernelManager()
+    km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]
+    km.start_kernel(env=env, cwd=cwd_str)
+    _kernel_ready_handshake(km, timeout=10)
+    return km
+
+
+def restart_kernel(km: KernelManager) -> None:
+    km.restart_kernel(now=True)
+    _kernel_ready_handshake(km, timeout=10)
+
+
+def shutdown_kernel(km: KernelManager) -> None:
+    try:
+        km.shutdown_kernel(now=True)
+    except Exception:
+        logger.exception("Failed to shutdown dead kernel cleanly")

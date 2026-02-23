@@ -4,6 +4,7 @@ import time
 from contextvars import ContextVar
 import threading
 from queue import Empty
+from typing import Dict, Any, Optional
 
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
@@ -13,7 +14,7 @@ from jupyter_client import KernelManager
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.server_auth import jwt_verifier
-from src.tools.code.helpers import strip_ansi, sanitize_code
+from src.tools.code.helpers import strip_ansi, sanitize_code, start_kernel, restart_kernel, shutdown_kernel
 from src.tools.code.safety_check import check_code_safety
 
 logger = configure_logging(__name__, named_log="code_server")
@@ -31,8 +32,14 @@ KERNEL_LOCKS_GUARD = threading.Lock()
 REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "300"))
 
 # We leave 5 seconds buffer so server responds before client timeout
-EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
+EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 580)
 
+IOPUB_DRAIN_AFTER_REPLY: float = 0.25
+IOPUB_POLL = 0.1
+SHELL_POLL = 0.1
+
+# Recovery tuning
+MAX_RECOVERY_RETRIES = 1  # restart+retry once
 
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
@@ -58,32 +65,20 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
 
     # Check existing kernel state
     if km is not None and not km.is_alive():
-        # Handling dead kernel
+        # Dead kernel, discard it
         logger.warning("Kernel for sid=%s is dead; restarting", sid)
-        try:
-            km.shutdown_kernel(now=True)
-        except Exception:
-            logger.exception("Failed to shutdown dead kernel cleanly")
-        KERNEL_REGISTRY.pop(sid, None)
+        shutdown_kernel(km)
+        KERNEL_REGISTRY.pop(sid, None) # discard
         km = None
     elif km and km.is_alive():
         # Report alive kernel
         logger.warning("Kernel for sid=%s is alive and ready", sid)
 
     if km is None:
+        logger.info("Starting new kernel for sid=%s", sid)
         # We preserve the env variables set in Dockerfile
-        env = os.environ.copy()
-        km = KernelManager()
-        km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
-        km.start_kernel(env=env, cwd=cwd_str)
-
-        # Check for ready
-        kc = km.client()
-        kc.start_channels()
-        kc.wait_for_ready(timeout=10)
-
-        # Register
-        KERNEL_REGISTRY[sid] = km
+        km = start_kernel(cwd_str)
+        KERNEL_REGISTRY[sid] = km # register
     return km
 
 

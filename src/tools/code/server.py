@@ -31,7 +31,7 @@ mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_ver
 REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "300"))
 
 # We leave 5 seconds buffer so server responds before client timeout
-EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 580)
+EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
 
 IOPUB_DRAIN_AFTER_REPLY: float = 0.25
 IOPUB_POLL = 0.1

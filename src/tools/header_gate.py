@@ -48,7 +48,7 @@ def make_header_gate(
 
             # handle session close 
             if scope.get("method") == "DELETE":
-                sid = hdrs.get("mcp-session-id", "")
+                sid = hdrs.get("Mcp-Session-Id", "")
                 try:
                     log.info("DELETE %s received. Session id=%r", mcp_path, sid)
                 except Exception:

@@ -18,6 +18,7 @@ class Settings:
     MONGODB_COLLECTION_NAME: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME", "threads")
     MONGODB_COLLECTION_NAME_EMB: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME_EMB", "embeddings")
     CLEAR_MONGODB_EMBEDDINGS: bool = os.getenv("FREVAGPT_CLEAR_MONGODB_EMBEDDINGS", "").lower() in {"1","true","yes"}
+    MCP_REQUEST_TIMEOUT_SEC: int = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
     DEV: bool = os.getenv("FREVAGPT_DEV", "").lower() in {"1","true","yes"}
 
 

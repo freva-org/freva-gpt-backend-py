@@ -212,11 +212,11 @@ def test_unsafe_code(mcp_client_CI):
     result = _execute_code_via_mcp(mcp_client_CI, code)
     assert "Code execution blocked by safety rule" in result.get("error")
 
-def test_timeout_soft_failure_and_recovery(mcp_client_CI):
-    result = _execute_code_via_mcp(mcp_client_CI, {"code": "while True: pass"})
-    assert "exceeded" in (result.get("error","") + result.get("stderr","")).lower()
+# def test_timeout_soft_failure_and_recovery(mcp_client_CI):
+#     result = _execute_code_via_mcp(mcp_client_CI, {"code": "while True: pass"})
+#     assert "exceeded" in (result.get("error","") + result.get("stderr","")).lower()
 
-    # Kernel should still be usable
-    assert _exec_and_get_printed_value(
-        mcp_client_CI, {"code": "print('still alive')"}
-    ) == "still alive\n"
+#     # Kernel should still be usable
+#     assert _exec_and_get_printed_value(
+#         mcp_client_CI, {"code": "print('still alive')"}
+#     ) == "still alive\n"

@@ -139,6 +139,9 @@ class DummyCollection:
             return len(self.storage)
         return sum(1 for doc in self.storage.values() if doc.get("user_id") == user_id)
 
+    async def create_index(self, ind):
+        pass
+
 
 class DummyDB:
     def __init__(self):
@@ -190,7 +193,6 @@ def patch_mongo_uri(monkeypatch):
 
 @pytest.fixture
 def patch_read_thread(monkeypatch):
-    async def _fake(self, thread_id: str):
     async def _fake(self, thread_id: str):
         return [
             {"variant": "Prompt", "text": "user prompt should be filtered out"},

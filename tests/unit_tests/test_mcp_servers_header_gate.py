@@ -43,7 +43,7 @@ async def test_header_gate_delete_triggers_cleanup_and_returns_204():
         "method": "DELETE",
         "path": "/mcp",
         "headers": [
-            (b"mcp-session-id", b"abc123"),
+            (b"Mcp-Session-Id", b"abc123"),
         ],
     }
 

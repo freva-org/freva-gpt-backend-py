@@ -85,7 +85,7 @@ async def summarize_topic(content: List[Dict]) -> str:
     try:
         resp = await acomplete(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             max_tokens=50,
             temperature=0.2,
         )

@@ -138,7 +138,6 @@ def _run_shell(kc, code: str) -> dict:
         nonlocal error, result_repr
         msg_type = (msg.get("header") or {}).get("msg_type")
         content = msg.get("content") or {}
-        logger.debug(f"Message: {msg}")
 
         if msg_type == "stream":
             name = content.get("name", "")

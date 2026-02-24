@@ -16,7 +16,7 @@ _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","tru
 mcp = FastMCP("web-search-server", auth=None if _disable_auth else jwt_verifier)
 
 # ── Config ───────────────────────────────────────────────────────────────────
-WEB_SEARCH_MODEL="gpt-4o"
+WEB_SEARCH_MODEL="gpt-4.1"
 ALLOWED_DOMAINS=[
     "docs.dkrz.de",
     "docs.icon-model.org",

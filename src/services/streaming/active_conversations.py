@@ -67,8 +67,8 @@ async def check_thread_exists(thread_id: str) -> bool:
 async def initialize_conversation(
     thread_id: str, 
     user_id: str,
-    messages: Optional[List[Dict[str, Any]]] = [],
-    auth: Optional[Authenticator] = None,
+    messages: List[StreamVariant],
+    auth: Authenticator,
     logger=None,
 ) -> ActiveConversation:
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
@@ -76,11 +76,11 @@ async def initialize_conversation(
     if not await check_thread_exists(thread_id):
         log.debug("Initializing the conversation and saving it to Registry...")
 
-        if auth:
-            mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
-        else:
-            log.warning(f"The conversation {thread_id} initialized without MCPManager! "
-                        "Please note that the MCP servers cannot be connected!")
+        # if auth:
+        mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
+        # else:
+        #     log.warning(f"The conversation {thread_id} initialized without MCPManager! "
+        #                 "Please note that the MCP servers cannot be connected!")
 
         conv = ActiveConversation(
             thread_id=thread_id,
@@ -91,7 +91,8 @@ async def initialize_conversation(
             last_activity=now,
         )
         # register conversation
-        Registry[thread_id] = conv
+        async with RegistryLock:
+            Registry[thread_id] = conv
 
         # send tool calls to MCP server if there are Code variants present in messages
         if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
@@ -107,7 +108,7 @@ async def initialize_conversation(
         log.debug("Conversation was found in the Registry. Starting streaming...")
         async with RegistryLock:
             conv = Registry.get(thread_id)
-            conv.state = ConversationState.STREAMING
+            conv.state = ConversationState.STREAMING # This always expects the thread to exist here...
             conv.last_activity = datetime.now(timezone.utc)
         
 

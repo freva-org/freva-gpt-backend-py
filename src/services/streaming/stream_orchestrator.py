@@ -215,7 +215,7 @@ async def stream_with_tools(
 async def run_stream(
     *,
     model: str,
-    thread_id: Optional[str],
+    thread_id: str,
     user_input: str,
     system_prompt: List[Dict[str, Any]],
     logger=None,
@@ -265,9 +265,9 @@ async def run_stream(
 
 
 async def prepare_for_stream(
-    thread_id, 
-    user_id,
-    Auth: Optional[Authenticator] = None, 
+    thread_id: str, 
+    user_id: str,
+    Auth: Authenticator, 
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
     logger=None,
@@ -277,7 +277,7 @@ async def prepare_for_stream(
     set conversation state to "streaming
     """
     log = logger or DEFAULT_LOGGER
-    messages: List[Dict[str, Any]] = []
+    messages: List[StreamVariant] = []
     if read_history and Storage:
         messages = await get_conversation_history(thread_id, Storage)
 
@@ -287,7 +287,7 @@ async def prepare_for_stream(
 
 
 async def get_conversation_history(
-    thread_id: Optional[str],
+    thread_id: str,
     Storage: ThreadStorage,
     ):
     # Build messages for ongoing conversation

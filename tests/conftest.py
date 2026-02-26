@@ -190,7 +190,6 @@ def patch_mongo_uri(monkeypatch):
 @pytest.fixture
 def patch_read_thread(monkeypatch):
     async def _fake(self, thread_id: str):
-    async def _fake(self, thread_id: str):
         return [
             {"variant": "Prompt", "text": "user prompt should be filtered out"},
             {"variant": "User", "text": "kept"},

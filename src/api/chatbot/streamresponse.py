@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
 
 from src.core.logging_setup import configure_logging
-from src.core.available_chatbots import default_chatbot
+from src.core.available_chatbots import default_chatbot, available_chatbots
 from src.core.prompting import get_entire_prompt
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
@@ -93,6 +93,7 @@ async def streamresponse(
         HTTPException (422):
             - If the user input is missing or empty.
             - If the vault URL header is missing or empty.
+            - If the specified chatbot model is not found in the available chatbots.
         HTTPException (503):
             - If the storage backend (e.g., MongoDB) connection fails.
         HTTPException (500):
@@ -126,6 +127,13 @@ async def streamresponse(
             )
 
     model_name = chatbot or default_chatbot()
+    available = available_chatbots()
+    if model_name not in available:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Chatbot model '{model_name}' not found. Please provide a valid model name from the available chatbots: {available}."
+        )
+
 
     user_name = Auth.username
     logger = configure_logging(__name__, thread_id=thread_id, user_id=user_name)

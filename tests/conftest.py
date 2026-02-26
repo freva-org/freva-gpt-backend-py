@@ -134,6 +134,9 @@ class DummyCollection:
             return len(self.storage)
         return sum(1 for doc in self.storage.values() if doc.get("user_id") == user_id)
 
+    async def create_index(self, ind):
+        pass
+
 
 class DummyDB:
     def __init__(self):

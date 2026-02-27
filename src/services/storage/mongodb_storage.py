@@ -2,6 +2,7 @@ from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime, timezone
 import re
 
+import pymongo
 from pymongo import AsyncMongoClient
 
 from .helpers import Thread, get_database, summarize_topic, Variant, VARIANT_FIELD
@@ -33,7 +34,11 @@ class ThreadStorage():
             self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
         else:
             self.db = await get_database(self.vault_url)
-        await self.db[MONGODB_COLLECTION_NAME].create_index([("thread_id", 1)])
+
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        await coll.create_index("thread_id", unique=True)
+        await coll.create_index([("user_id", pymongo.ASCENDING), ("date", pymongo.DESCENDING)])
+        
         return self
 
 

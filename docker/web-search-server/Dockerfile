@@ -56,9 +56,12 @@ ENV PATH="/opt/conda/envs/env/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-EXPOSE 8052
+EXPOSE ${FREVAGPT_MCP_PORT:-8052}
 
 COPY src /app/src
 
 # Launch server
-CMD ["python","-m","src.tools.web_search.server"]
+CMD uvicorn src.tools.web_search.server:app \
+    --host ${FREVAGPT_MCP_HOST:-0.0.0.0}\
+    --port ${FREVAGPT_MCP_PORT:-8052} \
+    --proxy-headers

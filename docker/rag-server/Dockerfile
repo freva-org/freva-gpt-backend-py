@@ -56,9 +56,12 @@ ENV PATH="/opt/conda/envs/env/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-EXPOSE 8050
+EXPOSE ${FREVAGPT_MCP_PORT:-8050}
 
 COPY src /app/src
 
-# Launch RAG server
-CMD ["python","-m","src.tools.rag.server"]
+# Launch CI server
+CMD uvicorn src.tools.rag.server:app \
+    --host ${FREVAGPT_MCP_HOST:-0.0.0.0}\
+    --port ${FREVAGPT_MCP_PORT:-8050} \
+    --proxy-headers

@@ -21,7 +21,24 @@ ALLOWED_DOMAINS=[
     "docs.dkrz.de",
     "docs.icon-model.org",
     ]
-# ─────────────────────────────────────────────────────────────────────────────
+
+HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
+PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8052"))
+PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
+
+# ─── App ────────────────────────────────────────────────────────────────────
+
+logger.info("Starting Web-Search MCP server on %s:%s%s (auth=%s)",
+            HOST, PORT, PATH, "off" if _disable_auth else "on")
+
+# Start the MCP server using Streamable HTTP transport
+wrapped_app = make_header_gate(
+    mcp.http_app(),
+    ctx_list=[],
+    header_name_list=[],
+    logger=logger,       
+    mcp_path=PATH,  
+)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -75,25 +92,3 @@ def debug():
     question = "How do I submit a job to the DKRZ HPC?"
     resp = web_search(question)
     print(resp)
-
-    
-if __name__ == "__main__":
-    # Configure Streamable HTTP transport 
-    host = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("FREVAGPT_MCP_PORT", "8052"))
-    path = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
-
-    logger.info("Starting Web-Search MCP server on %s:%s%s (auth=%s)",
-                host, port, path, "off" if _disable_auth else "on")
-
-    # Start the MCP server using Streamable HTTP transport
-    wrapped_app = make_header_gate(
-        mcp.http_app(),
-        ctx_list=[],
-        header_name_list=[],
-        logger=logger,       
-        mcp_path=path,  
-    )
-
-    import uvicorn
-    uvicorn.run(wrapped_app, host=host, port=port, ws="websockets-sansio",)

@@ -42,7 +42,7 @@ RUN echo "conda activate env" >> ~/.bashrc
 # Install uv into the env 
 RUN conda run -n env python -m pip install --no-cache-dir uv
 
-COPY docker/web_search-server/pyproject.toml /app/pyproject.toml
+COPY docker/web-search-server/pyproject.toml /app/pyproject.toml
 
 # Export requirements from pyproject.toml into a file
 RUN conda run -n env uv export --format requirements-txt --no-hashes -o /tmp/requirements.txt

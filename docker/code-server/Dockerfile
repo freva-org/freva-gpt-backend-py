@@ -61,6 +61,10 @@ RUN conda run -n env uv pip install \
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch
 
+# # Install pytorch with CUDA wheels
+# RUN conda run -n env python -m pip install --no-cache-dir \
+#     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
 # Python env paths
 ENV PATH="/opt/conda/envs/env/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"

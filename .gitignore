@@ -9,6 +9,7 @@ wheels/
 *.egg-info
 .DS_Store
 .coverage
+tui_files/
 
 .env
 

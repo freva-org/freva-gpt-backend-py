@@ -104,7 +104,7 @@ def get_user_threads(num_threads=None, page=0) -> tuple[list, int]:
 
 def set_thread_topic(thread_id, new_topic):
     return do_request_and_maybe_fail(
-        f"/setthreadtopic?thread_id={thread_id}&new_topic={new_topic}"
+        f"/setthreadtopic?thread_id={thread_id}&topic={new_topic}"  # It's "topic", not "new_topic" now
     )
 
 
@@ -113,9 +113,22 @@ def search_database(query: str):
     return do_request_and_maybe_fail(f"/searchthreads?query={query}&num_threads=10")
 
 
+def delete_thread(thread_id: str):
+    return do_request_and_maybe_fail(f"/deletethread?thread_id={thread_id}")
+
+
+def fork_thread(thread_id: str, fork_from_index: int) -> str:
+    response = do_request_and_maybe_fail(
+        f"/editthread?source_thread_id={thread_id}&fork_from_index={fork_from_index}"
+    )
+    print(response)
+    return response["new_thread_id"]
+
+
 @dataclass
 class StreamResult:
     chatbot: str | None
+    thread_id: str
     raw_response: list = field(default_factory=list)
     json_response: list = field(default_factory=list)
     code_variants: list = field(default_factory=list)
@@ -126,120 +139,135 @@ class StreamResult:
     parsed_list: list = field(
         default_factory=list
     )  # Full list of variants, with combined fragments.
-    thread_id: str | None = None
-
-    def extract_variants(self, thread_id: str | None = None):
-        if self.json_response:
-            # DEBUG
-            print("Debug: Extracting variants from json_response: ", self.json_response)
-            # The stream can stream multiple Assistant or Code fragments one after the other, in order to get good UX, but that means that multiple fragments that form a single variant can be streamed one after the other.
-            # So, for convenience, we'll combine consecutive fragments that form a single variant into a single variant, if that variant is Assistant or Code.
-
-            full_list = []  # Full list of variants, with combined fragments.
-
-            running_code = None  # None or tuple of (code, code_id) (which is the content of the fragment)
-            running_assistant = (
-                None  # None or string (which is the content of the fragment)
-            )
-            for fragment in self.json_response:
-                variant = fragment["variant"]
-                content = fragment["content"]
-
-                if variant != "Code" and running_code:
-                    self.code_variants.append(running_code)
-                    full_list.append({"variant": "Code", "content": running_code})
-                    running_code = None
-                if variant != "Assistant" and running_assistant:
-                    self.assistant_variants.append(running_assistant)
-                    full_list.append(
-                        {"variant": "Assistant", "content": running_assistant}
-                    )
-                    running_assistant = None
-
-                if variant == "Code":
-                    # Python doesn't encode the ID as a part of the content (the second object in the tuple),
-                    # but rather as a separate field in the JSON object. So we need to check for that and combine it with the code content if it exists.
-                    actual_content = (
-                        content[0]
-                        if isinstance(content, list) and len(content) > 0
-                        else content
-                    )  # if it's a list, assume Rust and take the first element, else take the content directly, which is how the Python backend does it.
-                    actual_id = (
-                        content[1]
-                        if isinstance(content, list) and len(content) > 1
-                        else fragment.get("id", None)
-                    )  # The code_id can be either in the content (Rust) or in a separate field (Python), so we check both places.
-                    if running_code:
-                        running_code = (
-                            running_code[0] + actual_content,
-                            running_code[1],
-                        )
-                    else:
-                        running_code = (actual_content, actual_id)
-                elif variant == "Assistant":
-                    if running_assistant:
-                        running_assistant = running_assistant + content
-                    else:
-                        running_assistant = content
-                elif variant == "CodeOutput":
-                    # The same divide on how the ID is encoded also exists for the CodeOutput
-                    actual_content = (
-                        content[0]
-                        if isinstance(content, list) and len(content) > 0
-                        else content
-                    )
-                    self.codeoutput_variants.append(actual_content)
-                    full_list.append({"variant": variant, "content": actual_content})
-                elif variant == "Image":
-                    self.image_variants.append(content)
-                    full_list.append({"variant": variant, "content": content})
-                elif variant == "ServerHint":
-                    self.server_hint_variants.append(content)
-                    full_list.append({"variant": variant, "content": content})
-                elif (
-                    variant == "User"
-                    or variant == "OpenAIError"
-                    or variant == "CodeError"
-                    or variant == "StreamEnd"
-                ):
-                    full_list.append({"variant": variant, "content": content})
-                else:
-                    print(f"Unknown variant {variant} found in response!")
-
-            # If there is still a running code or assistant, add it to the list.
-            # But this shouldn't really happen, every stream should be ended with a StreamEnd variant.
-            if running_code:
-                self.code_variants.append(running_code)
-                full_list.append(("Code", running_code))
-            if running_assistant:
-                self.assistant_variants.append(running_assistant)
-                full_list.append(("Assistant", running_assistant))
-
-            self.parsed_list = full_list
-
-            # The python backend puts the payload in directly, so the dict doesn't need to be parsed.
-            # If it's a string, decode it, else use it directly.
-            # I actually don't understand why this code worked before; the Rust backend should actually not always send the thread_id.
-            # Now that it isn't being sent every time, this breaks. I'll just set the thread_id from outside if it's already known.
-            if thread_id:
-                self.thread_id = thread_id
-            elif self.server_hint_variants and isinstance(
-                self.server_hint_variants[0], str
-            ):
-                self.thread_id = json.loads(self.server_hint_variants[0])["thread_id"]
-            elif self.server_hint_variants and isinstance(
-                self.server_hint_variants[0], dict
-            ):
-                self.thread_id = self.server_hint_variants[0]["thread_id"]
-            else:
-                self.thread_id = None
-
-            print(
-                "Debug: thread_id: " + (self.thread_id or "None")
-            )  # Alway print the thread_id for debugging, so that when a test fails, we know which thread_id to look at.
 
     def has_error_variants(self):
         return any(["error" in i["variant"].lower() for i in self.json_response])
+
+
+def parse_response_variants(
+    json_response, raw_response: list | None = None, thread_id: str | None = None
+) -> StreamResult:
+    code_variants = []
+    assistant_variants = []
+    codeoutput_variants = []
+    image_variants = []
+    server_hint_variants = []
+
+    # DEBUG
+    print("Debug: Extracting variants from json_response: ", json_response)
+    # The stream can stream multiple Assistant or Code fragments one after the other, in order to get good UX, but that means that multiple fragments that form a single variant can be streamed one after the other.
+    # So, for convenience, we'll combine consecutive fragments that form a single variant into a single variant, if that variant is Assistant or Code.
+
+    full_list = []  # Full list of variants, with combined fragments.
+
+    running_code = (
+        None  # None or tuple of (code, code_id) (which is the content of the fragment)
+    )
+    running_assistant = None  # None or string (which is the content of the fragment)
+    for fragment in json_response:
+        variant = fragment["variant"]
+        content = fragment["content"]
+
+        if variant != "Code" and running_code:
+            code_variants.append(running_code)
+            full_list.append({"variant": "Code", "content": running_code})
+            running_code = None
+        if variant != "Assistant" and running_assistant:
+            assistant_variants.append(running_assistant)
+            full_list.append({"variant": "Assistant", "content": running_assistant})
+            running_assistant = None
+
+        if variant == "Code":
+            # Python doesn't encode the ID as a part of the content (the second object in the tuple),
+            # but rather as a separate field in the JSON object. So we need to check for that and combine it with the code content if it exists.
+            actual_content = (
+                content[0]
+                if isinstance(content, list) and len(content) > 0
+                else content
+            )  # if it's a list, assume Rust and take the first element, else take the content directly, which is how the Python backend does it.
+            actual_id = (
+                content[1]
+                if isinstance(content, list) and len(content) > 1
+                else fragment.get("id", None)
+            )  # The code_id can be either in the content (Rust) or in a separate field (Python), so we check both places.
+            if running_code:
+                running_code = (
+                    running_code[0] + actual_content,
+                    running_code[1],
+                )
+            else:
+                running_code = (actual_content, actual_id)
+        elif variant == "Assistant":
+            if running_assistant:
+                running_assistant = running_assistant + content
+            else:
+                running_assistant = content
+        elif variant == "CodeOutput":
+            # The same divide on how the ID is encoded also exists for the CodeOutput
+            actual_content = (
+                content[0]
+                if isinstance(content, list) and len(content) > 0
+                else content
+            )
+            codeoutput_variants.append(actual_content)
+            full_list.append({"variant": variant, "content": actual_content})
+        elif variant == "Image":
+            image_variants.append(content)
+            full_list.append({"variant": variant, "content": content})
+        elif variant == "ServerHint":
+            server_hint_variants.append(content)
+            full_list.append({"variant": variant, "content": content})
+        elif (
+            variant == "User"
+            or variant == "OpenAIError"
+            or variant == "CodeError"
+            or variant == "StreamEnd"
+        ):
+            full_list.append({"variant": variant, "content": content})
+        else:
+            print(f"Unknown variant {variant} found in response!")
+
+    # If there is still a running code or assistant, add it to the list.
+    # But this shouldn't really happen, every stream should be ended with a StreamEnd variant.
+    if running_code:
+        code_variants.append(running_code)
+        full_list.append(("Code", running_code))
+    if running_assistant:
+        assistant_variants.append(running_assistant)
+        full_list.append(("Assistant", running_assistant))
+
+    # The python backend puts the payload in directly, so the dict doesn't need to be parsed.
+    # If it's a string, decode it, else use it directly.
+    # I actually don't understand why this code worked before; the Rust backend should actually not always send the thread_id.
+    # Now that it isn't being sent every time, this breaks. I'll just set the thread_id from outside if it's already known.
+    if thread_id:
+        thread_id = thread_id
+    elif server_hint_variants and isinstance(server_hint_variants[0], str):
+        thread_id = json.loads(server_hint_variants[0])["thread_id"]
+    elif server_hint_variants and isinstance(server_hint_variants[0], dict):
+        thread_id = server_hint_variants[0]["thread_id"]
+    if not thread_id:
+        # self.thread_id = None
+        raise ValueError(
+            "No thread_id found in server hints! Server hints were: "
+            + str(server_hint_variants)
+        )  # We should really not try to continue if we don't have a thread_id
+
+    print(
+        "Debug: thread_id: " + (thread_id or "None")
+    )  # Alway print the thread_id for debugging, so that when a test fails, we know which thread_id to look at.
+    return StreamResult(
+        chatbot=None,
+        thread_id=thread_id,
+        raw_response=raw_response,
+        json_response=json_response,
+        code_variants=code_variants,
+        codeoutput_variants=codeoutput_variants,
+        assistant_variants=assistant_variants,
+        image_variants=image_variants,
+        server_hint_variants=server_hint_variants,
+        parsed_list=full_list,
+    )
 
 
 def generate_full_response(
@@ -248,15 +276,21 @@ def generate_full_response(
     inner_url = "/streamresponse?input=" + user_input
     if chatbot:
         inner_url = inner_url + "&chatbot=" + chatbot
+    if fork_from_index is not None:
+        # The new backend has a separate endpoint for forking threads.
+        # First, fork the thread, grab the new thread_id, then call the streamresponse endpoint with the new thread_id.
+        if thread_id is None:
+            raise ValueError(
+                "thread_id must be provided if fork_from_index is provided"
+            )
+        thread_id = fork_thread(thread_id, fork_from_index)
+        # Just continue with the new thread_id, which will be used in the streamresponse call below.
     if thread_id:
         inner_url = inner_url + "&thread_id=" + thread_id
-    if fork_from_index is not None:
-        inner_url = inner_url + "&fork_from_index=" + str(fork_from_index)
 
     print("Debug: Generating full response with URL: " + inner_url)
 
     # The response is streamed, but we will consume it here and store it
-    result = StreamResult(chatbot)
     response = get_request(inner_url, stream=True)
 
     # Because the python request library is highly unreliable when it comes to streaming, we will manually assemble the response packet by packet here.
@@ -291,10 +325,11 @@ def generate_full_response(
                     pass
 
         # All packets that we could parse are now in reconstructed_packets, and the buffer contains the rest of the data.
-    result.raw_response = raw_response
-    result.json_response = reconstructed_packets
-
-    result.extract_variants(thread_id)  # maybe pass the thread_id.
+    result = parse_response_variants(
+        json_response=reconstructed_packets,
+        raw_response=raw_response,
+        thread_id=thread_id,
+    )
 
     # Print the response for debugging, so that when a test fails, we know what the response was.
     print("Debug: Assistant variants: ")
@@ -367,9 +402,13 @@ def test_hello_world():
     thread_id = get_hello_world_thread_id()
     # Now use the thread_id to test the getthread endpoint
     hw_thread = get_thread_by_id(thread_id)  # Type: list of variants.
-    temp = StreamResult(None)
-    temp.json_response = hw_thread
-    temp.extract_variants()
+    temp = parse_response_variants(json_response=hw_thread)
+    delete_thread(
+        thread_id
+    )  # Clean up after the test, to not clutter the database with test threads.
+    # But do it as soon as possible to make sure that failing asserts don't prevent cleanup.
+    # Some later tests can't guarantee that because of the multi-turn conversations, they work on best-effort.
+
     assert temp.thread_id == thread_id  # Just make sure the thread_id is correct
     assert any(
         "Hello\nWorld\n!" in i for i in temp.codeoutput_variants
@@ -384,6 +423,7 @@ def test_sine_wave(display=False):
     )
     # We want to make sure we have generated code, code output and an image. But we want to print the assistant response if it fails.
     print(response.assistant_variants)
+    delete_thread(response.thread_id)
     assert response.code_variants
     assert response.codeoutput_variants
     assert response.image_variants
@@ -407,6 +447,7 @@ def test_persistent_thread_storage():
         chatbot=selected_chatbot,
         thread_id=response.thread_id,
     )
+    delete_thread(response.thread_id)
     # The code output should now contain 12
     assert any("12" in i for i in response2.codeoutput_variants)
 
@@ -418,6 +459,7 @@ def test_persistant_state_storage():
         'Please assign the value 42 to the variable x in the code_interpreter tool. After that, call the tool with the code "print(x, flush=True)", without assigning x again. It\'s a test for the presistance of data.',
         chatbot=selected_chatbot,
     )
+    delete_thread(response.thread_id)
     # The code output should now contain 42
     assert any("42" in i for i in response.codeoutput_variants)
     # Also make sure there are actually two code variants
@@ -426,18 +468,19 @@ def test_persistant_state_storage():
 
 def test_persistant_xarray_storage():
     """Can the backend refer to the same xarray in different tool calls?"""  # Since Version 1.6.5
-    reponse = generate_full_response(
+    response = generate_full_response(
         'Please generate a simple xarray dataset in the code_interpreter tool and print out the content. After that, call the tool with the code "print(ds, flush=True)", without generating the dataset again. It\'s a test for the presistance of data, specifically whether xarray Datasets also work.',
         chatbot=selected_chatbot,
     )
+    delete_thread(response.thread_id)
     # The code output should now contain the content of the xarray dataset
     assert any(
         ("xarray.Dataset" in i or "xarray.DataArray" in i)
-        for i in reponse.codeoutput_variants
+        for i in response.codeoutput_variants
     )
     # Also make sure there are actually two code variants
     assert (
-        len(reponse.code_variants) >= 2
+        len(response.code_variants) >= 2
     )  # The LLM sometimes messes up and needs to try again...
 
 
@@ -470,6 +513,7 @@ def test_heartbeat():
         'Please use the code_interpreter tool to run the following code: "import time\ntime.sleep(7)".',
         chatbot=selected_chatbot,
     )
+    delete_thread(response.thread_id)
     # There should now, in total be at least two ServerHint Variants
     # (The Rust backend incorrectly sent two heartbeats at the start of the stream, but the Python backend only sends one, so it's 2 instead of 3)
     assert len(response.server_hint_variants) >= 2
@@ -512,7 +556,6 @@ To test this. Please run the following code: \"x = 42\nraise Exception('This is 
     response = generate_full_response(input, chatbot=selected_chatbot)
     # The code output should now contain the exception message
     assert any(["This is a test exception" in i for i in response.codeoutput_variants])
-    assert any(["This is a test exception" in i for i in response.codeoutput_variants])
 
     # Now make sure the variable x is still stored
     response2 = generate_full_response(
@@ -520,6 +563,7 @@ To test this. Please run the following code: \"x = 42\nraise Exception('This is 
         chatbot=selected_chatbot,
         thread_id=response.thread_id,
     )
+    delete_thread(response.thread_id)
     # The code output should now contain 42
     assert any(["42" in i for i in response2.codeoutput_variants])
     assert any(["42" in i for i in response2.codeoutput_variants])
@@ -549,6 +593,7 @@ def test_third_request():
         thread_id=response1.thread_id,
     )
 
+    delete_thread(response1.thread_id)
     assert any("Sebastian" in i for i in response3.assistant_variants)
 
 
@@ -714,6 +759,7 @@ def test_user_vision():
     )
 
     # print(response) # Debug
+    delete_thread(response.thread_id)
 
     # The response should contain an image and the assistant should not be confused about the location of the X.
     assert response.image_variants, "No image variants found in response!"
@@ -768,6 +814,7 @@ def test_non_alphanumeric_user_id():
             "This is simple test. Please just return 'OK' and exit.",
             chatbot=selected_chatbot,
         )
+        delete_thread(response.thread_id)
         # The response should contain "OK"
         assert any("OK" in i for i in response.assistant_variants), (
             "Assistant did not return 'OK'! Instead, it returned: "
@@ -798,7 +845,7 @@ def test_edit_input():
         "Thank you. This is a test for the functionality to edit existing requests. What do you know about me?",
         chatbot=selected_chatbot,
         thread_id=response1.thread_id,
-        fork_from_index=1,
+        fork_from_index=3,
     )
     # The response should contain my name, but not the fact that I am a student of the university of Hamburg.
     assert "sebastian" in "".join(response3.assistant_variants).lower(), (
@@ -822,6 +869,11 @@ def test_edit_input():
     # And that new thread_id should also be stored in the database, so we can test that.
     # We know what it should contain.
     retrived_thread = get_thread_by_id(response3.thread_id)
+
+    # Note that the thread_id of response1 and response3 differ, as per the assert in the middle of this test.
+    delete_thread(response1.thread_id)
+    delete_thread(response3.thread_id)
+
     assert retrived_thread, (
         "The thread with the edited response was not found in the database! It should have been stored, so that the frontend can handle it correctly."
     )
@@ -856,44 +908,38 @@ def test_edit_input():
     # The Serverhint variant will be where the edit is indicated.
 
     # We'll not use the thread from the database, but rather the one from the response, to make sure that the response is correct.
+    # Note: the new backend doesn't send the already sent variants again since it does it with a seperate call (tbh, it's cleaner)
+    # That means that the sent variants only include a single Assistant variant.
     retrived_thread = [
         i for i in response3.parsed_list if i["variant"] in ["User", "Assistant"]
     ]
 
     print("retrived_thread of response: ", retrived_thread)
 
-    # There should be 3 variants in total, where the first is User, the second is Assistant, and the third is Assistant.
+    # There should be 1 variant in total, only the assistant.
 
-    assert len(retrived_thread) == 3, (
-        "The edited response should have 3 variants, but it has "
+    assert len(retrived_thread) == 1, (
+        "The edited response should have 1 variants, but it has "
         + str(len(retrived_thread))
         + ". Instead, it has the following variants: "
         + str(retrived_thread)
     )
 
-    assert retrived_thread[0]["variant"] == "User", (
-        "The first variant of the thread with the edited response should be User, but it is "
+    assert retrived_thread[0]["variant"] == "Assistant", (
+        "The second variant of the thread with the edited response should be Assistant, but it is "
         + retrived_thread[0]["variant"]
         + "."
     )
-    assert retrived_thread[1]["variant"] == "Assistant", (
-        "The second variant of the thread with the edited response should be Assistant, but it is "
-        + retrived_thread[1]["variant"]
-        + "."
-    )
-    assert retrived_thread[2]["variant"] == "Assistant", (
-        "The third variant of the thread with the edited response should be Assistant, but it is "
-        + retrived_thread[2]["variant"]
-        + "."
-    )
 
-    # Additionally, the content of the user variant is known and should be checked.
-    assert retrived_thread[0]["content"] == "Hi, I'm Sebastian! Who are you?", (
-        'The content of the first variant of the thread with the edited response is not correct! It should be "Hi, I\'m Sebastian! Who are you?", but it is "'
-        + retrived_thread[0]["content"]
-        + '".'
-    )
-    # The content of the second and third variants is not known, so we won't check them.
+    # # Additionally, the content of the user variant is known and should be checked.
+    # assert retrived_thread[0]["content"] == "Hi, I'm Sebastian! Who are you?", (
+    #     'The content of the first variant of the thread with the edited response is not correct! It should be "Hi, I\'m Sebastian! Who are you?", but it is "'
+    #     + retrived_thread[0]["content"]
+    #     + '".'
+    # )
+    # Instead of containing the entire content; this system stores only the added context in the new thread.
+    # It then stores the thread_id of the parent separately. The parent thread_id is not currently readable from outside, so we can't test it.
+    # TODO: maybe test the parent thread_id being correct once it's available.
 
 
 def test_edit_input_with_code():
@@ -929,6 +975,15 @@ def test_edit_input_with_code():
         thread_id=response1.thread_id,
         fork_from_index=4,
     )
+
+    # The thread_ids should differ
+    assert response1.thread_id != response3.thread_id, (
+        "The thread_id of the edited response should be different from the original response, but it is not. This means that the edit request was not handled correctly. Instead, both thread_ids are: "
+        + response1.thread_id
+    )
+    delete_thread(response1.thread_id)
+    delete_thread(response3.thread_id)
+
     # The code output should now contain 42 again, as the value of x should still be stored.
     assert any("42" in i for i in response3.codeoutput_variants), (
         "The code output should contain 42, as the value of x should still be stored, but it does not. Instead, it returned: "

@@ -56,7 +56,7 @@ RUN conda run -n env uv pip install --no-cache-dir --system \
 # Install Python deps via uv (this replaces `pip install ...`)
 RUN conda run -n env uv pip install \
     freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy tzdata
+    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy tzdata pytz
 
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch
@@ -70,9 +70,12 @@ ENV PATH="/opt/conda/envs/env/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-EXPOSE 8051
+EXPOSE ${FREVAGPT_MCP_PORT:-8051}
 
 COPY src /app/src
 
 # Launch CI server
-CMD ["python","-m","src.tools.code.server"]
+CMD uvicorn src.tools.code.server:app \
+    --host ${FREVAGPT_MCP_HOST:-0.0.0.0}\
+    --port ${FREVAGPT_MCP_PORT:-8051} \
+    --proxy-headers

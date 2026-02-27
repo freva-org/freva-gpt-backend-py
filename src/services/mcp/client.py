@@ -10,8 +10,10 @@ import threading
 import httpx
 
 from src.core.logging_setup import configure_logging
+from src.core.settings import get_settings
 
 DEFAULT_LOGGER = configure_logging(__name__)
+settings = get_settings()
 
 MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
@@ -46,7 +48,7 @@ class McpClient:
         self.log = logger or DEFAULT_LOGGER
 
         # simple shared client
-        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(300.0))
+        self._http = httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(settings.MCP_REQUEST_TIMEOUT_SEC))
 
     # ────────── session ──────────
 
@@ -240,14 +242,33 @@ class McpClient:
 
         return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)
 
-    # ────────── convenience ──────────
+    # ────────── termination and clean-up ──────────
+
+    def terminate_session(self) -> None:
+        """
+        Best-effort: tell server to terminate the current session via HTTP DELETE.
+        Server is expected to identify the session via Mcp-Session-Id header.
+        """
+        with self._lock:
+            # TODO: check if multiple sessions even possible
+            sids = list(set(self._session_ids.values()))
+
+        for sid in set(sids):
+            self._session_id = sid
+            try:
+                self._http.delete("/mcp", headers=self._headers(include_session=True))
+            except Exception:
+                pass
+
 
     def close(self) -> None:
         try:
+            self.terminate_session()
+        finally:
+            with self._lock:
+                self._session_id = None
+                self._session_ids.clear()
             self._http.close()
-        except Exception:
-            pass
-
         
 # ──────────────────── Helper functions ──────────────────────────────
 

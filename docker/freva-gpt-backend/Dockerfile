@@ -9,6 +9,7 @@ FROM fedora:latest
 RUN dnf install -y curl bzip2 awk git
 
 RUN mkdir /app
+WORKDIR /app
 
 # -------------------
 # Conda setup
@@ -34,21 +35,21 @@ RUN conda create --name env "python>=3.11.10,<3.12"
 RUN conda init bash
 RUN echo "conda activate env" >> ~/.bashrc
 
-WORKDIR /app
-
 # -----------------
 # uv and deps
 # -----------------
 
-# Uv is a much faster package manager and installer, we'll use it over conda where possible to cut time.
-RUN pip install uv
+# Install uv into the env 
+RUN conda run -n env python -m pip install --no-cache-dir uv
 
 COPY pyproject.toml /app/pyproject.toml
 
-# Export from pyproject and install into the current interpreter (Conda)
-# --system is required when mutating a non-venv interpreter
-RUN source activate env && uv export --format requirements-txt \
-    | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
+# Export requirements from pyproject.toml into a file
+RUN conda run -n env uv export --format requirements-txt --no-hashes -o /tmp/requirements.txt
+# Install exactly those requirements into the env's interpreter
+RUN conda run -n env uv pip install --no-cache-dir --system \
+    --python "/opt/conda/envs/env/bin/python" \
+    -r /tmp/requirements.txt
 
 # -------------------------
 # Config + source
@@ -58,10 +59,9 @@ RUN source activate env && uv export --format requirements-txt \
 COPY litellm_config.yaml /app/litellm_config.yaml
 
 # Python env paths
-ENV PYTHONUSERBASE /opt/conda/envs/env
-ENV PYTHONPATH=/opt/conda/envs/env/lib/python3.11/site-packages
-ENV PATH /opt/conda/envs/env/bin/:$PATH
-ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
+ENV PATH="/opt/conda/envs/env/bin/:$PATH"
+ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 # Copy source code
 COPY src /app/src

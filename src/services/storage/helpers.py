@@ -85,7 +85,7 @@ async def summarize_topic(content: List[Dict]) -> str:
     try:
         resp = await acomplete(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             max_tokens=50,
             temperature=0.2,
         )
@@ -133,7 +133,7 @@ async def get_database(
         """
         mongodb_uri = await get_mongodb_uri(vault_url)
 
-        client = AsyncMongoClient(mongodb_uri)
+        client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
         return client[MONGODB_DATABASE_NAME]
 
 # ──────────────────── Search threads ──────────────────────────────

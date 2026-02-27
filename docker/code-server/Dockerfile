@@ -11,6 +11,7 @@ RUN dnf install -y curl bzip2 awk git \
     && dnf clean all
 
 RUN mkdir /app
+WORKDIR /app
 
 # -------------------
 # Conda setup
@@ -36,39 +37,45 @@ RUN conda create --name env "python>=3.11.10,<3.12"
 RUN conda init bash
 RUN echo "conda activate env" >> ~/.bashrc
 
-WORKDIR /app
-
 # -----------------
 # uv and deps
 # -----------------
 
-RUN pip install uv
+# Install uv into the env 
+RUN conda run -n env python -m pip install --no-cache-dir uv
 
 COPY docker/code-server/pyproject.toml /app/pyproject.toml
 
-# Export from pyproject and install into the current interpreter (Conda)
-# --system is required when mutating a non-venv interpreter
-RUN source activate env && uv export --format requirements-txt \
-    | uv pip install --no-cache-dir --system --python "$(python -c 'import sys; print(sys.executable)')" -r -
+# Export requirements from pyproject.toml into a file
+RUN conda run -n env uv export --format requirements-txt --no-hashes -o /tmp/requirements.txt
+# Install exactly those requirements into the env's interpreter
+RUN conda run -n env uv pip install --no-cache-dir --system \
+    --python "/opt/conda/envs/env/bin/python" \
+    -r /tmp/requirements.txt
 
 # Install Python deps via uv (this replaces `pip install ...`)
-RUN source activate env && uv pip install \
+RUN conda run -n env uv pip install \
     freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy 
+    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy tzdata pytz
 
 # These libraries cannot be installed by uv, so we use conda.
 RUN conda install --yes -c conda-forge -n env pytorch
 
+# # Install pytorch with CUDA wheels
+# RUN conda run -n env python -m pip install --no-cache-dir \
+#     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
 # Python env paths
-ENV PYTHONUSERBASE /opt/conda/envs/env
-ENV PYTHONPATH=/opt/conda/envs/env/lib/python3.11/site-packages
-ENV PATH /opt/conda/envs/env/bin/:$PATH
-ENV LD_LIBRARY_PATH /opt/conda/envs/env/lib/:$PATH
+ENV PATH="/opt/conda/envs/env/bin/:$PATH"
+ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-EXPOSE 8051
+EXPOSE ${FREVAGPT_MCP_PORT:-8051}
 
 COPY src /app/src
 
 # Launch CI server
-CMD ["python","-m","src.tools.code.server"]
+CMD uvicorn src.tools.code.server:app \
+    --host ${FREVAGPT_MCP_HOST:-0.0.0.0}\
+    --port ${FREVAGPT_MCP_PORT:-8051} \
+    --proxy-headers

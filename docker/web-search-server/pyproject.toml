@@ -10,4 +10,5 @@ dependencies = [
     "httpx>=0.28.1",
     "uvicorn[standard]>=0.35.0",
     "openai",
+    "requests>=2.31.0",
 ]

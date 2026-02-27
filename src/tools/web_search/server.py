@@ -32,7 +32,7 @@ logger.info("Starting Web-Search MCP server on %s:%s%s (auth=%s)",
             HOST, PORT, PATH, "off" if _disable_auth else "on")
 
 # Start the MCP server using Streamable HTTP transport
-wrapped_app = make_header_gate(
+app = make_header_gate(
     mcp.http_app(),
     ctx_list=[],
     header_name_list=[],

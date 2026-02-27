@@ -27,7 +27,6 @@ _disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","tru
 mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
 
 # ── Config ───────────────────────────────────────────────────────────────────
-
 REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
 
 # We leave 5 seconds buffer so server responds before client timeout
@@ -39,6 +38,39 @@ SHELL_POLL = 0.1
 
 # Recovery tuning
 MAX_RECOVERY_RETRIES = 1  # extra fresh-client attempt (no restart)
+
+HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
+PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
+PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
+
+# ── App ───────────────────────────────────────────────────────────────────
+# Per-request header context
+CODE_INTERPRETER_CWD_HDR = "working-dir"
+cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
+
+
+# Configure Streamable HTTP transport 
+logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
+            HOST, PORT, PATH, "off" if _disable_auth else "on")
+
+
+# Start the MCP server using Streamable HTTP transport
+app = make_header_gate(
+    mcp.http_app(),
+    ctx_list=[cwd_ctx],
+    header_name_list=[CODE_INTERPRETER_CWD_HDR],
+    logger=logger,       
+    mcp_path=PATH,  
+)
+
+def _get_cwd():
+    cwd = cwd_ctx.get()
+    if not cwd:
+        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
+                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
+        return
+    else:
+        return cwd
 
 # ── Kernel persistence ───────────────────────────────────────────────────────
 
@@ -354,42 +386,3 @@ def code_interpreter(code: str) -> dict:
             "display_data": [],
             "error": msg,
         }
-
-
-# ── Header helpers ────────────────────────────────────────────────────────────
-# Per-request header context
-CODE_INTERPRETER_CWD_HDR = "working-dir"
-cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
-
-    
-def _get_cwd():
-    cwd = cwd_ctx.get()
-    if not cwd:
-        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
-                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
-        return
-    else:
-        return cwd
-
-
-if __name__ == "__main__":
-    # Configure Streamable HTTP transport 
-    host = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
-    path = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
-
-    logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
-                host, port, path, "off" if _disable_auth else "on")
-    
-    # Start the MCP server using Streamable HTTP transport
-    wrapped_app = make_header_gate(
-        mcp.http_app(),
-        ctx_list=[cwd_ctx],
-        header_name_list=[CODE_INTERPRETER_CWD_HDR],
-        logger=logger,       
-        mcp_path=path,  
-        on_session_close=cleanup_mcp_session,
-    )
-
-    import uvicorn
-    uvicorn.run(wrapped_app, host=host, port=port, ws="websockets-sansio",)

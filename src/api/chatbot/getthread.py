@@ -16,7 +16,7 @@ router = APIRouter()
 def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
     items = [item for item in v if not is_prompt(item)]
-    cleaned: List[Dict] = []
+    cleaned: List[StreamVariant] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = (i == len(items) - 1)
@@ -81,7 +81,8 @@ async def get_thread(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=Auth.vault_url)
-    except:
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
@@ -104,6 +105,6 @@ async def get_thread(
 
     content = _post_process(content)
 
-    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info(f"Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

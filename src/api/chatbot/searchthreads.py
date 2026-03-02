@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union, Tuple
+from typing import Union, Tuple, Literal
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -82,19 +82,22 @@ async def search_threads(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=auth.vault_url)
-    except:
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB: %s", e)
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Decide search mode (topic vs variant)
-    mode, _query = parse_query_mode(query)
+    mode_and_query = parse_query_mode(query)
 
     try:
-        if mode == "variant":
-            variant, content = _query
+        if mode_and_query[0] == "variant":
+            variant, content = mode_and_query[1]
             total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads)
         else:
+            _query = mode_and_query[1]
             total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads)
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to query threads: %s", e)
         raise HTTPException(status_code=500, detail="Failed to query threads.")
 
     return [
@@ -112,7 +115,7 @@ async def search_threads(
     ]
 
 
-def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
+def parse_query_mode(query: str) -> Union[tuple[Literal["topic"], str], tuple[Literal["variant"], Tuple[Variant, str]]]:
     """
     Returns:
       - query string OR

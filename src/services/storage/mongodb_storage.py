@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
 import re
 
@@ -144,7 +144,7 @@ class ThreadStorage():
         user_id: str,
         topic: str,
         num_threads: int,
-    ) -> Dict[str, Any]:
+    ) -> tuple[int, List[Thread]]:
         """
         Search in the topic field.
         """
@@ -180,7 +180,7 @@ class ThreadStorage():
         variant: Variant,
         content: str,
         num_threads: int,
-    ) -> Dict[str, Any]:
+    ) -> tuple[int, List[Thread]]:
         """
         Search in a specific variant field (user/assistant/code/code_output).
         """

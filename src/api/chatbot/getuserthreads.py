@@ -65,7 +65,8 @@ async def get_user_threads(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=auth.vault_url)
-    except:
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
@@ -89,6 +90,7 @@ async def get_user_threads(
             ], 
             total_num_threads
         ]
-    except:
+    except Exception as e:
+        logger.warning("Failed to fetch user history from storage", extra={"error": str(e)})
         raise HTTPException(status_code=500,
                             detail="Failed to fetch user history from storage.")

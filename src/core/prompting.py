@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+import json
+import logging
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List
+
+from src.core.available_chatbots import model_is_gpt_5, model_is_ollama
+from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
+
 """
 Prompt loading & assembly (non-streaming), single API for all models.
 
@@ -18,14 +27,6 @@ Differences from Rust (documented for future parity)
    and fall back to the baseline prompt set.
 """
 
-import json
-import logging
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, Dict, List
-
-from src.core.available_chatbots import model_is_gpt_5, model_is_ollama
-from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
 
 logger = logging.getLogger(__name__)
 

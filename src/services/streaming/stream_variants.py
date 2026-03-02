@@ -357,7 +357,7 @@ def help_convert_sv_ccrm(
                 out.append(_as_system("openai_error", v.message))
 
         elif isinstance(v, SVCodeError):
-            if include_meta and v.id:
+            if include_meta and v.id: # TODO: fix?
                 out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
             elif include_meta:
                 out.append(_as_system("code_error", v.message))

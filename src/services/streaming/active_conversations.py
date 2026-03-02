@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import asyncio
+from contextlib import asynccontextmanager
 
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_variants import StreamVariant, SVCode, from_json_to_sv, from_sv_to_json
@@ -14,6 +15,29 @@ from src.services.service_factory import (
     get_mcp_manager
 )
 from src.services.streaming.tool_calls import run_tool_via_mcp
+
+import time
+from prometheus_client import Histogram, Gauge
+
+REGISTRY_LOCK_WAIT_SECONDS = Histogram(
+    "registry_lock_wait_seconds",
+    "Time spent waiting to acquire RegistryLock",
+    buckets=(0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5),
+)
+
+REGISTRY_LOCK_HOLD_SECONDS = Histogram(
+    "registry_lock_hold_seconds",
+    "Time spent holding RegistryLock (critical section duration)",
+    buckets=(0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1),
+)
+
+"""
+Measurement with 100 parallel streams:
+lock wait p95 ≈ 0.475 ms
+lock hold p95 ≈ 0.19 ms
+"""
+
+REGISTRY_SIZE = Gauge("registry_size", "Number of active conversations in Registry")
 
 DEFAULT_LOGGER = configure_logging(__name__)
 
@@ -39,6 +63,19 @@ Registry: Dict[str, ActiveConversation] = {}
 RegistryLock = asyncio.Lock()
 
 
+@asynccontextmanager
+async def registry_lock():
+    t_wait0 = time.perf_counter()
+    async with RegistryLock:
+        REGISTRY_LOCK_WAIT_SECONDS.observe(time.perf_counter() - t_wait0)
+
+        t_hold0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            REGISTRY_LOCK_HOLD_SECONDS.observe(time.perf_counter() - t_hold0)
+
+
 def _generate_id(length: int = 32) -> str:
     """Generate a random thread id candidate."""
     return "".join(random.choices(string.ascii_letters + string.digits, k=length))
@@ -49,7 +86,7 @@ async def new_thread_id() -> str:
     Create a new unique thread_id that does not collide with existing entries
     in the in-memory registry.
     """
-    async with RegistryLock:
+    async with registry_lock():
         while True:
             candidate = _generate_id()
             if candidate not in Registry:
@@ -60,7 +97,7 @@ async def check_thread_exists(thread_id: str) -> bool:
     """
     Check if a thread_id exists in the registry.
     """
-    async with RegistryLock:
+    async with registry_lock():
         return thread_id in Registry.keys()
     
 
@@ -92,6 +129,7 @@ async def initialize_conversation(
         )
         # register conversation
         Registry[thread_id] = conv
+        REGISTRY_SIZE.set(len(Registry))
 
         # send tool calls to MCP server if there are Code variants present in messages
         if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
@@ -105,7 +143,7 @@ async def initialize_conversation(
 
     else:
         log.debug("Conversation was found in the Registry. Starting streaming...")
-        async with RegistryLock:
+        async with registry_lock():
             conv = Registry.get(thread_id)
             conv.state = ConversationState.STREAMING
             conv.last_activity = datetime.now(timezone.utc)
@@ -119,7 +157,7 @@ async def add_to_conversation(
     Check if an ActiveConversation exists for thread_id and append new variants.
     Updates last_activity and returns the updated conversation object.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         if conv is None: 
             raise ValueError("Conversation does not exist. Please initialize first!")
@@ -133,7 +171,7 @@ async def get_conversation_state(thread_id: str) -> Optional[ConversationState]:
     Return the state of the conversation, or None if it is unknown.
     Does NOT create a conversation if missing.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         return conv.state if conv is not None else None
     
@@ -143,7 +181,7 @@ async def get_conv_mcpmanager(thread_id: str) -> Optional[McpManager]:
     Return the MCPManager of the conversation, or None if it does not exist
     Does NOT create a conversation if missing.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         return conv.mcp_manager if conv is not None else None
     
@@ -153,7 +191,7 @@ async def get_conv_messages(thread_id: str) -> Optional[List[StreamVariant]]:
     Return the messages of the conversation, or None if it does not exist
     Does NOT create a conversation if missing.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         return conv.messages if conv is not None else None
     
@@ -164,7 +202,7 @@ async def request_stop(thread_id: str) -> bool:
     Returns True if the conversation was found and updated.
     (The streaming loop should periodically check the state and exit when STOPPING.)
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         if conv is None:
             return False
@@ -182,7 +220,7 @@ async def end_and_save_conversation(
     storage through storage.router. Usually followed by remove_conversation.
     Returns True if a conversation was found and saved, False if it didn't exist.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         if conv is None:
             return False
@@ -203,8 +241,9 @@ async def remove_conversation(
     NOTE: we do NOT hold the registry_lock while awaiting I/O.
     """
     # Remove under lock
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.pop(thread_id, None)
+        REGISTRY_SIZE.set(len(Registry))
 
     if conv is None:
         return False
@@ -218,7 +257,7 @@ async def _replay_code_history(thread_id: str) -> None:
 
     This is best-effort: failures are logged and we continue or stop depending on the error.
     """
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         if conv is None:
             return
@@ -266,7 +305,7 @@ async def register_tool_task(thread_id: str, task: asyncio.Task) -> None:
     Register a long-running tool task with a conversation so it can be cancelled
     via /stop.
     """
-    async with RegistryLock:
+    async with registry_lock():
         Registry.get(thread_id).tool_tasks.add(task)
 
 
@@ -274,7 +313,7 @@ async def unregister_tool_task(thread_id: str, task: asyncio.Task) -> None:
     """
     Remove a task from the registry once it finishes.
     """
-    async with RegistryLock:
+    async with registry_lock():
         tasks = Registry.get(thread_id).tool_tasks or ()
         if not tasks:
             return
@@ -285,14 +324,14 @@ async def cancel_tool_tasks(thread_id: str) -> None:
     """
     Cancel all known tool tasks for this conversation.
     """
-    async with RegistryLock:
+    async with registry_lock():
         tasks = Registry.get(thread_id).tool_tasks or ()
     for t in tasks:
         t.cancel()
 
 
 async def save_feedback_to_registry(thread_id: str, f_ind: int, feedback: str) -> None:
-    async with RegistryLock:
+    async with registry_lock():
         conv = Registry.get(thread_id)
         msg = conv.messages
         conv.last_activity = datetime.now(timezone.utc)
@@ -319,12 +358,13 @@ async def cleanup_idle(
     evicted_ids: List[str] = []
 
     # Decide which ones to evict under lock and remove them.
-    async with RegistryLock:
+    async with registry_lock():
         for thread_id, conv in list(Registry.items()):
             if now - conv.last_activity > max_idle:
                 evicted_ids.append(thread_id)
                 conv.mcp_manager.close()
                 to_evict.append(Registry.pop(thread_id))
+                REGISTRY_SIZE.set(len(Registry))
 
     # Persist outside the lock to avoid blocking other requests.
     if Storage:

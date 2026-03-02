@@ -10,7 +10,7 @@ from fastmcp import FastMCP
 from src.tools.rag.helpers import *
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
-from src.tools.header_gate import make_header_gate
+from src.tools.asgi_wrapper import wrap_asgi_app
 from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
@@ -46,7 +46,7 @@ logger.info("Starting RAG MCP server on %s:%s%s (auth=%s)",
             HOST, PORT, PATH, "off" if _disable_auth else "on")
 
 # Start the MCP server using Streamable HTTP transport
-app = make_header_gate(
+app = wrap_asgi_app(
     mcp.http_app(),
     ctx_list=[mongo_uri_ctx],
     header_name_list=[MONGODB_URI_HDR],

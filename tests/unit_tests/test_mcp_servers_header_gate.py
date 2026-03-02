@@ -5,7 +5,7 @@ from contextvars import ContextVar
 async def test_header_gate_delete_triggers_cleanup_and_returns_204():
     # Import your make_header_gate from wherever it lives
     # from src.tools.header_gate import make_header_gate
-    from src.tools.header_gate import make_header_gate
+    from src.tools.asgi_wrapper import make_header_gate
 
     # Dummy inner app that should NOT be called on DELETE
     inner_called = {"called": False}

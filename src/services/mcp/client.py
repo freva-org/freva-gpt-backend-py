@@ -19,6 +19,21 @@ MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
 DISCOVERY_SESSION_KEY = "__discovery__"
 
+import time
+from prometheus_client import Histogram, Counter
+
+MCP_CALL_SECONDS = Histogram(
+    "mcp_call_seconds",
+    "Time spent calling MCP servers (sync client)",
+    ["method", "tool"],
+    buckets=(0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 60),
+)
+
+MCP_CALL_ERRORS = Counter(
+    "mcp_call_errors_total",
+    "MCP call errors",
+    ["method", "tool", "kind"],
+)
 
 @dataclass
 class McpCallResult:
@@ -188,7 +203,8 @@ class McpClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         }
-        r = self._http.post("/mcp", headers=self._headers(extra_headers), json=body)
+        r = self._timed_post("jsonrpc_tools/call", name, "/mcp",
+                     headers=self._headers(extra_headers), json=body)
         res = self._rpc_result(r, rpc_id)
         if res.ok and isinstance(res.result, dict):
             return res.result
@@ -201,22 +217,34 @@ class McpClient:
             "method": "tools.call",
             "params": {"name": name, "arguments": args},
         }
-        r2 = self._http.post("/mcp", headers=self._headers(extra_headers), json=body2)
+        r2 = self._timed_post("jsonrpc_tools.call", name, "/mcp",
+                      headers=self._headers(extra_headers), json=body2)
         res2 = self._rpc_result(r2, rpc_id2)
         if res2.ok and isinstance(res2.result, dict):
             return res2.result
 
         # Strategy 3: direct POST /tools/call
-        r3 = self._http.post(
-            "/tools/call",
-            headers=self._headers(extra_headers),
-            json={"name": name, "arguments": args},
-        )
+        r3 = self._timed_post("http_tools/call", name, "/tools/call",
+                      headers=self._headers(extra_headers),
+                      json={"name": name, "arguments": args})
         r3.raise_for_status()
         data = r3.json()
         if isinstance(data, dict):
             return data
         return {"ok": True, "result": data}
+    
+    def _timed_post(self, method_label: str, tool_name: str, path: str, *, headers, json):
+        t0 = time.perf_counter()
+        try:
+            r = self._http.post(path, headers=headers, json=json)
+            if r.status_code >= 400:
+                MCP_CALL_ERRORS.labels(method=method_label, tool=tool_name, kind=f"http_{r.status_code}").inc()
+            return r
+        except Exception as e:
+            MCP_CALL_ERRORS.labels(method=method_label, tool=tool_name, kind=type(e).__name__).inc()
+            raise
+        finally:
+            MCP_CALL_SECONDS.labels(method=method_label, tool=tool_name).observe(time.perf_counter() - t0)
 
     # ────────── rpc result helper ──────────
 

@@ -31,6 +31,10 @@ from src.services.streaming.active_conversations import (
     register_tool_task, unregister_tool_task,   
 )
 
+from prometheus_client import Gauge
+
+RUN_STREAMS_IN_PROGRESS = Gauge("run_streams_in_progress", "Active run_stream() generators")
+
 DEFAULT_LOGGER = configure_logging(__name__)
 
 
@@ -232,35 +236,40 @@ async def run_stream(
     await add_to_conversation(thread_id, [user_v])
 
     stream_state = StreamState()
-    
-    # Stream model/tool output
-    while not stream_state.finished:
-        conv_state = await get_conversation_state(thread_id)
-        if conv_state != ConversationState.STREAMING:
-            break
-        try:
-            async for piece in stream_with_tools(
-                thread_id=thread_id,
-                messages=system_prompt,
-                model=model,
-                acomplete_func=acomplete,
-                stream_state=stream_state,
-                logger=log,
-            ):  
-                yield piece
 
-        except asyncio.CancelledError:
-            end_v = SVStreamEnd(message="Cancelled.")
-            log.error("Stream is cancelled.")
-            stream_state.finished = True
-        except Exception as e:
-            log.exception("Stream error: %s", e)
-            err_v = SVServerError(message=str(e))
-            end_v = SVStreamEnd(message="Stream ended with an error.")
-            await add_to_conversation(thread_id, [err_v])
-            stream_state.finished = True
-            yield err_v
-            yield end_v
+    RUN_STREAMS_IN_PROGRESS.inc()
+    try:
+    
+        # Stream model/tool output
+        while not stream_state.finished:
+            conv_state = await get_conversation_state(thread_id)
+            if conv_state != ConversationState.STREAMING:
+                break
+            try:
+                async for piece in stream_with_tools(
+                    thread_id=thread_id,
+                    messages=system_prompt,
+                    model=model,
+                    acomplete_func=acomplete,
+                    stream_state=stream_state,
+                    logger=log,
+                ):  
+                    yield piece
+
+            except asyncio.CancelledError:
+                end_v = SVStreamEnd(message="Cancelled.")
+                log.error("Stream is cancelled.")
+                stream_state.finished = True
+            except Exception as e:
+                log.exception("Stream error: %s", e)
+                err_v = SVServerError(message=str(e))
+                end_v = SVStreamEnd(message="Stream ended with an error.")
+                await add_to_conversation(thread_id, [err_v])
+                stream_state.finished = True
+                yield err_v
+                yield end_v
+    finally:
+        RUN_STREAMS_IN_PROGRESS.dec()
 
 
 async def prepare_for_stream(

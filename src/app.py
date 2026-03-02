@@ -82,3 +82,30 @@ app.include_router(chatbot.router, prefix="/api/chatbot", tags=["chatbot"])
 def _healthz():
     # Simple liveness probe
     return {"status": "ok", "version": get_settings().VERSION}
+
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator(
+    excluded_handlers=["/metrics", "/healthz"]
+).instrument(app).expose(app, endpoint="/metrics")
+
+from prometheus_client import Gauge
+import time
+
+EVENT_LOOP_LAG_SECONDS = Gauge(
+    "event_loop_lag_seconds",
+    "How much the asyncio event loop is delayed (blocked)",
+)
+
+async def _monitor_event_loop_lag():
+    interval = 0.1  # 100ms
+    while True:
+        t0 = time.perf_counter()
+        await asyncio.sleep(interval)
+        lag = (time.perf_counter() - t0) - interval
+        # don't record tiny negative values due to clock jitter
+        EVENT_LOOP_LAG_SECONDS.set(max(0.0, lag))
+
+@app.on_event("startup")
+async def _start_lag_monitor():
+    asyncio.create_task(_monitor_event_loop_lag())

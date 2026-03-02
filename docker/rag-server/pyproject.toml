@@ -13,4 +13,5 @@ dependencies = [
     "motor>=3.7.1",
     "uvicorn[standard]>=0.35.0",
     "jq>=1.10.0",
+    "prometheus-fastapi-instrumentator>=7.1.0",
 ]

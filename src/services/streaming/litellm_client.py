@@ -8,6 +8,25 @@ from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
 import httpx
 
 from src.core.settings import get_settings
+
+import time
+from prometheus_client import Histogram, Counter
+
+LITELLM_STREAM_TTFB_SECONDS = Histogram(
+    "litellm_stream_ttfb_seconds",
+    "Time to first streamed token from LiteLLM",
+    buckets=(0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10),
+)
+LITELLM_STREAM_TOTAL_SECONDS = Histogram(
+    "litellm_stream_total_seconds",
+    "Total duration of LiteLLM streaming request",
+    buckets=(0.2, 0.5, 1, 2, 5, 10, 20, 60, 120),
+)
+LITELLM_STREAM_RESPONSES = Counter(
+    "litellm_stream_responses_total",
+    "LiteLLM streaming responses by status code",
+    ["status"],
+)
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
@@ -88,12 +107,21 @@ async def acomplete(
     client = httpx.AsyncClient(timeout=timeout)
 
     async def _aiter() -> AsyncIterator[Dict[str, Any]]:
+        t0 = time.perf_counter()
+        first_token_recorded = False
         try:
             async with client.stream("POST", url, json=payload, headers=_headers()) as r:
+                LITELLM_STREAM_RESPONSES.labels(status=str(r.status_code)).inc()
                 r.raise_for_status()
                 async for line in r.aiter_lines():
                     if not line or not line.startswith("data:"):
                         continue
+
+                    # record time-to-first-token exactly once
+                    if not first_token_recorded:
+                        LITELLM_STREAM_TTFB_SECONDS.observe(time.perf_counter() - t0)
+                        first_token_recorded = True
+
                     data = line[5:].strip()
                     if data == "[DONE]":
                         break
@@ -102,6 +130,7 @@ async def acomplete(
                     except json.JSONDecodeError:
                         continue
         finally:
+            LITELLM_STREAM_TOTAL_SECONDS.observe(time.perf_counter() - t0)
             await client.aclose()
     return _aiter()
 

@@ -100,6 +100,15 @@ services:
     ports:
       - "27016:27017"
     command: --quiet --logpath /dev/null 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - freva-gpt
+
 
 networks:
   freva-gpt:

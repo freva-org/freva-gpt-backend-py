@@ -24,4 +24,5 @@ dependencies = [
     "ansi2html>=1.9.2",
     "psutil>=7.1.3",
     "pytest-cov>=7.0.0",
+    "prometheus-fastapi-instrumentator>=7.1.0",
 ]

@@ -1,12 +1,15 @@
 from typing import Callable, Awaitable, Dict, Any, List, Optional
 from contextvars import ContextVar
 import logging
+
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
 from src.core.logging_setup import configure_logging
 
 log = logging.getLogger(__name__)
 configure_logging()
 
-def make_header_gate(
+def wrap_asgi_app(
     inner_app,
     *,
     ctx_list: List[ContextVar[str | None]],
@@ -105,4 +108,18 @@ def make_header_gate(
                 for ctx, tok_v in reversed(tokens):
                     ctx.reset(tok_v)
 
-    return HeaderCaptureASGI(inner_app)
+    class MetricsASGI:
+        def __init__(self, inner_app):
+            self.inner_app = inner_app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http" and scope.get("path") == "/metrics":
+                body = generate_latest()
+                headers = [(b"content-type", CONTENT_TYPE_LATEST.encode("utf-8"))]
+                await send({"type": "http.response.start", "status": 200, "headers": headers})
+                await send({"type": "http.response.body", "body": body})
+                return
+
+            await self.inner_app(scope, receive, send)    
+
+    return MetricsASGI(HeaderCaptureASGI(inner_app))

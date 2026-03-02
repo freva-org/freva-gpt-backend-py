@@ -162,7 +162,7 @@ async def streamresponse(
         msg = f"Stream preparation has failed: {e}"
         logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
         # Normalize response to a clean HTTP 500 instead of a partial stream
-        raise HTTPException(status_code=500, detail="Internal Server Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
     async def event_stream():
         if is_new_thread:
@@ -190,7 +190,8 @@ async def streamresponse(
                 state = await get_conversation_state(thread_id)
                 if state == ConversationState.STOPPING:
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
-                    yield _sse_data(from_sv_to_json(end_v))
+                    for data in  _sse_data(from_sv_to_json(end_v)):
+                        yield data
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
                     logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})
@@ -198,6 +199,7 @@ async def streamresponse(
                 
         await end_and_save_conversation(thread_id, Storage)
         logger.info("Completed streaming and saved conversation", extra={"thread_id": thread_id, "user_id": user_name})
+
 
     return StreamingResponse(
         event_stream(),

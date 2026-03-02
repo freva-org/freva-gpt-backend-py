@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 import re
 
 from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
-from .helpers import Thread, get_database, summarize_topic, Variant, VARIANT_FIELD
+from .helpers import Thread, get_database, summarize_topic, Variant
 from src.core.settings import get_settings
 from src.services.streaming.stream_variants import StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
 from src.core.logging_setup import configure_logging
@@ -20,19 +21,19 @@ MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 class ThreadStorage():
     """PROD / shared implementation: store threads in MongoDB."""
-    def __init__(self, vault_url: str) -> None:
+    def __init__(self, vault_url: str, db: AsyncDatabase) -> None:
         self.vault_url = vault_url
-        self.db = None
+        self.db = db
 
 
     @classmethod
     async def create(cls, vault_url: str):
-        self = cls(vault_url)
         if settings.DEV:
-            self.db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
+            db = AsyncMongoClient(settings.MONGODB_URI_DEV)[MONGODB_DATABASE_NAME]
         else:
-            self.db = await get_database(self.vault_url)
-        return self
+            db = await get_database(vault_url)
+        s = cls(vault_url=vault_url, db=db)
+        return s
 
 
     async def save_thread(
@@ -62,7 +63,7 @@ class ThreadStorage():
 
         # compute topic if missing
         if not topic:
-            topic = await summarize_topic(content or "Untitled")
+            topic = await summarize_topic(content)
 
         all_stream = [from_sv_to_json(v) for v in merged_sv] if merged_sv else []
         doc = {

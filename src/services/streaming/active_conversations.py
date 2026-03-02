@@ -35,6 +35,9 @@ REGISTRY_LOCK_HOLD_SECONDS = Histogram(
 Measurement with 100 parallel streams:
 lock wait p95 ≈ 0.475 ms
 lock hold p95 ≈ 0.19 ms
+At the moment this is perfectly fine, not restricting the performance.
+If it becomes significant in the future, an idea is to use per-thread-lock 
+instead of global lock.
 """
 
 REGISTRY_SIZE = Gauge("registry_size", "Number of active conversations in Registry")

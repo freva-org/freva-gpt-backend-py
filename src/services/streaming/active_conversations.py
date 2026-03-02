@@ -189,9 +189,9 @@ async def end_and_save_conversation(
         # End conversation
         conv.state = ConversationState.ENDED
         conv.last_activity = datetime.now(timezone.utc)
-        # Save conversation
-        await Storage.save_thread(conv.thread_id, conv.user_id, conv.messages, append_to_existing=False)
-        return True
+    # Save conversation
+    await Storage.save_thread(conv.thread_id, conv.user_id, conv.messages, append_to_existing=False)
+    return True
 
 
 async def remove_conversation(

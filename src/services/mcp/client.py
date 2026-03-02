@@ -1,3 +1,21 @@
+# ── Performance metrics ──────────────────────────────────────────────────────────
+import time
+from prometheus_client import Histogram, Counter
+
+MCP_CALL_SECONDS = Histogram(
+    "mcp_call_seconds",
+    "Time spent calling MCP servers (sync client)",
+    ["method", "tool"],
+    buckets=(0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 60),
+)
+
+MCP_CALL_ERRORS = Counter(
+    "mcp_call_errors_total",
+    "MCP call errors",
+    ["method", "tool", "kind"],
+)
+# ────────────────────────────────────────────────────────────────────────────────
+
 from __future__ import annotations
 
 import json
@@ -19,21 +37,6 @@ MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
 DISCOVERY_SESSION_KEY = "__discovery__"
 
-import time
-from prometheus_client import Histogram, Counter
-
-MCP_CALL_SECONDS = Histogram(
-    "mcp_call_seconds",
-    "Time spent calling MCP servers (sync client)",
-    ["method", "tool"],
-    buckets=(0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 60),
-)
-
-MCP_CALL_ERRORS = Counter(
-    "mcp_call_errors_total",
-    "MCP call errors",
-    ["method", "tool", "kind"],
-)
 
 @dataclass
 class McpCallResult:

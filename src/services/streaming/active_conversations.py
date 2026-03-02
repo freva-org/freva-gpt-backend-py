@@ -1,20 +1,4 @@
-import string
-import random
-import json
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
-import asyncio
-from contextlib import asynccontextmanager
-
-from src.core.logging_setup import configure_logging
-from src.services.streaming.stream_variants import StreamVariant, SVCode, from_json_to_sv, from_sv_to_json
-from src.services.service_factory import (
-    Authenticator, ThreadStorage, McpManager,
-    get_mcp_manager
-)
-from src.services.streaming.tool_calls import run_tool_via_mcp
+# ── Performance metrics ──────────────────────────────────────────────────────────
 
 import time
 from prometheus_client import Histogram, Gauge
@@ -41,6 +25,26 @@ instead of global lock.
 """
 
 REGISTRY_SIZE = Gauge("registry_size", "Number of active conversations in Registry")
+
+# ─────────────────────────────────────────────────────────────────────────────────
+
+import string
+import random
+import json
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone, timedelta
+import asyncio
+from contextlib import asynccontextmanager
+
+from src.core.logging_setup import configure_logging
+from src.services.streaming.stream_variants import StreamVariant, SVCode, from_json_to_sv, from_sv_to_json
+from src.services.service_factory import (
+    Authenticator, ThreadStorage, McpManager,
+    get_mcp_manager
+)
+from src.services.streaming.tool_calls import run_tool_via_mcp
 
 DEFAULT_LOGGER = configure_logging(__name__)
 

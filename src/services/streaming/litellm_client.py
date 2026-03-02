@@ -1,14 +1,4 @@
-from __future__ import annotations
-import os
-import json
-import time
-import asyncio
-from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
-
-import httpx
-
-from src.core.settings import get_settings
-
+# ── Performance metrics ──────────────────────────────────────────────────────────
 import time
 from prometheus_client import Histogram, Counter
 
@@ -27,6 +17,19 @@ LITELLM_STREAM_RESPONSES = Counter(
     "LiteLLM streaming responses by status code",
     ["status"],
 )
+# ─────────────────────────────────────────────────────────────────────────────────
+
+from __future__ import annotations
+import os
+import json
+import time
+import asyncio
+from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
+
+import httpx
+
+from src.core.settings import get_settings
+
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------

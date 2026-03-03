@@ -1,4 +1,7 @@
 import re
+import os, sys
+
+from jupyter_client import KernelManager
 
 from src.core.logging_setup import configure_logging
 
@@ -43,43 +46,40 @@ def sanitize_code(code: str) -> str:
     return out
 
 
-def code_is_likely_safe(code: str) -> bool:
-    """
-    Checks whether the given code passes basic safety checks.
-    """
+# ── Kernel lifecycle ─────────────────────────────────────────────────────────
 
-    # Patterns considered dangerous
-    # Allowing file I/O, but blocking system, subprocess, and execution functions.
-    dangerous_patterns = [
-        "import os",
-        "import sys",  # May be allowed in testing, but should be blocked in production
-        "exec(",
-        "eval(",
-        "subprocess",
-        "socket",
-        "os.system",
-        "shutil",
-        "ctypes",
-        "pickle",
-        "__import__",
-        "get_ipython",  # Access to IPython internals
-    ]
+def _kernel_ready_handshake(km: KernelManager, timeout: int = 10) -> None:
+    kc = km.client()
+    kc.start_channels()
+    try:
+        kc.wait_for_ready(timeout=timeout)
+    finally:
+        kc.stop_channels()
 
-    # Check for static string patterns first
-    for pattern in dangerous_patterns:
-        if pattern in code:
-            logger.warning(f"The code contains a dangerous pattern: {pattern}")
-            logger.debug(f"The code is: {code}")
-            return False
 
-    # Regex check for Jupyter magics and shell escapes
-    # Matches lines starting with '%' or '!' (optionally with whitespace before)
-    # In the future, we may introduce a white list of packages that is allowed to be installed by the user.
-    magic_pattern = re.compile(r"(?m)^\s*[!%]")
-    if magic_pattern.search(code):
-        logger.warning("The code contains a Jupyter magic line or shell escape.")
-        logger.debug(f"The code is: {code}")
-        return False
+def start_kernel(cwd_str: str) -> KernelManager:
+    env = os.environ.copy()
+    km = KernelManager()
+    km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]
+    km.start_kernel(env=env, cwd=cwd_str)
+    _kernel_ready_handshake(km, timeout=10)
+    return km
 
-    # Passed all checks
-    return True
+
+def restart_kernel(km: KernelManager) -> None:
+    km.restart_kernel(now=True)
+    _kernel_ready_handshake(km, timeout=10)
+
+
+def shutdown_kernel(km: KernelManager) -> None:
+    try:
+        km.shutdown_kernel(now=True)
+    except Exception:
+        logger.exception("Failed to shutdown dead kernel cleanly")
+
+# ── exit() / quit() handling ────────────────────────────────────────────────
+
+EXIT_RE = re.compile(r"(?m)^\s*(exit|quit)\s*\(\s*\)\s*(#.*)?$")
+
+def should_restart_after(code: str) -> bool:
+    return bool(EXIT_RE.search(code))

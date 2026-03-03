@@ -47,6 +47,8 @@ services:
       FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8051
+    ports: 
+      - 8051:8051
     volumes:
       - ./cache/:/app/cache
       - ./logs/:/app/logs

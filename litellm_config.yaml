@@ -1,12 +1,12 @@
 model_list:
-  - model_name: gpt-4o ### RECEIVED MODEL NAME ###
+  - model_name: gpt-4.1 ### RECEIVED MODEL NAME ###
     litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
-      model: openai/gpt-4o ### MODEL NAME sent to `litellm.completion()` ###
+      model: openai/gpt-4.1 ### MODEL NAME sent to `litellm.completion()` ###
       api_key: "os.environ/FREVAGPT_OPENAI_API_KEY" 
       # temperature: 0.2
-  - model_name: gpt-4o-mini ### RECEIVED MODEL NAME ###
+  - model_name: gpt-4.1-mini ### RECEIVED MODEL NAME ###
     litellm_params: # all params accepted by litellm.completion() - https://docs.litellm.ai/docs/completion/input
-      model: openai/gpt-4o-mini ### MODEL NAME sent to `litellm.completion()` ###
+      model: openai/gpt-4.1-mini ### MODEL NAME sent to `litellm.completion()` ###
       api_key: "os.environ/FREVAGPT_OPENAI_API_KEY" 
   - model_name: "ministral-3:14b"
     litellm_params:

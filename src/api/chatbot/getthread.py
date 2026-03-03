@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
@@ -105,6 +105,6 @@ async def get_thread(
 
     content = _post_process(content)
 
-    logger.info(f"Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 
     return content

@@ -1,4 +1,3 @@
-from glob import glob
 import hashlib
 import json
 import time
@@ -107,11 +106,11 @@ def postprocessing_query_result(query_results):
             if context: 
                 context += "\n\n"
             context += "Here are some examples that can help you answer the question:\n\n"\
-                       f"### EXAMPLES BEGIN ###\n\n"
+                       "### EXAMPLES BEGIN ###\n\n"
             chunks_sorted = sorted(result, key=itemgetter("document", "chunk_id"))
             context += "\n\n".join(document["content"] for document in chunks_sorted)
             context += "\n\n### EXAMPLES END ###"
 
         else:
-            raise (ValueError, f"Unknown resource type: {resource_type}")
+            raise ValueError(f"Unknown resource type: {resource_type}")
     return context

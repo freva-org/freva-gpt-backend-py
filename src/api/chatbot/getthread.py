@@ -102,7 +102,7 @@ async def get_thread(
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
     content = await get_conv_messages(thread_id)
-
+    # TODO: handle none case
     content = _post_process(content)
 
     logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})

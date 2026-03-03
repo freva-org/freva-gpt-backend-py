@@ -6,7 +6,7 @@ import re
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from dataclasses import dataclass
 
-from src.services.service_factory import Authenticator, ThreadStorage, McpManager
+from src.services.service_factory import Authenticator, ThreadStorage
 
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
@@ -66,12 +66,11 @@ async def stream_with_tools(
     # 1) First request
     tool_agg: Dict[str, Any] = {}
     tools = mcp.openai_tools() if hasattr(mcp, "openai_tools") else []
-    kwargs = {"model": model, "messages": messages, "stream": True}
+    
     if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-
-    resp = await acomplete_func(**kwargs)
+        resp = await acomplete_func(model=model, messages=messages, stream=True, tools=tools, tool_choice="auto")
+    else:
+        resp = await acomplete_func(model=model, messages=messages, stream=True)
 
     accumulated_asst_text: List[str] = []
 
@@ -108,7 +107,7 @@ async def stream_with_tools(
         full_txt = first_text(resp) or ""
         for p in re.findall(r"\S+\s*", full_txt):
             if p:
-                accumulated_asst_text.append(full_txt)
+                accumulated_asst_text.append(full_txt) #FIXME: this feels almost definitely wrong, does it work?
                 yield SVAssistant(text=full_txt)
 
     # 2) Any tool calls?
@@ -161,7 +160,7 @@ async def stream_with_tools(
                 tool_task.cancel()
                 raise
 
-            except Exception as e:
+            except Exception:
                 tool_task.cancel()
                 raise
 

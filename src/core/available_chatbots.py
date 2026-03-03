@@ -1,6 +1,14 @@
 # src/core/available_chatbots.py
 from __future__ import annotations
 
+import logging
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, List, Optional
+
+import yaml  
+
 """
 Model catalog loader for LiteLLM config (YAML-based).
 
@@ -16,14 +24,6 @@ Behavior:
 - model_supports_images: names starting with 'gpt-4o', 'gpt-5', or 'gpt-4.1'
 - model_ends_on_no_choice: names starting with 'qwen2_5'
 """
-
-import logging
-import os
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, List, Optional
-
-import yaml  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,7 @@ def refresh_cache() -> None:
     """
     Clear memoized results (useful in tests or after config changes).
     """
-    available_chatbots.cache_clear()  # type: ignore[attr-defined]
+    available_chatbots.cache_clear() 
 
 
 __all__ = [

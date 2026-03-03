@@ -1,8 +1,6 @@
 from __future__ import annotations
 from contextlib import asynccontextmanager
-from typing import Optional
 
-import httpx
 import asyncio
 from datetime import timedelta
 from fastapi import FastAPI

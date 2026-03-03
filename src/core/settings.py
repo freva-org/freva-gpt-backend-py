@@ -32,11 +32,11 @@ def get_settings() -> Settings:
     return _SETTINGS
 
 def get_server_url_dict(server_list):
-    url_dict: Dict[str:str] = {}
+    url_dict: Dict[str, str] = {}
     for s in server_list:
         s_url = os.getenv(f"FREVAGPT_{s.upper()}_SERVER_URL", "")
         if s_url:
             url_dict.update({s: s_url})
         else:
-            ValueError(f"Please set url address for MCP server {s}!")
+            raise ValueError(f"Please set url address for MCP server {s}!")
     return url_dict

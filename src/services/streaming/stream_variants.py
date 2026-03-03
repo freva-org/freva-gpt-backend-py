@@ -1,4 +1,12 @@
 from __future__ import annotations
+from typing import Annotated, Literal, Optional, Union, List, Dict, Any
+from typing_extensions import TypedDict
+import json
+import logging
+from pathlib import Path
+
+from pydantic import BaseModel, Field, ConfigDict
+
 """
 Mirror of Rust enum `StreamVariant` and alias `Conversation = Vec<StreamVariant>`,
 with Pythonic refactor to typed classes (Pydantic v2 discriminated union).
@@ -15,14 +23,6 @@ Notes
 • examples.jsonl is stored in wire shape; use parse_examples_jsonl(...) to read it as classes.
 • Assistant name convention matches Rust tests: "frevaGPT".
 """
-
-from typing import Annotated, Literal, Optional, Union, List, Dict, Any
-from typing_extensions import TypedDict
-import json
-import logging
-from pathlib import Path
-
-from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
 

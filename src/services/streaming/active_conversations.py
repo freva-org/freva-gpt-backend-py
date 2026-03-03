@@ -3,7 +3,7 @@ import random
 import json
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import asyncio
 
@@ -32,7 +32,7 @@ class ActiveConversation:
     mcp_manager: McpManager
     tool_tasks: set[asyncio.Task] = field(default_factory=set)
     messages: List[StreamVariant] = field(default_factory=list)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 Registry: Dict[str, ActiveConversation] = {}
@@ -70,46 +70,52 @@ async def initialize_conversation(
     messages: List[StreamVariant],
     auth: Authenticator,
     logger=None,
-) -> ActiveConversation:
+):
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
     now = datetime.now(timezone.utc)      
-    if not await check_thread_exists(thread_id):
-        log.debug("Initializing the conversation and saving it to Registry...")
-
-        # if auth:
-        mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
-        # else:
-        #     log.warning(f"The conversation {thread_id} initialized without MCPManager! "
-        #                 "Please note that the MCP servers cannot be connected!")
-
-        conv = ActiveConversation(
-            thread_id=thread_id,
-            user_id=user_id,
-            state=ConversationState.STREAMING,
-            mcp_manager= mcp_mgr,
-            messages=messages,
-            last_activity=now,
-        )
-        # register conversation
-        async with RegistryLock:
-            Registry[thread_id] = conv
-
-        # send tool calls to MCP server if there are Code variants present in messages
-        if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(_replay_code_history(thread_id))
-            await register_tool_task(thread_id, task)
-            task.add_done_callback(
-                # to be unregistered when done
-                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
-            )
-
-    else:
-        log.debug("Conversation was found in the Registry. Starting streaming...")
-        async with RegistryLock:
-            conv = Registry.get(thread_id)
-            conv.state = ConversationState.STREAMING # This always expects the thread to exist here...
+    async with RegistryLock:
+        conv = Registry.get(thread_id)
+        if conv:
+            log.debug("Conversation was found in the Registry. Starting streaming...")
+            #TODO: this currently raises if conv is None, which is technically not possible unless it's deleted between the check and here
+            conv.state = ConversationState.STREAMING
             conv.last_activity = datetime.now(timezone.utc)
+            return # Don't continue with initialization if conversation already exists; we just update the state and timestamp.
+    
+    # RegistryLock is dropped here before continuing 
+    # This is only reached if the conversation did not already exist, so we proceed with initialization and registration.
+    
+    log.debug("Initializing the conversation and saving it to Registry...")
+
+    # if auth:
+    mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
+    # else:
+    #     log.warning(f"The conversation {thread_id} initialized without MCPManager! "
+    #                 "Please note that the MCP servers cannot be connected!")
+
+    conv = ActiveConversation(
+        thread_id=thread_id,
+        user_id=user_id,
+        state=ConversationState.STREAMING,
+        mcp_manager= mcp_mgr,
+        messages=messages,
+        last_activity=now,
+    )
+    # register conversation
+    async with RegistryLock:
+        Registry[thread_id] = conv
+
+    # send tool calls to MCP server if there are Code variants present in messages
+    if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(_replay_code_history(thread_id))
+        await register_tool_task(thread_id, task)
+        task.add_done_callback(
+            # to be unregistered when done
+            lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
+        )
+
+
         
 
 async def add_to_conversation(

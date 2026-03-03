@@ -42,7 +42,7 @@ def _get_cwd():
 
 def _current_sid() -> str:
     ctx = get_context()
-    return (getattr(ctx, "session_id"), "")
+    return getattr(ctx, "session_id", "")
 
 def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)
@@ -126,6 +126,7 @@ def code_interpreter(code: str) -> dict:
             raise Exception(f"Execution failed: {type(e).__name__}: {e}")
     else:
         logger.warning("Code is not executed due to potential safety concerns!")
+        # TODO: how is returning None handled? Can we change the signature?
         return 
         
 

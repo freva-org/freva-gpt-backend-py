@@ -250,7 +250,6 @@ class McpClient:
         Server is expected to identify the session via Mcp-Session-Id header.
         """
         with self._lock:
-            # TODO: check if multiple sessions even possible
             sids = list(set(self._session_ids.values()))
 
         for sid in set(sids):

@@ -56,9 +56,8 @@ def set_globals(request: pytest.FixtureRequest):
         base_url = target_url
 
 
-auth_key = os.getenv("AUTH_KEY", "no_auth_key")
 global_user_id = "testing"
-auth_string = "&auth_key=" + auth_key + "&user_id=" + global_user_id  # Only for testing
+auth_string = "&user_id=" + global_user_id  # Only for testing
 # In Version 1.6.1, the freva_config also needs to be set to a specific path. We won't be using this for now.
 auth_string = auth_string + "&freva_config=" + "Cargo.toml"  # Dummy value
 

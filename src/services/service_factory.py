@@ -35,8 +35,7 @@ async def auth_dependency(
     - returns the authenticated object (or raises HTTPException)
     """
     AuthCls = get_authenticator()
-    auth = AuthCls(request)
-    await auth.run()
+    auth = await AuthCls.build(request)
     return auth
 
 # Convenience alias for router-wide protection:

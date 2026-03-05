@@ -1,9 +1,10 @@
-from fastapi import HTTPException, status
-import warnings
+from fastapi import HTTPException, status, Request
 import httpx
 
 from src.core.logging_setup import configure_logging
 from .authenticator import Authenticator
+
+from src.core.settings import get_settings
 
 log = configure_logging(__name__)
 
@@ -18,9 +19,8 @@ class FullAuthenticator(Authenticator):
     Errors:
       - 422/400/401/502/503
     """
-    async def run(self) -> "FullAuthenticator":
-        settings = self.settings
-        request = self.request
+    async def build(request: Request) -> Authenticator:
+        settings = get_settings()
 
         q = request.query_params
         headers = request.headers
@@ -30,13 +30,12 @@ class FullAuthenticator(Authenticator):
 
         # Checking vault_url. If it is not found, the exception is raised in the endpoints, where this is a must-have
         vault_url = headers.get("x-freva-vault-url")
-        self.vault_url = vault_url
 
         if header_val:
             # -> Bearer flow
             try:
                 token = bearer_token_from_header(header_val)
-                self.access_token = token
+                access_token = token
             except HTTPException as e:
                 # Raise exception for non-Bearer
                 raise e
@@ -48,12 +47,18 @@ class FullAuthenticator(Authenticator):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Authentication not successful! RestURL not found. Please use the nginx proxy. (rest)",
                 )
-            self.rest_url = rest_url
 
             try:
-                username = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=self.username))
-                self.username = username
-                return self
+                username = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=None))
+                username = username
+                return FullAuthenticator(
+                    request=request,
+                    settings=settings,
+                    username=username,
+                    vault_url=vault_url,
+                    rest_url=rest_url,
+                    access_token=access_token,
+                )
             except HTTPException as err:
                 raise err
 

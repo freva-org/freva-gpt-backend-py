@@ -20,7 +20,7 @@ settings = get_settings()
 
 CACHE_ROOT = Path("./cache")
 
-def get_authenticator() -> Authenticator:
+def get_authenticator() -> type[Authenticator]:
     if settings.DEV:
         return DevAuthenticator
     return FullAuthenticator
@@ -53,7 +53,7 @@ async def get_thread_storage(
     return await ThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager:
+async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager | None:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -82,3 +82,4 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
         logger.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        return None

@@ -29,7 +29,7 @@ class ActiveConversation:
     thread_id: str
     user_id: str
     state: ConversationState
-    mcp_manager: McpManager
+    mcp_manager: Optional[McpManager]
     tool_tasks: set[asyncio.Task] = field(default_factory=set)
     messages: List[StreamVariant] = field(default_factory=list)
     last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -71,13 +71,18 @@ async def initialize_conversation(
     auth: Authenticator,
     logger=None,
 ):
+    """
+    Initialize and register a new conversation in the registry with the given thread_id and user_id.
+    If a conversation with the same thread_id already exists, it will be updated to STREAMING state
+    and the last_activity timestamp will be refreshed, but the existing conversation will stay unchanged.
+    """
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
     now = datetime.now(timezone.utc)      
     async with RegistryLock:
         conv = Registry.get(thread_id)
         if conv:
             log.debug("Conversation was found in the Registry. Starting streaming...")
-            #TODO: this currently raises if conv is None, which is technically not possible unless it's deleted between the check and here
+            
             conv.state = ConversationState.STREAMING
             conv.last_activity = datetime.now(timezone.utc)
             return # Don't continue with initialization if conversation already exists; we just update the state and timestamp.

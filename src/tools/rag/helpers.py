@@ -18,8 +18,8 @@ def json_to_str(data) -> str:
 
 def compute_hash(doc):
     """Compute a hash for the document based on its content and source."""
-    if type(doc.page_content) == list or str:
-        content = doc.page_content.strip() if type(doc.page_content) == str else json_to_str(doc.page_content)
+    if isinstance(doc.page_content, (list, str)):
+        content = doc.page_content.strip() if isinstance(doc.page_content, str) else json_to_str(doc.page_content)
     else:
         raise TypeError("Unknown content type in document. The content should either be string or a list.")
     source = doc.metadata.get("source")

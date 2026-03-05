@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
-import base64
 import time
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, Request, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
 
 from src.core.logging_setup import configure_logging
@@ -91,6 +88,8 @@ async def streamresponse(
             Response buffering is disabled.
 
     Raises:
+        HTTPException (409):
+            - If the provided `thread_id` is already active and streaming.
         HTTPException (422):
             - If the thread id is missing or empty.
             - If the user input is missing or empty.
@@ -130,7 +129,8 @@ async def streamresponse(
     try:
         # Get thread storage
         Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
-    except:
+    except Exception as e:
+        logger.exception("Failed to connect to MongoDB", extra={"thread_id": thread_id, "user_id": user_name, "error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Check if thread-id exists in DB
@@ -141,6 +141,13 @@ async def streamresponse(
             logger.info(f"Existing conversation is not found in the registry: {thread_id} ! "\
                         "It will be registered after the thread history is read.")
             read_history = True
+        if await get_conversation_state(thread_id) == ConversationState.STREAMING:
+            logger.warning(f"Conversation with thread_id: {thread_id} is already active and streaming. "
+                        "Aborting the new streaming request to avoid conflicts.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Conversation with thread_id: {thread_id} is already active and streaming. Please use a different thread_id or wait for the current stream to finish."
+                )
     else:
         logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
 

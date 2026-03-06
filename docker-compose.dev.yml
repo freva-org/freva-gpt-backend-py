@@ -48,6 +48,7 @@ services:
       FREVAGPT_MCP_PORT: ${FREVAGPT_CODE_PORT:-8051}
     ports: 
       - 8051:8051
+    cpus: 4
     volumes:
       - ./cache/:/app/cache
       - ./logs/:/app/logs

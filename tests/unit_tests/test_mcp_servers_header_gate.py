@@ -3,9 +3,7 @@ from contextvars import ContextVar
 
 @pytest.mark.asyncio
 async def test_header_gate_delete_triggers_cleanup_and_returns_204():
-    # Import your make_header_gate from wherever it lives
-    # from src.tools.header_gate import make_header_gate
-    from src.tools.asgi_wrapper import make_header_gate
+    from src.tools.asgi_wrapper import wrap_asgi_app
 
     # Dummy inner app that should NOT be called on DELETE
     inner_called = {"called": False}
@@ -22,7 +20,7 @@ async def test_header_gate_delete_triggers_cleanup_and_returns_204():
     # ContextVar can be anything; it should not matter on DELETE
     cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
 
-    app = make_header_gate(
+    app = wrap_asgi_app(
         inner_app,
         ctx_list=[cwd_ctx],
         header_name_list=["working-dir"],

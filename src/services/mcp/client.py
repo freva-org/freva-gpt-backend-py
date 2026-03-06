@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ── Performance metrics ──────────────────────────────────────────────────────────
 import time
 from prometheus_client import Histogram, Counter
@@ -15,8 +17,6 @@ MCP_CALL_ERRORS = Counter(
     ["method", "tool", "kind"],
 )
 # ────────────────────────────────────────────────────────────────────────────────
-
-from __future__ import annotations
 
 import json
 import time

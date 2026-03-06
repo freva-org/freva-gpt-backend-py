@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ── Performance metrics ──────────────────────────────────────────────────────────
 import time
 from prometheus_client import Histogram, Counter
@@ -19,7 +21,6 @@ LITELLM_STREAM_RESPONSES = Counter(
 )
 # ─────────────────────────────────────────────────────────────────────────────────
 
-from __future__ import annotations
 import os
 import json
 import time

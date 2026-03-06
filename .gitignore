@@ -24,4 +24,4 @@ logs/
 *scaled.yml
 nginx.conf
 
-out_*.ndjson
+performance_exp/*/

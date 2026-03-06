@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os, importlib
+import random, string
 from typing import Iterable, Dict, Optional, Any
 
 from src.services.mcp.client import McpClient
@@ -27,9 +28,10 @@ def _force_dev(monkeypatch):
 @pytest.fixture
 def mcp_client_CI():
     base_url = os.getenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
+    thread_id = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     client = McpClient(
         base_url=base_url,
-        default_headers={"freva-config-path": "freva_evaluation.conf"},
+        default_headers={"thread-id": thread_id},
     )
     return client
 

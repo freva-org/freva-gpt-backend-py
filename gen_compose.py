@@ -103,6 +103,7 @@ def main():
 
     available_mcp_servers = [s for s in os.environ.get("FREVAGPT_AVAILABLE_MCP_SERVERS", []).split(",")]
     mcp_replica_n = {s: int(os.environ.get(f"FREVAGPT_{s.upper()}_REPLICAS", "1")) for s in available_mcp_servers}
+    port_dict = {s: os.environ.get(f"FREVAGPT_{s.upper()}_PORT", "") for s in available_mcp_servers}
 
     base = yaml.safe_load(open(compose_path))
 
@@ -125,6 +126,7 @@ def main():
         "env_file": ".env",
         "ports": [
             f"{backend_port}:{backend_port}",
+            f"{port_dict.get('code')}:{port_dict.get('code')}"
         ],
         "volumes": [
             "./nginx.conf:/etc/nginx/nginx.conf:ro"

@@ -196,21 +196,13 @@ class McpManager:
 async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[str, str]:
     log = logger or DEFAULT_LOGGER
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
-    access_token = auth.access_token
-    
-    auth_header = f"Bearer {access_token}" if access_token else None
     
     headers = {
         "rag": {
-            "Authorization": auth_header,
             "mongodb-uri":  mongodb_uri,
         },
         "code": {
-            "Authorization": auth_header,
             "working-dir": str(cache),
-        },
-        "web_search": {
-            "Authorization": auth_header,
         },
     }
     return headers

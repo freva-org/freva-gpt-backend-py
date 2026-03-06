@@ -11,8 +11,7 @@ services:
     hostname: freva-gpt-backend-instance-${FREVAGPT_INSTANCE_NAME}
     ports:
       - "${FREVAGPT_TARGET_PORT:-8502}:${FREVAGPT_BACKEND_PORT:-8502}" # If either is unset, the default value will be used.
-      - "8600:${FREVAGPT_BACKEND_PORT:-8502}" # This is to listen to the backend port without and frontend. localhost:8600/docs give FastAPI docs
-      - "${FREVAGPT_DEBUG_PORT:-5678}:${FREVAGPT_DEBUG_PORT:-5678}" # Port for debugpy
+      - "5678:5678" # Port for debugpy
     volumes: 
       - ./cache/:/app/cache
       - ./logs/:/app/logs
@@ -29,7 +28,7 @@ services:
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
       FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
-      FREVAGPT_MCP_PORT: 8050
+      FREVAGPT_MCP_PORT: ${FREVAGPT_RAG_PORT:-8050}
     volumes: 
       - ./resources:/app/resources:ro
       - ./logs/:/app/logs
@@ -46,7 +45,7 @@ services:
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
       FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
-      FREVAGPT_MCP_PORT: 8051
+      FREVAGPT_MCP_PORT: ${FREVAGPT_CODE_PORT:-8051}
     ports: 
       - 8051:8051
     volumes:

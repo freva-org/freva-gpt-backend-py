@@ -21,4 +21,7 @@ threads/
 cache/
 logs/
 
+*scaled.yml
+nginx.conf
+
 out_*.ndjson

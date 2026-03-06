@@ -42,6 +42,15 @@ class ThreadStorage():
         return self
 
 
+    async def thread_exists(self, thread_id: str) -> bool:
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        exists = await coll.find_one(
+            {"thread_id": thread_id},
+            {"_id": 1}
+        ) is not None
+        return exists
+
+
     async def save_thread(
         self,
         thread_id: str,

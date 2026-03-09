@@ -20,6 +20,6 @@ done
 echo
 echo "Done. Results in $BASE_DIR"
 echo "Now running:"
-echo "./performance_exp/summarize_plot.py \"$BASE_DIR\""
+echo "./performance_exp/summarize_plot.sh \"$BASE_DIR\""
 
 ./performance_exp/summarize_plot.sh \"$BASE_DIR\"

@@ -9,7 +9,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
-#TODO debug port for dev
+DEFAULT_MCP_PORTS = {"rag":"8050",
+                     "code":"8051",
+                     "web_search":"8052"}
 
 def expand_service(name, service, replicas):
     services = {}
@@ -38,18 +40,24 @@ def nginx_upstream(name, port, replicas, sticky):
     return "\n".join(lines)
 
 
-def generate_nginx(backend_n, server_list, replica_dict):
-
-    backend_port = os.environ.get("FREVAGPT_BACKEND_PORT", "8502")
-    port_dict = {s: os.environ.get(f"FREVAGPT_{s.upper()}_PORT", "") for s in server_list}
+def generate_nginx(backend_n, backend_port, server_list, replica_dict, port_dict):
 
     conf = []
 
+    conf.append("user root;\n")
     conf.append("worker_processes auto;\n")
     conf.append("events {\n"\
                 "   worker_connections 1024;\n"\
                 "}\n")
     conf.append("http {\n")
+
+    conf.append("""
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path       /tmp/proxy_temp;
+  fastcgi_temp_path     /tmp/fastcgi_temp;
+  uwsgi_temp_path       /tmp/uwsgi_temp;
+  scgi_temp_path        /tmp/scgi_temp;
+""")
 
     conf.append(nginx_upstream(
         "freva-gpt-backend",
@@ -99,11 +107,13 @@ def main():
     compose_path = sys.argv[1]
 
     backend_port = os.environ.get("FREVAGPT_BACKEND_PORT", "8502")
+    backend_target_port = os.environ.get("FREVAGPT_TARGET_PORT", "8502")
     backend_n = int(os.environ.get("FREVAGPT_BACKEND_REPLICAS", "1"))
 
     available_mcp_servers = [s for s in os.environ.get("FREVAGPT_AVAILABLE_MCP_SERVERS", []).split(",")]
     mcp_replica_n = {s: int(os.environ.get(f"FREVAGPT_{s.upper()}_REPLICAS", "1")) for s in available_mcp_servers}
-    port_dict = {s: os.environ.get(f"FREVAGPT_{s.upper()}_PORT", "") for s in available_mcp_servers}
+    port_dict = {s: os.environ.get(f"FREVAGPT_{s.upper()}_PORT", DEFAULT_MCP_PORTS.get(s)) for s in available_mcp_servers}
+    print(port_dict.get('code'))
 
     base = yaml.safe_load(open(compose_path))
 
@@ -125,12 +135,13 @@ def main():
         "image": "nginx:alpine",
         "env_file": ".env",
         "ports": [
-            f"{backend_port}:{backend_port}",
+            f"{backend_target_port}:{backend_port}",
             f"{port_dict.get('code')}:{port_dict.get('code')}"
         ],
         "volumes": [
             "./nginx.conf:/etc/nginx/nginx.conf:ro"
         ],
+        "tmpfs": ["/tmp", "/var/cache/nginx"],
         "networks": ["freva-gpt"],
         "depends_on": list(new_services.keys())
     }
@@ -150,7 +161,11 @@ def main():
         yaml.dump(out, sort_keys=False)
     )
 
-    nginx = generate_nginx(backend_n, available_mcp_servers, mcp_replica_n)
+    nginx = generate_nginx(backend_n, 
+                           backend_port, 
+                           available_mcp_servers, 
+                           mcp_replica_n, 
+                           port_dict)
 
     Path("nginx.conf").write_text(nginx)
 

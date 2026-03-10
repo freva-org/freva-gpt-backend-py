@@ -22,6 +22,6 @@ cache/
 logs/
 
 *scaled.yml
-nginx.conf
+haproxy.cfg
 
 performance_exp/*/

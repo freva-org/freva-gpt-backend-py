@@ -63,7 +63,11 @@ services:
     hostname: litellm-instance-${FREVAGPT_INSTANCE_NAME}
     volumes:
       - ./litellm_config.yaml:/app/config.yaml # Mount the local litellm_config.yaml file to the container
-    command: "--config=/app/config.yaml"
+    command: >
+      --config=/app/config.yaml
+      --port=4000
+      --num_workers=8
+      --run_gunicorn
     env_file: .env
     networks:
       - freva-gpt

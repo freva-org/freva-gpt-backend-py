@@ -10,4 +10,4 @@ echo "[prod.sh] Generating scaled compose file and nginx-conf from ${COMPOSE_FIL
 
 echo "[prod.sh] podman-compose -f "docker-compose.scaled.yml" $*"
 
-podman-compose -f "docker-compose.scale.yml" "$@"
+podman-compose -f "docker-compose.scaled.yml" "$@"

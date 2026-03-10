@@ -3,7 +3,7 @@ set -euo pipefail
 
 i="$1"
 
-RUN_DIR="${2:-performance_exp/run}"
+RUN_DIR="${2:-scripts/performance_exp/run}"
 
 THREAD_ID="t-$(uuidgen)"
 

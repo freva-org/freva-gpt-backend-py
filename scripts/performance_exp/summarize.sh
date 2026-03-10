@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-file="${1:-results/all_metrics.csv}"
+folder="${1:-results}"
+file="${folder}/all_metrics.csv"
 
 awk -F, '
 {

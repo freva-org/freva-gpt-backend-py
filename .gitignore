@@ -24,4 +24,4 @@ logs/
 *scaled.yml
 haproxy.cfg
 
-performance_exp/*/
+scripts/performance_exp/*/

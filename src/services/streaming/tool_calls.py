@@ -14,7 +14,8 @@ from src.services.streaming.stream_variants import (
     SVCodeOutput,
     SVImage,
     StreamVariant,
-    help_convert_sv_ccrm
+    help_convert_sv_ccrm,
+    OpenAIMessage
 )
 
 
@@ -98,8 +99,8 @@ def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
 # ──────────────────────────────────────────────────────────────────────────────
 @dataclass
 class FinalSummary:
-    var_block: list
-    tool_messages: list
+    var_block: list[StreamVariant]
+    tool_messages: list[OpenAIMessage]
     is_error: bool
 
 
@@ -115,7 +116,7 @@ def parse_tool_result(out_txt: str, tool_name: str, call_id: str, logger=None):
 def parse_code_interpreter_result(result_txt: str, id: str, logger=None):
     log = logger or DEFAULT_LOGGER
     code_block : List[StreamVariant] = []
-    code_msgs: List[Dict] = []
+    code_msgs: List[OpenAIMessage] = []
 
     # Code output: structured dict of displayed data, image or error   
     result_json = json.loads(result_txt)

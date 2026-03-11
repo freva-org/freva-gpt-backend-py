@@ -3,7 +3,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import AuthRequired
 from src.core.logging_setup import configure_logging
-from src.services.streaming.active_conversations import request_stop, cancel_tool_tasks
+from src.services.streaming.active_conversations import request_stop
 
 router = APIRouter()
 

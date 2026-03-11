@@ -1,3 +1,4 @@
+from starlette.datastructures import QueryParams, Headers
 from fastapi import HTTPException, status, Request
 import httpx
 
@@ -22,26 +23,26 @@ class FullAuthenticator(Authenticator):
     async def build(request: Request) -> Authenticator:
         settings = get_settings()
 
-        q = request.query_params
-        headers = request.headers
+        q: QueryParams = request.query_params
+        headers: Headers = request.headers
 
         # Checking Authorization header OR x-freva-user-token
-        header_val = headers.get("Authorization") or headers.get("x-freva-user-token")
+        header_val: str | None = headers.get("Authorization") or headers.get("x-freva-user-token")
 
         # Checking vault_url. If it is not found, the exception is raised in the endpoints, where this is a must-have
-        vault_url = headers.get("x-freva-vault-url")
+        vault_url: str | None = headers.get("x-freva-vault-url")
 
         if header_val:
             # -> Bearer flow
             try:
-                token = bearer_token_from_header(header_val)
-                access_token = token
+                token: str = bearer_token_from_header(header_val)
+                access_token: str = token
             except HTTPException as e:
                 # Raise exception for non-Bearer
                 raise e
 
             # Checking rest_url
-            rest_url = headers.get("x-freva-rest-url")
+            rest_url: str | None = headers.get("x-freva-rest-url")
             if not rest_url:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -49,8 +50,7 @@ class FullAuthenticator(Authenticator):
                 )
 
             try:
-                username = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=None))
-                username = username
+                username: str = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=None))
                 return FullAuthenticator(
                     request=request,
                     settings=settings,

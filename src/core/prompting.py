@@ -4,7 +4,7 @@ import json
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from src.core.available_chatbots import model_is_gpt_5, model_is_ollama
 from src.services.streaming.stream_variants import parse_examples_jsonl, help_convert_sv_ccrm
@@ -88,7 +88,7 @@ def _read_text(path: Path) -> str:
 
 
 @lru_cache(maxsize=256)
-def _load_prompts(model: str) -> Dict[str, str]:
+def _load_prompts(model: str) -> Dict[Literal["starting", "summary", "examples_path"], str]:
     """
     Load raw prompt assets for the given model (with GPT-5 placeholder fallback).
 
@@ -122,7 +122,9 @@ def _load_examples_as_messages(examples_path: str | Path) -> list[dict]:
         svs,
         include_images=False,
         include_meta=True,  # parity note: Rust typically drops meta; we keep for now
-    )
+    )  # ty:ignore[invalid-return-type]
+    # Note: OpenAIMessage is a class that inherits from TypedDict, so it can be used as a dict by json.dumps. 
+    # This means that the above error message can be ignored. 
 
 
 def get_entire_prompt(user_id: str, thread_id: str, model: str) -> List[Dict[str, Any]]:

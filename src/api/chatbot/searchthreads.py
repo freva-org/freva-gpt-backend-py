@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.services.storage.mongodb_storage import ThreadStorage
 
 from typing import Union, Tuple, Literal
 
@@ -81,7 +82,7 @@ async def search_threads(
         
     try:
         # Thread storage 
-        Storage = await get_thread_storage(vault_url=auth.vault_url)
+        Storage: ThreadStorage = await get_thread_storage(vault_url=auth.vault_url)
     except Exception as e:
         logger.warning("Failed to connect to MongoDB: %s", e)
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
@@ -91,10 +92,11 @@ async def search_threads(
 
     try:
         if mode_and_query[0] == "variant":
-            variant, content = mode_and_query[1]
+            variant: Variant = mode_and_query[1][0]
+            content: str = mode_and_query[1][1]
             total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads)
         else:
-            _query = mode_and_query[1]
+            _query: str = mode_and_query[1]
             total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads)
     except Exception as e:
         logger.warning("Failed to query threads: %s", e)
@@ -130,7 +132,7 @@ def parse_query_mode(query: str) -> Union[tuple[Literal["topic"], str], tuple[Li
     prefix = prefix.strip()
     content = content.strip()
 
-    variant = PREFIX_MAP.get(prefix)
+    variant: Variant | None = PREFIX_MAP.get(prefix)
     if variant:
         return "variant", (variant, content)
 

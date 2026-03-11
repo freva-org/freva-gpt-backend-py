@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
-from src.core.settings import get_settings
+from src.core.settings import get_settings, Settings
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_variants import StreamVariant, SVUser
 from src.services.streaming.litellm_client import acomplete, first_text
@@ -16,7 +16,7 @@ DEFAULT_LOGGER = configure_logging(__name__)
 
 # ──────────────────── Config from settings.py ────────────────────────────
 
-settings = get_settings()
+settings: Settings = get_settings()
 MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 

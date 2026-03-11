@@ -6,17 +6,16 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
 from src.services.streaming.stream_orchestrator import prepare_for_stream
-from src.services.streaming.active_conversations import get_conv_messages
 from src.core.logging_setup import configure_logging
 
 
 router = APIRouter()
 
 
-def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
+def _post_process(variants: List[StreamVariant]) -> List[dict[str, str | list[str]]]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
-    items = [item for item in v if not is_prompt(item)]
-    cleaned: List[StreamVariant] = []
+    items = [item for item in variants if not is_prompt(item)]
+    cleaned: List[dict[str, str | list[str]]] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = (i == len(items) - 1)
@@ -86,7 +85,7 @@ async def get_thread(
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        await prepare_for_stream(
+        messages = await prepare_for_stream(
             thread_id=thread_id, 
             user_id=Auth.username,
             Auth=Auth,
@@ -94,6 +93,10 @@ async def get_thread(
             read_history=True,
             logger=logger,
         )
+        # Note: we have passed in a Storage and set read_history to True, so the prepare_for_stream will read the history and return it as StreamVariants.
+        # So if the messages are None, it means there was no Storage to read from and we raise a 404.
+        if not messages:
+            raise FileNotFoundError(f"Thread with ID {thread_id} not found.")
     except FileNotFoundError:
         logger.exception("Thread not found.", extra={"thread_id": thread_id})
         raise HTTPException(status_code=404, detail="Thread not found.")
@@ -101,9 +104,10 @@ async def get_thread(
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
-    content = await get_conv_messages(thread_id)
-    # TODO: handle none case
-    content = _post_process(content)
+    # Note: in the past, the content was retrieved from the Registry here, but not that the messages are returned directly from the prepare_for_stream, 
+    # (Which, through the initialize_conversation, wrote to the Registry; that value was then read back here fallibly)
+    # Since messages are Some, we can be sure that the content that would be returned by the retrieval from the Registry is the same as the messages. 
+    content = _post_process(messages)
 
     logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
 

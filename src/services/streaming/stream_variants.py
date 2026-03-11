@@ -145,6 +145,7 @@ StreamVariant = Annotated[
 
 Conversation = List[StreamVariant]
 
+SVDict = dict[str, str | list[str]]  # for when handling variants as dicts (e.g. from JSON) 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers: conversation normalization
@@ -357,9 +358,12 @@ def help_convert_sv_ccrm(
                 out.append(_as_system("openai_error", v.message))
 
         elif isinstance(v, SVCodeError):
-            if include_meta and v.id: # TODO: fix?
-                out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
-            elif include_meta:
+            # Code Errors do not have IDs, so we treat them as system messages rather than tool results.
+            
+            # if include_meta and v.id:
+            #     out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
+            # elif include_meta:
+            if include_meta:
                 out.append(_as_system("code_error", v.message))
 
         elif isinstance(v, SVStreamEnd):
@@ -432,7 +436,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
     raise ValueError(f"unsupported variant: {obj!r}")
 
 
-def from_sv_to_json(v: StreamVariant) -> dict:
+def from_sv_to_json(v: StreamVariant) -> SVDict:
     """
     Convert Pydantic class back to json/dict.
     """

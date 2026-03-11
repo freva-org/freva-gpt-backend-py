@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Optional
+from typing import Optional, Generator
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
@@ -13,7 +13,7 @@ from src.core.prompting import get_entire_prompt
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 
-from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE
+from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVDict
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
@@ -27,12 +27,13 @@ router = APIRouter()
 CHECK_INTERVAL = 3  # seconds, the interval to wait before check STOP request
 
 
-def _sse_data(obj: dict):
+def _sse_data(obj: SVDict) -> Generator[bytes]:
     if obj.get("variant") == IMAGE:
         image_b64 = obj.get("content")
         id = obj.get("id")
         CHUNK_SIZE = 16_384  # 16 KiB per JSON line
 
+        # The fact that image_b64 will always be a string is implied by requiring the input to be a SVDict, which is only constructed from StreamVariants, which have strict types.
         for frag in chunks(image_b64, CHUNK_SIZE):
             payload = json.dumps({"variant":"Image", "content":frag, "id":id})
             yield f"{payload}\n".encode("utf-8")
@@ -119,8 +120,7 @@ async def streamresponse(
                 detail=f"Conversation with thread_id: {thread_id} is already active and streaming. Please use a different thread_id or wait for the current stream to finish."
                 )
 
-    user_input = input or None
-    if user_input is None:
+    if input is None:
         raise HTTPException(
             status_code=422, 
             detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
@@ -183,7 +183,7 @@ async def streamresponse(
         async for variant in run_stream(
             model=model_name,
             thread_id=thread_id,
-            user_input=user_input,
+            user_input=input,
             system_prompt=system_prompt,
             logger=logger,
         ):

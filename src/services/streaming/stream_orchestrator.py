@@ -50,7 +50,7 @@ async def stream_with_tools(
     thread_id: str,
     messages: List[Dict[str, Any]], # system_prompt
     acomplete_func=acomplete,
-    stream_state: StreamState = None,
+    stream_state: StreamState,
     logger=None,
 ) -> AsyncIterator[StreamVariant]:
     log = logger or DEFAULT_LOGGER
@@ -270,10 +270,11 @@ async def prepare_for_stream(
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
     logger=None,
-) :
+) -> List[StreamVariant] | None:
     """ 
     Preparations for the streaming, read history (if needed), add to Registry and 
-    set conversation state to "streaming
+    set conversation state to "streaming". 
+    Returns the conversation history as StreamVariants if `read_history` is True.
     """
     log = logger or DEFAULT_LOGGER
     messages: List[StreamVariant] = []
@@ -283,12 +284,17 @@ async def prepare_for_stream(
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
     await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=log)
+    
+    if messages:
+        log.info("Conversation history loaded with %d messages.", len(messages))
+        return messages
+    return None
 
 
 async def get_conversation_history(
     thread_id: str,
     Storage: ThreadStorage,
-    ):
+    ) -> List[StreamVariant]:
     # Build messages for ongoing conversation
     prior_json: List[dict] = await Storage.read_thread(thread_id)
     prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]

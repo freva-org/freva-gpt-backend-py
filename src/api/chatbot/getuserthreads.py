@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.services.storage.mongodb_storage import ThreadStorage
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -64,7 +65,7 @@ async def get_user_threads(
 
     try:
         # Thread storage 
-        Storage = await get_thread_storage(vault_url=auth.vault_url)
+        Storage: ThreadStorage = await get_thread_storage(vault_url=auth.vault_url)
     except Exception as e:
         logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")

@@ -44,7 +44,7 @@ class ThreadStorage():
         append_to_existing: Optional[bool] = False,
     ) -> None:
         logger = configure_logging(__name__, thread_id=thread_id, user_id=user_id)
-        content = cleanup_conversation(content)
+        content: list[StreamVariant] = cleanup_conversation(content)
         if not content:
             return
 
@@ -56,7 +56,7 @@ class ThreadStorage():
         if existing:
             if append_to_existing:
                 existing_stream = existing.get("content", [])
-                existing_sv = [from_json_to_sv(v) for v in existing_stream]
+                existing_sv: list[StreamVariant] = [from_json_to_sv(v) for v in existing_stream]
                 merged_sv: List[StreamVariant] = existing_sv + content
             # topic: keep existing if present
             topic = existing.get("topic", "") or None

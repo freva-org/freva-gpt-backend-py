@@ -261,12 +261,26 @@ class McpClient:
         }
         r = self._timed_post("jsonrpc_tools/call", name, 
             "/mcp",
-                     headers=self._headers(extra_headers, session_id=session_id), json=body
+            headers=self._headers(extra_headers, session_id=session_id), json=body
         )
         res = self._rpc_result(r, rpc_id)
         if isinstance(res.result, dict):
             return res.result
         return {"result": res.result}
+    
+
+    def _timed_post(self, method_label: str, tool_name: str, path: str, *, headers, json):
+        t0 = time.perf_counter()
+        try:
+            r = self._http.post(path, headers=headers, json=json)
+            if r.status_code >= 400:
+                MCP_CALL_ERRORS.labels(method=method_label, tool=tool_name, kind=f"http_{r.status_code}").inc()
+            return r
+        except Exception as e:
+            MCP_CALL_ERRORS.labels(method=method_label, tool=tool_name, kind=type(e).__name__).inc()
+            raise
+        finally:
+            MCP_CALL_SECONDS.labels(method=method_label, tool=tool_name).observe(time.perf_counter() - t0)
 
 
     # ────────── rpc result helper ──────────

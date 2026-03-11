@@ -259,16 +259,8 @@ class McpClient:
         if isinstance(payload, dict):
             if "error" in payload and payload["error"]:
                 err = payload["error"]
-                code = err.get("code", 500)
-                status = response.status_code
-                msg = err.get("message", "")
-                if status in (401, 403):
-                    raise McpUnauthorized(msg or str(err))
-                if status == 400:
-                    raise McpBadRequest(msg or str(err))
-                if code == -32602:
-                    raise McpInvalidParams(msg or str(err))
-                raise McpError(msg or str(err))
+                self.log.error(f"MCP client received payload with error: {str(err)}")
+                raise McpError(str(err))
             return McpCallResult(ok=True, id=rpc_id, result=payload.get("result"), status_code=response.status_code)
 
         return McpCallResult(ok=True, id=rpc_id, result=payload, status_code=response.status_code)

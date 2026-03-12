@@ -1,7 +1,7 @@
 from __future__ import annotations
 from src.services.storage.mongodb_storage import ThreadStorage
 
-from typing import Union, Tuple, Literal
+from typing import Union, Tuple, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -14,7 +14,8 @@ router = APIRouter()
 
 @router.get("/searchthreads", dependencies=[AuthRequired])
 async def search_threads(
-    num_threads: int,
+    num_threads: Optional[int],
+    page: Optional[int],
     query: str,
     auth: Authenticator = Depends(auth_dependency),
 ):
@@ -28,9 +29,9 @@ async def search_threads(
 
     Parameters:
         num_threads (int):
-            The maximum number of matching threads to return.
+            The maximum number of matching threads to return. Optional, defaults to 20.
         page (int):
-            The page number for pagination (reserved for paging logic).
+            The page number for pagination (reserved for paging logic). Optional, starts at 0.
         query (str):
             The search query string. The query may be interpreted as:
                 - A topic search (default mode), or
@@ -90,14 +91,17 @@ async def search_threads(
     # Decide search mode (topic vs variant)
     mode_and_query = parse_query_mode(query)
 
+    num_threads = num_threads or 20  # default to 20 if not provided
+    page = page or 0  # default to 0 if not provided
+
     try:
         if mode_and_query[0] == "variant":
             variant: Variant = mode_and_query[1][0]
             content: str = mode_and_query[1][1]
-            total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads)
+            total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads, page)
         else:
             _query: str = mode_and_query[1]
-            total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads)
+            total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads, page)
     except Exception as e:
         logger.warning("Failed to query threads: %s", e)
         raise HTTPException(status_code=500, detail="Failed to query threads.")

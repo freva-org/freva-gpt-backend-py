@@ -144,6 +144,7 @@ class ThreadStorage():
         user_id: str,
         topic: str,
         num_threads: int,
+        page: int,
     ) -> tuple[int, List[Thread]]:
         """
         Search in the topic field.
@@ -158,6 +159,7 @@ class ThreadStorage():
         cursor = (
             coll.find(filt)
             .sort("updated_at", -1)
+            .skip(page * num_threads)
             .limit(num_threads)
         )
         docs = await cursor.to_list(length=num_threads)
@@ -180,6 +182,7 @@ class ThreadStorage():
         variant: Variant,
         content: str,
         num_threads: int,
+        page: int,
     ) -> tuple[int, List[Thread]]:
         """
         Search in a specific variant field (user/assistant/code/code_output).
@@ -200,6 +203,7 @@ class ThreadStorage():
         cursor = (
             coll.find(filt)
             .sort("updated_at", -1)
+            .skip(page * num_threads)
             .limit(num_threads)
         )
         docs = await cursor.to_list(length=num_threads)

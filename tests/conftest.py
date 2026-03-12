@@ -112,7 +112,7 @@ class DummyCollection:
                 docs = docs[:length]
             return docs[: self._limit] if self._limit is not None else docs
 
-    async def find_one(self, q):
+    async def find_one(self, q, unique=None):
         return self.storage.get(q.get("thread_id"))
 
     def find(self, q):

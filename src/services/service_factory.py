@@ -59,8 +59,14 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
     """
     MCP_SERVER_URLs = get_server_url_dict(settings.AVAILABLE_MCP_SERVERS)
 
+    access_token = authenticator.access_token
+    auth_header = f"Bearer {access_token}" if access_token else None
+
     # Defaults to send; per-call headers (vault/rest) are added at call time.
-    default_headers: Dict[str, str] = {}
+    default_headers: Dict[str, str] = {
+        "Authorization": auth_header,
+        "thread-id": thread_id,
+        }
 
     logger = configure_logging(__name__, thread_id=thread_id, user_id=authenticator.username)
 

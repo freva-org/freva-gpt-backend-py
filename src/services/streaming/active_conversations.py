@@ -189,9 +189,9 @@ async def end_and_save_conversation(
         # End conversation
         conv.state = ConversationState.ENDED
         conv.last_activity = datetime.now(timezone.utc)
-        # Save conversation
-        await Storage.save_thread(conv.thread_id, conv.user_id, conv.messages, append_to_existing=False)
-        return True
+    # Save conversation
+    await Storage.save_thread(conv.thread_id, conv.user_id, conv.messages, append_to_existing=False)
+    return True
 
 
 async def remove_conversation(
@@ -307,15 +307,12 @@ async def save_feedback_to_registry(thread_id: str, f_ind: int, feedback: str) -
 
 async def cleanup_idle(
     max_idle: timedelta,
-    Storage: Optional[ThreadStorage] = None,
 ) -> list[str]:  # thread_ids evicted
     """
     Remove conversations that have been idle longer than MAX_IDLE.
-    Each removed conversation is persisted via `end_and_save_conversation`.
     Returns a list of evicted thread_ids.
     """
     now = datetime.now(timezone.utc)
-    to_evict: List[ActiveConversation] = []
     evicted_ids: List[str] = []
 
     # Decide which ones to evict under lock and remove them.
@@ -324,11 +321,6 @@ async def cleanup_idle(
             if now - conv.last_activity > max_idle:
                 evicted_ids.append(thread_id)
                 conv.mcp_manager.close()
-                to_evict.append(Registry.pop(thread_id))
-
-    # Persist outside the lock to avoid blocking other requests.
-    if Storage:
-        for conv in to_evict:
-            await end_and_save_conversation(conv.thread_id, Storage)
+                Registry.pop(thread_id)
 
     return evicted_ids

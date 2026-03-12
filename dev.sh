@@ -8,6 +8,7 @@ set -euo pipefail
 #   --debug / --DEBUG          -> DEBUG=1
 #   --debug=0 / --DEBUG=0      -> DEBUG=0
 #   --no-debug                 -> DEBUG=0
+#   --scale             --> to use scaling with load-balancing proxy
 #
 # Everything else is passed through to `docker compose`.
 #
@@ -48,6 +49,11 @@ for arg in "$@"; do
       print_usage
       exit 0
       ;;
+    # Launch with scaling and proxy
+    --scale)
+      ./gen_compose.py ${COMPOSE_FILE}
+      COMPOSE_FILE="docker-compose.dev.scaled.yml"
+      ;;
     # Everything else goes to docker compose
     *)
       COMPOSE_ARGS+=("$arg")
@@ -61,4 +67,4 @@ export FREVAGPT_DEBUG
 echo "[dev.sh] Using ${COMPOSE_FILE} with DEBUG=${FREVAGPT_DEBUG}"
 echo "[dev.sh] docker compose -f ${COMPOSE_FILE} ${COMPOSE_ARGS[*]}"
 
-docker compose -f "${COMPOSE_FILE}" "${COMPOSE_ARGS[@]}"
+docker compose -f ${COMPOSE_FILE} "${COMPOSE_ARGS[@]}"

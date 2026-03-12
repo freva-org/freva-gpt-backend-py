@@ -19,7 +19,7 @@ from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
     ConversationState, get_conversation_state, 
     end_and_save_conversation, add_to_conversation,
-    new_thread_id, check_thread_exists, cancel_tool_tasks
+    check_thread_exists, cancel_tool_tasks
 )
 
 router = APIRouter()
@@ -58,8 +58,8 @@ async def streamresponse(
     Requires a valid authenticated user and vault-url.
 
     Behavior:
-        - Creates a new thread if `thread_id` is not provided.
-        - Resumes an existing thread if `thread_id` is provided.
+        - Checks if thread-id exists in storage, resumes an existing thread 
+          if it already exists.
         - Reads thread history if the thread exists in storage but is not
           registered in the in-memory registry.
         - Selects the specified chatbot model or falls back to the default.
@@ -91,6 +91,7 @@ async def streamresponse(
         HTTPException (409):
             - If the provided `thread_id` is already active and streaming.
         HTTPException (422):
+            - If the thread id is missing or empty.
             - If the user input is missing or empty.
             - If the vault URL header is missing or empty.
         HTTPException (503):
@@ -100,31 +101,18 @@ async def streamresponse(
               before streaming begins.
     """
     logger = configure_logging(__name__)
-    read_history=False
-    is_new_thread = False
-    if not thread_id:
-        is_new_thread = True
-        thread_id = await new_thread_id()
-        logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
-    else:
-        logger.info(f"Resuming conversation with thread_id: {thread_id}...")
-        if not await check_thread_exists(thread_id):
-            logger.info(f"Existing conversation is not found in the registry: {thread_id} ! "\
-                        "It will be registered after the thread history is read.")
-            read_history = True
-        if await get_conversation_state(thread_id) == ConversationState.STREAMING:
-            logger.warning(f"Conversation with thread_id: {thread_id} is already active and streaming. "
-                        "Aborting the new streaming request to avoid conflicts.")
-            raise HTTPException(
-                status_code=409,
-                detail=f"Conversation with thread_id: {thread_id} is already active and streaming. Please use a different thread_id or wait for the current stream to finish."
-                )
+
+    if thread_id is None:
+        raise HTTPException(
+            status_code=422, 
+            detail="Thread-id not found. Please request a new thread-id and provide it in the query parameters, of type String."
+            )
 
     user_input = input or None
     if user_input is None:
         raise HTTPException(
             status_code=422, 
-            detail="Input not found. Please provide a non-empty input in the query parameters or the headers, of type String."
+            detail="Input not found. Please provide a non-empty input in the query parameters, of type String."
             )
 
     model_name = chatbot or default_chatbot()
@@ -144,6 +132,26 @@ async def streamresponse(
     except Exception as e:
         logger.exception("Failed to connect to MongoDB", extra={"thread_id": thread_id, "user_id": user_name, "error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
+
+    # Check if thread-id exists in DB
+    read_history=False
+    is_new_thread = False
+    if await Storage.thread_exists(thread_id=thread_id):
+        logger.info(f"Resuming conversation with thread_id: {thread_id}...")
+        if not await check_thread_exists(thread_id):
+            logger.info(f"Existing conversation is not found in the registry: {thread_id} ! "\
+                        "It will be registered after the thread history is read.")
+            read_history = True
+        if await get_conversation_state(thread_id) == ConversationState.STREAMING:
+            logger.warning(f"Conversation with thread_id: {thread_id} is already active and streaming. "
+                        "Aborting the new streaming request to avoid conflicts.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Conversation with thread_id: {thread_id} is already active and streaming. Please use a different thread_id or wait for the current stream to finish."
+                )
+    else:
+        is_new_thread = True
+        logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
 
@@ -197,7 +205,8 @@ async def streamresponse(
                 state = await get_conversation_state(thread_id)
                 if state == ConversationState.STOPPING:
                     end_v = SVStreamEnd(message="Stream is stopped by user.")
-                    yield _sse_data(from_sv_to_json(end_v))
+                    for data in _sse_data(from_sv_to_json(end_v)):
+                            yield data
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
                     logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})

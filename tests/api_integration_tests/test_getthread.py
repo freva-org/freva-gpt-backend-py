@@ -38,17 +38,18 @@ async def test_getthread_returns_500_when_history_invalid(
     client,
     patch_db,
     patch_mongo_uri,
-    patch_mcp_manager,
     GOOD_HEADERS,
     monkeypatch,
 ):
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("broken history")
 
+    import src.services.storage.mongodb_storage as mongo_store
     monkeypatch.setattr(
-        "src.api.chatbot.getthread.prepare_for_stream",
+        mongo_store.ThreadStorage,
+        "read_thread",
         _raise_value_error,
-        raising=True,
+        raising=False,
     )
 
     with stub_resp:

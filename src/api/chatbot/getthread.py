@@ -22,7 +22,7 @@ def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
             is_last = (i == len(items) - 1)
             if (not is_last) or ("unexpected manner" in (getattr(v, "message", "") or "").lower()):
                 continue
-        cleaned.append(from_sv_to_json(v))
+        cleaned.append(v)
     return cleaned
 
 
@@ -85,14 +85,7 @@ async def get_thread(
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        await prepare_for_stream(
-            thread_id=thread_id, 
-            user_id=Auth.username,
-            Auth=Auth,
-            Storage=Storage,
-            read_history=True,
-            logger=logger,
-        )
+        content = await Storage.read_thread(thread_id=thread_id)
     except FileNotFoundError:
         logger.exception("Thread not found.", extra={"thread_id": thread_id})
         raise HTTPException(status_code=404, detail="Thread not found.")
@@ -100,10 +93,9 @@ async def get_thread(
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
-    content = await get_conv_messages(thread_id)
-
     content = _post_process(content)
 
-    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, 
+                                                  "user_id": Auth.username})
 
     return content

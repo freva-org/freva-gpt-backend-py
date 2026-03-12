@@ -12,10 +12,15 @@ curl -sS -N -G "http://localhost:8502/api/chatbot/streamresponse" \
   --data-urlencode "input=plot x=y" \
   -H "Authorization: Bearer <YOUR_TOKEN>" \
   -H "x-freva-rest-url: http://rest.example" \
-  -H "x-freva-vault-url: mongodb://<YOUR_MONGO_URI_OR_VAULT_URL>" \
-  -H "x-freva-config-path: /tmp/config.yml" \
+  -H "x-freva-vault-url: vault://<YOUR_AULT_URL>" \
   -o "$RUN_DIR/out_$i.ndjson" \
   -w "$i,%{http_code},%{time_connect},%{time_starttransfer},%{time_total},%{size_download}\n" \
-  > "$RUN_DIR/metrics_$i.csv"
+  # > "$RUN_DIR/metrics_$i.csv"
+
+curl -sS -N -G "http://localhost:8502/api/chatbot/deletethread" \
+  --data-urlencode "thread_id=$THREAD_ID" \
+  -H "Authorization: Bearer <YOUR_TOKEN>" \
+  -H "x-freva-rest-url: http://rest.example" \
+  -H "x-freva-vault-url: vault://<YOUR_VAULT_URL>" 
 
 # seq 1 20 | xargs -n1 -P20 ./one_call.sh

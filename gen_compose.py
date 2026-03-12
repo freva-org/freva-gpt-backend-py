@@ -12,6 +12,7 @@ load_dotenv()
 DEFAULT_MCP_PORTS = {"rag":"8050",
                      "code":"8051",
                      "web_search":"8052"}
+MCP_SERVICES = {"rag", "code", "web-search"}
 
 
 def canonical_service_name(name: str) -> str:
@@ -157,8 +158,9 @@ def main():
             new_services.update(expand_service(name, svc, backend_n))
         elif name == "litellm":
             new_services.update(expand_service(name, svc, litellm_n))
-        elif name in available_mcp_servers:
-            new_services.update(expand_service(name, svc, mcp_replica_n[name]))
+        elif name in MCP_SERVICES:
+            if name in available_mcp_servers:
+                new_services.update(expand_service(name, svc, mcp_replica_n[name]))
         else:
             new_services[name] = svc
 

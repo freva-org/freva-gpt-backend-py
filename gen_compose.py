@@ -113,7 +113,7 @@ def generate_haproxy(backend_n, backend_port, litellm_n, server_list, replica_di
                 canonical_service_name(s),
                 port_dict[s],
                 replica_dict[s],
-                "hdr(thread_id)",
+                "hdr(thread-id)",
             )
         )
 
@@ -139,7 +139,7 @@ def main():
         if s.strip()
     ]
     mcp_replica_n = {
-        s: int(os.environ.get(f"FREVAGPT_{env_name(s)}_REPLICAS", "1"))
+        s: int(os.environ.get(f"FREVAGPT_{env_name(s).upper()}_REPLICAS", "1"))
         for s in available_mcp_servers
     }
     port_dict = {

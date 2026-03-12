@@ -155,6 +155,7 @@ async def streamresponse(
                 )
     else:
         is_new_thread = True
+        is_new_thread = True
         logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
 
     system_prompt = get_entire_prompt(user_name, thread_id, model_name)
@@ -211,13 +212,13 @@ async def streamresponse(
                     state = await get_conversation_state(thread_id)
                     if state == ConversationState.STOPPING:
                         end_v = SVStreamEnd(message="Stream is stopped by user.")
-                        for data in  _sse_data(from_sv_to_json(end_v)):
+                        for data in _sse_data(from_sv_to_json(end_v)):
                             yield data
                         await cancel_tool_tasks(thread_id)
                         await end_and_save_conversation(thread_id, Storage)
                         logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})
                         return
-                    
+                
             await end_and_save_conversation(thread_id, Storage)
             logger.info("Completed streaming and saved conversation", extra={"thread_id": thread_id, "user_id": user_name})
         finally:

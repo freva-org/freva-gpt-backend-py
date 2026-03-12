@@ -171,6 +171,9 @@ async def streamresponse(
             read_history=read_history,
             logger=logger,
         )
+    except ValueError as e:
+        logger.warning(f"ValueError during stream preparation; most likely a race condition: {e}", extra={"thread_id": thread_id, "user_id": user_name})
+        raise HTTPException(status_code=409, detail="Another stream with the same thread_id is already active. Please wait for the current stream to finish or use a different thread_id.")
     except Exception as e:
         msg = f"Stream preparation has failed: {e}"
         logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})

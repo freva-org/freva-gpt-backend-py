@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
-from src.services.streaming.stream_orchestrator import prepare_for_stream
+from src.services.streaming.stream_orchestrator import get_conversation_history
 from src.core.logging_setup import configure_logging
 
 
@@ -85,13 +85,9 @@ async def get_thread(
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        messages = await prepare_for_stream(
+        messages = await get_conversation_history(
             thread_id=thread_id, 
-            user_id=Auth.username,
-            Auth=Auth,
             Storage=Storage,
-            read_history=True,
-            logger=logger,
         )
         # Note: we have passed in a Storage and set read_history to True, so the prepare_for_stream will read the history and return it as StreamVariants.
         # So if the messages are None, it means there was no Storage to read from and we raise a 404.

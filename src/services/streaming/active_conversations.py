@@ -78,27 +78,14 @@ async def initialize_conversation(
     """
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
     now = datetime.now(timezone.utc)      
-    async with RegistryLock:
-        conv = Registry.get(thread_id)
-        if conv:
-            log.debug("Conversation was found in the Registry. Starting streaming...")
-            
-            conv.state = ConversationState.STREAMING
-            conv.last_activity = datetime.now(timezone.utc)
-            return # Don't continue with initialization if conversation already exists; we just update the state and timestamp.
-    
-    # RegistryLock is dropped here before continuing 
-    # This is only reached if the conversation did not already exist, so we proceed with initialization and registration.
-    
-    log.debug("Initializing the conversation and saving it to Registry...")
-
     # if auth:
     mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
     # else:
     #     log.warning(f"The conversation {thread_id} initialized without MCPManager! "
     #                 "Please note that the MCP servers cannot be connected!")
-
-    conv = ActiveConversation(
+    
+    # Precreate the conversation object to reduce time spent under lock
+    maybe_new_conv = ActiveConversation(
         thread_id=thread_id,
         user_id=user_id,
         state=ConversationState.STREAMING,
@@ -106,9 +93,33 @@ async def initialize_conversation(
         messages=messages,
         last_activity=now,
     )
-    # register conversation
+    
     async with RegistryLock:
-        Registry[thread_id] = conv
+        conv = Registry.get(thread_id)
+        if conv:
+            # We posess the lock and know the conversation exists. 
+            # However, if at this point, it is already streaming, we hit a race condition where
+            # between the check at the start of the streamresponse endpoint and now, another request has initialized the same conversation and started streaming.
+            # To avoid conflicts, we will abort here immediately without updating the conversation, and the streamresponse endpoint will raise a 409.
+            if conv.state == ConversationState.STREAMING:
+                raise ValueError(f"Conversation with thread_id: {thread_id} already exists. This should not happen due to the check at the start of the streaming endpoint, so it indicates"
+                                "a race condition. Aborting to avoid conflicts; the streaming endpoint should raise a 409 Conflict response to the client.")
+            
+            log.debug("Conversation was found in the Registry. Starting streaming...")
+            
+            
+            conv.state = ConversationState.STREAMING
+            conv.last_activity = datetime.now(timezone.utc)
+            return # Don't continue with initialization if conversation already exists; we just update the state and timestamp.
+    
+        # In order to not have any race conditions, we keep the lock until we've written to the registry
+    
+        # register conversation
+        Registry[thread_id] = maybe_new_conv
+
+
+    
+    log.debug("Initialized the conversation and saved to Registry. ")
 
     # send tool calls to MCP server if there are Code variants present in messages
     if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):

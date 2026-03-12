@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, List, Tuple
-import threading
+import asyncio
 
 import httpx
 
@@ -17,8 +16,7 @@ settings = get_settings()
 
 MCP_PROTOCOL_VERSION = "2025-03-26"
 DEFAULT_CLIENT_INFO = {"name": "freva-backend", "version": "local"}
-DISCOVERY_SESSION_KEY = "__discovery__"
-
+DEFAULT_SESSION_KEY = "__default__"
 
 @dataclass
 class McpCallResult:
@@ -62,31 +60,33 @@ class McpClient:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.default_headers = default_headers or {}
-        self._lock = threading.RLock()
+        self._lock = asyncio.Lock()
         self._session_ids: Dict[str, str] = {}
         self.log = logger or DEFAULT_LOGGER
 
         # simple shared client
-        self._http = httpx.Client(
+        self._http = httpx.AsyncClient(
             base_url=self.base_url, 
             timeout=httpx.Timeout(settings.MCP_REQUEST_TIMEOUT_SEC)
         )
 
     # ────────── session ──────────
 
-    def _ensure_session(self, logical_key: str) -> str:
+    async def _ensure_session(self, logical_key: str) -> str:
         lk = logical_key or "__anon__"
-        with self._lock:
+        async with self._lock:
             existing = self._session_ids.get(lk)
             if existing:
+                self.log.debug("Reusing MCP session logical_key=%s sid=%s", lk, existing)
                 return existing
 
-            new_sid = self._start_session()
+            new_sid = await self._start_session()
             self._session_ids[lk] = new_sid
+            self.log.debug("Created MCP session logical_key=%s sid=%s", lk, new_sid)
             return new_sid
 
 
-    def _start_session(self) -> str:
+    async def _start_session(self) -> str:
         init_body = {
             "jsonrpc": "2.0",
             "id": str(uuid.uuid4()),
@@ -97,7 +97,7 @@ class McpClient:
                 "clientInfo": DEFAULT_CLIENT_INFO,
             },
         }
-        init_resp = self._http.post("/mcp", headers=self._headers(include_session=False), 
+        init_resp = await self._http.post("/mcp", headers=self._headers(include_session=False), 
                                     json=init_body)
         init_payload, sid = self._extract_payload_and_session(init_resp)
 
@@ -114,7 +114,7 @@ class McpClient:
             "method": "notifications/initialized", 
             "params": {}
         }
-        notify_resp = self._http.post(
+        notify_resp = await self._http.post(
             "/mcp", 
             headers=self._headers(session_id=sid), 
             json=notify_body
@@ -186,11 +186,11 @@ class McpClient:
 
     # ────────── tool discovery ──────────
 
-    def tools_list_rpc(self) -> McpCallResult:
+    async def tools_list_rpc(self, logical_session_key: str = DEFAULT_SESSION_KEY) -> McpCallResult:
         """
         Try JSON-RPC method: 'tools/list' (default) or 'tools.list' (dot_name=True).
         """
-        session_id = self._ensure_session(DISCOVERY_SESSION_KEY)
+        session_id = await self._ensure_session(logical_session_key)
         rpc_id = str(uuid.uuid4())
 
         body = {
@@ -200,15 +200,15 @@ class McpClient:
             "params": {"cursor": None},
             }
         
-        r = self._http.post("/mcp", headers=self._headers(session_id=session_id), json=body)
+        r = await self._http.post("/mcp", headers=self._headers(session_id=session_id), json=body)
         return self._rpc_result(r, rpc_id)
 
 
-    def tools_list_http(self) -> List[Dict[str, Any]]:
+    async def tools_list_http(self) -> List[Dict[str, Any]]:
         """
         Try plain HTTP GET /tools (some implementations expose this).
         """
-        r = self._http.get("/tools", headers=self._headers(include_session=False))
+        r = await self._http.get("/tools", headers=self._headers(include_session=False))
         r.raise_for_status()
         data = r.json()
         if isinstance(data, dict) and "tools" in data:
@@ -219,19 +219,19 @@ class McpClient:
 
     # ────────── call tool ──────────
 
-    def call_tool(
+    async def call_tool(
         self,
         *,
         name: str,
         args: Dict[str, Any],
         extra_headers: Optional[Dict[str, str]] = None,
-        logical_session_key: str = "__default__",
+        logical_session_key: str = DEFAULT_SESSION_KEY,
     ) -> Dict[str, Any]:
         """
         Call a tool via JSON-RPC method 'tools/call'.
         Sets session id based on session_key to keep continuity.
         """
-        session_id = self._ensure_session(logical_session_key)
+        session_id = await self._ensure_session(logical_session_key)
 
         # JSON-RPC tools/call
         rpc_id = str(uuid.uuid4())
@@ -241,7 +241,7 @@ class McpClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         }
-        r = self._http.post(
+        r = await self._http.post(
             "/mcp", headers=self._headers(extra_headers, session_id=session_id), json=body
         )
         res = self._rpc_result(r, rpc_id)
@@ -351,28 +351,28 @@ class McpClient:
 
     # ────────── termination and clean-up ──────────
 
-    def terminate_session(self) -> None:
+    async def terminate_session(self) -> None:
         """
         Best-effort: tell server to terminate the current session via HTTP DELETE.
         Server is expected to identify the session via Mcp-Session-Id header.
         """
-        with self._lock:
+        async with self._lock:
             sids = list(set(self._session_ids.values()))
 
-        for sid in set(sids):
+        for sid in sids:
             try:
-                self._http.delete("/mcp", headers=self._headers(session_id=sid))
+                await self._http.delete("/mcp", headers=self._headers(session_id=sid))
             except Exception:
-                pass
+                self.log.exception("Failed to terminate MCP session sid=%s", sid, exc_info=True)
 
 
-    def close(self) -> None:
+    async def close(self) -> None:
         try:
-            self.terminate_session()
+            await self.terminate_session()
         finally:
-            with self._lock:
+            async with self._lock:
                 self._session_ids.clear()
-            self._http.close()
+            await self._http.close()
         
 # ──────────────────── Helper functions ──────────────────────────────
 

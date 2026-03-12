@@ -66,7 +66,7 @@ async def stream_with_tools(
 
     # 1) First request
     tool_agg: Dict[str, Any] = {}
-    tools = mcp.openai_tools() if hasattr(mcp, "openai_tools") else []
+    tools = await mcp.openai_tools() if hasattr(mcp, "openai_tools") else []
     kwargs = {"model": model, "messages": messages, "stream": True}
     if tools:
         kwargs["tools"] = tools

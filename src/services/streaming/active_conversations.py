@@ -243,7 +243,7 @@ async def _replay_code_history(thread_id: str) -> None:
 
     for code in code_blocks:
         try:
-            # Run the blocking MCP call in a thread, reusing helper from stream_orchestrator 
+            # Run the MCP call asynchronously, reusing helper from stream_orchestrator 
             await run_tool_via_mcp(
                 mcp=mcp,
                 tool_name="code_interpreter",
@@ -300,13 +300,21 @@ async def cleanup_idle(
     """
     now = datetime.now(timezone.utc)
     evicted_ids: List[str] = []
+    managers_to_close = []
 
     # Decide which ones to evict under lock and remove them.
     async with RegistryLock:
         for thread_id, conv in list(Registry.items()):
             if now - conv.last_activity > max_idle:
                 evicted_ids.append(thread_id)
-                conv.mcp_manager.close()
+                if conv.mcp_manager is not None:
+                    managers_to_close.append(conv.mcp_manager)
                 Registry.pop(thread_id)
+
+    for mgr in managers_to_close:
+        try:
+            await mgr.close()
+        except Exception:
+            DEFAULT_LOGGER.exception("Failed to close MCP manager during idle cleanup.")
 
     return evicted_ids

@@ -95,16 +95,56 @@ async def edit_thread(
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading thread file.")
 
-    # Check index within bounds
-    if fork_from_index < 0 or fork_from_index >= len(orig_json):
-        raise HTTPException(
-            status_code=422,
-            detail="fork_from_index outside content range! Please review query parameters!",
-        )
+    # From the stress test, we know that the index check is not exact all the time. 
+    # Instead of having to triple-check the index check logic, I suggest we switch from direct indexing to a more robust approach,
+    # where we instead index into the user messages only. 
+    # This way, at worst, we might edit the wrong user message, but we won't have to worry about accidentally creating invalid threads due to off-by-one errors.
+    
+    use_direct_index = True # Old system for now
+    
+    if use_direct_index:
+        # Check index within bounds
+        if fork_from_index < 0 or fork_from_index >= len(orig_json):
+            raise HTTPException(
+                status_code=422,
+                detail="fork_from_index outside content range! Please review query parameters!",
+            )
+        
+        # Also make sure the target index is a user message (not system or assistant)
+        if orig_json[fork_from_index].get("role") != "user":
+            raise HTTPException(
+                status_code=422,
+                detail="fork_from_index must point to a user message! Please review query parameters!",
+            )
+        base_json = orig_json[:fork_from_index]
+    else:
+        # Count the number of user messages and check index within bounds
+        user_message_count = sum(1 for msg in orig_json if msg.get("role") == "user")
+        if fork_from_index < 0 or fork_from_index >= user_message_count:
+            raise HTTPException(
+                status_code=422,
+                detail="fork_from_index outside user message range! Please review query parameters!",
+            )
+            
+        # Find the position of the Nth user message
+        user_msg_seen = 0
+        cur_index = None
+        for i, msg in enumerate(orig_json):
+            if msg.get("role") == "user":
+                if user_msg_seen == fork_from_index:
+                    cur_index = i
+                    break
+                user_msg_seen += 1
+        if cur_index is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not find the specified user message index! Please review query parameters!",
+            )
+        base_json = orig_json[:cur_index]
+
 
     # Cut history BEFORE the edited user message
     # (drop the original user message and everything after)
-    base_json = orig_json[:fork_from_index]
 
     base_sv = [from_json_to_sv(v) for v in base_json]
 

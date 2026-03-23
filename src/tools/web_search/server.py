@@ -3,7 +3,6 @@ import os
 from fastmcp import FastMCP
 
 from src.tools.header_gate import make_header_gate
-from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
 from openai import OpenAI
@@ -12,8 +11,7 @@ logger = configure_logging(__name__, named_log="web_search_server")
 
 OPENAI_API_KEY: str = os.getenv("FREVAGPT_OPENAI_API_KEY")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
-mcp = FastMCP("web-search-server", auth=None if _disable_auth else jwt_verifier)
+mcp = FastMCP("web-search-server")
 
 # ── Config ───────────────────────────────────────────────────────────────────
 WEB_SEARCH_MODEL="gpt-4.1"
@@ -28,8 +26,8 @@ PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
 # ─── App ────────────────────────────────────────────────────────────────────
 
-logger.info("Starting Web-Search MCP server on %s:%s%s (auth=%s)",
-            HOST, PORT, PATH, "off" if _disable_auth else "on")
+logger.info("Starting Web-Search MCP server on %s:%s%s",
+            HOST, PORT, PATH)
 
 # Start the MCP server using Streamable HTTP transport
 app = make_header_gate(

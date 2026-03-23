@@ -57,7 +57,7 @@ async def test_routes_succeed_with_auth_and_username_injection(
             r = await client.get(
                 "/api/chatbot/streamresponse",
                 headers=GOOD_HEADERS,
-                params={"input": "hi there", "chatbot": "qwen2.5:3b"},
+                params={"thread_id": "t-123", "input": "hi there", "chatbot": "qwen2.5:3b"},
             )
             assert r.status_code == 200
             assert r.headers.get("content-type", "").startswith("application/x-ndjson")

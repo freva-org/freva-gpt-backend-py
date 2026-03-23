@@ -1,4 +1,4 @@
-from typing import Callable, Awaitable, Dict, Any, List
+from typing import Callable, Awaitable, Dict, Any, List, Optional
 from contextvars import ContextVar
 import logging
 from src.core.logging_setup import configure_logging
@@ -13,11 +13,13 @@ def make_header_gate(
     header_name_list: List[str],
     logger: logging.Logger | None = None,
     mcp_path: str = "/mcp",
+    on_session_close: Optional[Callable[[str], None]] = None,
 ):
     """
     Wrap the FastMCP ASGI app so every request to `mcp_path`:
       - enforces a valid mongodb URI in mongodb-uri,
       - sets ContextVars for downstream code.
+      - (optional) cleans up on DELETE {mcp_path} using Mcp-Session-Id.
     """
     log = logger or logging.getLogger("header_gate")
 
@@ -43,7 +45,25 @@ def make_header_gate(
                 k.decode("latin-1").lower(): v.decode("latin-1")
                 for k, v in scope.get("headers", [])
             }
-            # log.debug(f"Raw server headers: {hdrs}")
+
+            # handle session close 
+            if scope.get("method") == "DELETE":
+                sid = hdrs.get("mcp-session-id", "")
+                try:
+                    log.info("DELETE %s received. Session id=%r", mcp_path, sid)
+                except Exception:
+                    pass
+
+                if on_session_close and sid:
+                    try:
+                        on_session_close(sid)
+                    except Exception:
+                        log.exception("on_session_close failed for sid=%s", sid)
+
+                # Respond 204 No Content
+                await send({"type": "http.response.start", "status": 204, "headers": []})
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+                return
 
             tokens: list[tuple[ContextVar, Any]] = []
 
@@ -51,11 +71,6 @@ def make_header_gate(
                 for ctx, header_name in zip(ctx_list, header_name_list):
 
                     v = hdrs.get(header_name)
-
-                    try:
-                        log.info(f"Server header {header_name} (ASGI wrap): {v}")
-                    except Exception:
-                        pass  # never fail on logging
 
                     # Enforce required conditions on header
                     # We do not do the same for CI because it doesn't have to be that strict, it can operate without freva access. We warn about this

@@ -31,10 +31,30 @@ AVAILABLE_LIBRARIES={"stableclimgen"}
 
 CLEAR_MONGODB_EMBEDDINGS = False
 
-# ── Mongo helpers ────────────────────────────────────────────────────────────
+HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
+PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8050"))
+PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
+
+# ── App ───────────────────────────────────────────────────────────────────
+
 # Per-request header context
 MONGODB_URI_HDR = "mongodb-uri"
 mongo_uri_ctx: ContextVar[str | None] = ContextVar("mongo_uri_ctx", default=None)
+
+# Configure Streamable HTTP transport 
+logger.info("Starting RAG MCP server on %s:%s%s (auth=%s)",
+            HOST, PORT, PATH, "off" if _disable_auth else "on")
+
+# Start the MCP server using Streamable HTTP transport
+app = make_header_gate(
+    mcp.http_app(),
+    ctx_list=[mongo_uri_ctx],
+    header_name_list=[MONGODB_URI_HDR],
+    logger=logger,       
+    mcp_path=PATH,  
+)
+
+# ── Mongo helpers ────────────────────────────────────────────────────────────
 
 @lru_cache(maxsize=32)
 def _client_for(uri: str) -> MongoClient:
@@ -202,27 +222,3 @@ def debug():
 
     context = get_query_results(question, resources_to_retrieve_from)
     print(context)
-
-    
-if __name__ == "__main__":
-    # Configure Streamable HTTP transport 
-    host = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("FREVAGPT_MCP_PORT", "8050"))
-    path = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
-
-    logger.info("Starting RAG MCP server on %s:%s%s (auth=%s)",
-                host, port, path, "off" if _disable_auth else "on")
-
-    # Start the MCP server using Streamable HTTP transport
-    wrapped_app = make_header_gate(
-        mcp.http_app(),
-        ctx_list=[mongo_uri_ctx],
-        header_name_list=[MONGODB_URI_HDR],
-        logger=logger,       
-        mcp_path=path,  
-    )
-
-    import uvicorn
-    uvicorn.run(wrapped_app, host=host, port=port, ws="websockets-sansio",)
-
-    # debug()

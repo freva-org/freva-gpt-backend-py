@@ -30,6 +30,11 @@ REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
 # We leave 5 seconds buffer so server responds before client timeout
 EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
 
+logger.info("MCP Code-Server timeouts configured", extra={
+    "request_timeout": REQUEST_TIMEOUT,
+    "exec_timeout": EXEC_TIMEOUT,
+})
+
 IOPUB_DRAIN_AFTER_REPLY: float = 0.25
 IOPUB_POLL = 0.1
 SHELL_POLL = 0.1

@@ -24,7 +24,6 @@ set -euo pipefail
 
 # Set FREVAGPT_DEV flag for everything in this session
 export FREVAGPT_DEV=1
-export FREVAGPT_MCP_DISABLE_AUTH=1
 
 FREVAGPT_DEBUG="${FREVAGPT_DEBUG:-0}"
 COMPOSE_FILE="docker-compose.dev.yml"

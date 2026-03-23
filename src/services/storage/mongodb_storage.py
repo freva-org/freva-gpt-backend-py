@@ -5,7 +5,7 @@ import re
 import pymongo
 from pymongo import AsyncMongoClient
 
-from .helpers import Thread, get_database, summarize_topic, Variant, VARIANT_FIELD
+from .helpers import Thread, get_database, summarize_topic
 from src.core.settings import get_settings
 from src.services.streaming.stream_variants import StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
 from src.core.logging_setup import configure_logging
@@ -166,48 +166,6 @@ class ThreadStorage():
         filt = {
             "user_id": user_id,
             "topic": {"$regex": re.escape(topic), "$options": "i"},
-        }
-
-        total = await coll.count_documents(filt)
-        cursor = (
-            coll.find(filt)
-            .sort("updated_at", -1)
-            .limit(num_threads)
-        )
-        docs = await cursor.to_list(length=num_threads)
-        threads = [
-            Thread(
-                user_id=d["user_id"],
-                thread_id=d["thread_id"],
-                date=d["date"],
-                topic=d.get("topic", ""),
-                content=d.get("content", []),
-            )
-            for d in docs
-        ]
-        return total, threads
-
-
-    async def query_by_variant(
-        self,
-        user_id: str,
-        variant: Variant,
-        content: str,
-        num_threads: int,
-    ) -> Dict[str, Any]:
-        """
-        Search in a specific variant field (user/assistant/code/code_output).
-        """
-        coll = self.db[MONGODB_COLLECTION_NAME]
-
-        filt = {
-            "user_id": user_id,
-            "content": {
-                "$elemMatch": {
-                    "variant": variant,
-                    "content": {"$regex": re.escape(content), "$options": "i"},
-                }
-            },
         }
 
         total = await coll.count_documents(filt)

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.streaming.stream_variants import from_json_to_sv
+from src.services.streaming.stream_variants import from_json_to_sv, SVServerHint
 from src.services.streaming.active_conversations import new_thread_id
+from src.core.logging_setup import configure_logging
 
 router = APIRouter()
+
 
 @router.get("/editthread", dependencies=[AuthRequired])
 async def edit_thread(
@@ -80,6 +82,8 @@ async def edit_thread(
             status_code=422,
             detail="Vault URL not found in headers",
         )
+    
+    logger = configure_logging(__name__, thread_id=source_thread_id, user_id=user_name)
 
     try:
         # Thread storage 
@@ -91,12 +95,15 @@ async def edit_thread(
     try:
         orig_json = await Storage.read_thread(thread_id=source_thread_id)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Thread not found")
+        logger.exception("Cannot read source thread. Thread not found.")
+        raise HTTPException(status_code=404, detail="Thread not found.")
     except Exception:
+        logger.exception("Cannot read source thread. Error reading thread file.")
         raise HTTPException(status_code=500, detail="Error reading thread file.")
 
     # Check index within bounds
     if fork_from_index < 0 or fork_from_index >= len(orig_json):
+        logger.exception(f"fork_from_index outside content range: {fork_from_index} content length: {len(orig_json)}.")
         raise HTTPException(
             status_code=422,
             detail="fork_from_index outside content range! Please review query parameters!",
@@ -106,25 +113,45 @@ async def edit_thread(
     # (drop the original user message and everything after)
     base_json = orig_json[:fork_from_index]
 
-    base_sv = [from_json_to_sv(v) for v in base_json]
+    content_sv = [from_json_to_sv(v) for v in base_json]
 
     new_id = await new_thread_id()
+    logger.info(f"Continuing the edited thread with thread-id: {new_id}")
+    logger = configure_logging(__name__, thread_id=new_id, user_id=Auth.username)
+    content_sv = update_threadid_in_content(new_id, content_sv, logger=logger)
+
     root_thread_id = source_thread_id  # TODO: if there are many changes we need to track down the original root
     
     try:
         await Storage.save_thread(
             thread_id=new_id,
             user_id=user_name,
-            content=base_sv,
+            content=content_sv,
             root_thread_id=root_thread_id,
             parent_thread_id=source_thread_id,
             fork_from_index= fork_from_index,
         )
     except:
-        raise HTTPException(status_code=500, detail="Failed to save new thread with edited user input.")
+        logger.exception(f"Failed to save new thread. Source thread id: {source_thread_id}.")
+        raise HTTPException(status_code=500, 
+                            detail="Failed to save new thread with edited user input.")
 
     # Return the new thread_id and the base history
     return {
         "new_thread_id": new_id,
         "history": base_json,
     }
+
+
+def update_threadid_in_content(new_id: str, content: list, logger):
+    if isinstance(content[0], SVServerHint):
+        content[0] = SVServerHint(data={"thread_id": new_id})
+        logger.info("Updated ServerHint with new thread-id.")
+    else:
+        if any(isinstance(c, SVServerHint) for c in content):
+            logger.exception("ServerHint is in unexpected position in thread content!")
+            raise ValueError("ServerHint is in unexpected position in thread content!")
+        else:
+            logger.info("ServerHint is missing in the thread content. It is inserted with the new thread-id.")
+            content = [SVServerHint(data={"thread_id": new_id})] + content
+    return content

@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 def _force_dev(monkeypatch):
     monkeypatch.setenv("FREVAGPT_DEV", "1")
     monkeypatch.setenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
-    monkeypatch.setenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "20")
     import src.core.settings as settings
     importlib.reload(settings)
     yield

@@ -2,12 +2,18 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timezone
 import re
 
+import pymongo
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
-from .helpers import Thread, get_database, summarize_topic, Variant
+from .helpers import Thread, get_database, summarize_topic
 from src.core.settings import get_settings
-from src.services.streaming.stream_variants import StreamVariant, cleanup_conversation, from_sv_to_json, from_json_to_sv
+from src.services.streaming.stream_variants import (
+    StreamVariant,
+    cleanup_conversation,
+    from_sv_to_json,
+    from_json_to_sv,
+)
 from src.core.logging_setup import configure_logging
 
 DEFAULT_LOGGER = configure_logging(__name__)
@@ -19,12 +25,12 @@ MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
 
-class ThreadStorage():
+class ThreadStorage:
     """PROD / shared implementation: store threads in MongoDB."""
+
     def __init__(self, vault_url: str, db: AsyncDatabase) -> None:
         self.vault_url = vault_url
         self.db = db
-
 
     @classmethod
     async def create(cls, vault_url: str):
@@ -33,8 +39,14 @@ class ThreadStorage():
         else:
             db = await get_database(vault_url)
         s = cls(vault_url=vault_url, db=db)
-        return s
 
+        coll = db[MONGODB_COLLECTION_NAME]
+        await coll.create_index("thread_id", unique=True)
+        await coll.create_index(
+            [("user_id", pymongo.ASCENDING), ("date", pymongo.DESCENDING)]
+        )
+
+        return s
 
     async def save_thread(
         self,
@@ -56,7 +68,9 @@ class ThreadStorage():
         if existing:
             if append_to_existing:
                 existing_stream = existing.get("content", [])
-                existing_sv: list[StreamVariant] = [from_json_to_sv(v) for v in existing_stream]
+                existing_sv: list[StreamVariant] = [
+                    from_json_to_sv(v) for v in existing_stream
+                ]
                 merged_sv: List[StreamVariant] = existing_sv + content
             # topic: keep existing if present
             topic = existing.get("topic", "") or None
@@ -71,15 +85,21 @@ class ThreadStorage():
             "thread_id": thread_id,
             "date": datetime.now(timezone.utc),
             "topic": topic,
-            "content": all_stream, 
+            "content": all_stream,
         }
 
         if existing:
             await coll.update_one({"thread_id": thread_id}, {"$set": doc}, upsert=True)
         else:
             await coll.insert_one(doc)
-        logger.info("Saved thread to MongoDB", extra={"thread_id": thread_id, "user_id": user_id, "append": append_to_existing})
-
+        logger.info(
+            "Saved thread to MongoDB",
+            extra={
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "append": append_to_existing,
+            },
+        )
 
     async def list_recent_threads(
         self,
@@ -101,35 +121,33 @@ class ThreadStorage():
             )
             for d in docs
         ]
-        logger.info("Listed recent threads from MongoDB", extra={"user_id": user_id, "returned": len(threads), "limit": limit})
+        logger.info(
+            "Listed recent threads from MongoDB",
+            extra={"user_id": user_id, "returned": len(threads), "limit": limit},
+        )
         return threads, n_threads
-
 
     async def read_thread(
         self,
         thread_id: str,
     ) -> List[Dict]:
-        #TODO check the return
+        # TODO check the return
         logger = configure_logging(__name__, thread_id=thread_id)
         coll = self.db[MONGODB_COLLECTION_NAME]
         doc = await coll.find_one({"thread_id": thread_id})
         if not doc:
-            logger.warning("Thread not found in MongoDB", extra={"thread_id": thread_id})
+            logger.warning(
+                "Thread not found in MongoDB", extra={"thread_id": thread_id}
+            )
             raise FileNotFoundError("Thread not found")
         return doc.get("content", [])
-    
 
-    async def update_thread_topic(
-        self,
-        thread_id: str,
-        topic: str
-    ):
+    async def update_thread_topic(self, thread_id: str, topic: str):
         logger = configure_logging(__name__, thread_id=thread_id)
         coll = self.db[MONGODB_COLLECTION_NAME]
-        update_op = { '$set' :  { 'topic' : topic } }
+        update_op = {"$set": {"topic": topic}}
         await coll.update_one({"thread_id": thread_id}, update_op)
         logger.info("Updated topic in MongoDB", extra={"thread_id": thread_id})
-
 
     async def delete_thread(
         self,
@@ -137,7 +155,6 @@ class ThreadStorage():
     ):
         coll = self.db[MONGODB_COLLECTION_NAME]
         await coll.delete_one({"thread_id": thread_id})
-        
 
     async def query_by_topic(
         self,
@@ -153,50 +170,6 @@ class ThreadStorage():
         filt = {
             "user_id": user_id,
             "topic": {"$regex": re.escape(topic), "$options": "i"},
-        }
-
-        total = await coll.count_documents(filt)
-        cursor = (
-            coll.find(filt)
-            .sort("updated_at", -1)
-            .skip(page * num_threads)
-            .limit(num_threads)
-        )
-        docs = await cursor.to_list(length=num_threads)
-        threads = [
-            Thread(
-                user_id=d["user_id"],
-                thread_id=d["thread_id"],
-                date=d["date"],
-                topic=d.get("topic", ""),
-                content=d.get("content", []),
-            )
-            for d in docs
-        ]
-        return total, threads
-
-
-    async def query_by_variant(
-        self,
-        user_id: str,
-        variant: Variant,
-        content: str,
-        num_threads: int,
-        page: int,
-    ) -> tuple[int, List[Thread]]:
-        """
-        Search in a specific variant field (user/assistant/code/code_output).
-        """
-        coll = self.db[MONGODB_COLLECTION_NAME]
-
-        filt = {
-            "user_id": user_id,
-            "content": {
-                "$elemMatch": {
-                    "variant": variant,
-                    "content": {"$regex": re.escape(content), "$options": "i"},
-                }
-            },
         }
 
         total = await coll.count_documents(filt)

@@ -14,6 +14,7 @@ from src.services.streaming.stream_variants import (
     SVServerError,
     SVServerHint,
     SVStreamEnd,
+    SVToolCall,
     StreamVariant,
     help_convert_sv_ccrm,
     from_json_to_sv
@@ -187,8 +188,10 @@ async def stream_with_tools(
 
         if name == "code_interpreter":
             # We append accumulated code text to thread
-            code_v = SVCode(code=args_txt, id=id)
-            tc_variants.append(code_v)
+            tool_v = SVCode(code=args_txt, id=id)
+        else:
+            tool_v = SVToolCall(arg=args_txt, id=id, tool_name=name)
+        tc_variants.append(tool_v)
 
         tool_out_v: List[StreamVariant] = []
         tool_msgs: List[Dict[str, Any]] = []

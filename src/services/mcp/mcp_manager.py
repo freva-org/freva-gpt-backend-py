@@ -208,10 +208,13 @@ async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[
         "rag": {
             "Authorization": auth_header,
             "mongodb-uri":  mongodb_uri,
-            },
+        },
         "code": {
             "Authorization": auth_header,
             "working-dir": str(cache),
-            },
-            }
+        },
+        "web_search": {
+            "Authorization": auth_header,
+        },
+    }
     return headers

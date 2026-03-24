@@ -85,7 +85,7 @@ async def summarize_topic(content: List[StreamVariant]) -> str:
     try:
         resp = await acomplete(
             messages=[{"role": "user", "content": prompt}],
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             max_tokens=50,
             temperature=0.2,
         )
@@ -133,34 +133,5 @@ async def get_database(
         """
         mongodb_uri = await get_mongodb_uri(vault_url)
 
-        client = AsyncMongoClient(mongodb_uri)
+        client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
         return client[MONGODB_DATABASE_NAME]
-
-# ──────────────────── Search threads ──────────────────────────────
-
-Variant = Literal["User", "Assistant", "Code", "CodeOutput"]
-
-
-PREFIX_MAP: Dict[str, Variant] = {
-    # user variants
-    "user": "User", "u": "User", "input": "User", "me": "User", "question": "User",
-    "request": "User", "i": "User", "benutzer": "User", "eingabe": "User",
-    # assistant variants
-    "ai": "Assistant", "a": "Assistant", "assistant": "Assistant",
-    "frevagpt": "Assistant", "freva-gpt": "Assistant", "freva_gpt": "Assistant",
-    "answer": "Assistant", "ki": "Assistant", "assistent": "Assistant",
-    "computer": "Assistant",
-    # code input variants
-    "code_input": "Code", "ci": "Code", "code": "Code", "codeinput": "Code",
-    "python": "Code", "py": "Code",
-    # code output variants
-    "code_output": "CodeOutput", "co": "CodeOutput", "codeoutput": "CodeOutput",
-    "output": "CodeOutput", "ausgabe": "CodeOutput", "ergebnis": "CodeOutput",
-}
-
-VARIANT_FIELD: Dict[Variant, str] = {
-    "User": "user_text",
-    "Assistant": "assistant_text",
-    "Code": "code_input",
-    "CodeOutput": "code_output",
-}

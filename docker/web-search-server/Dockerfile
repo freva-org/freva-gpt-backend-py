@@ -6,9 +6,7 @@ FROM fedora:latest
 # ---------------------
 
 # Install necessary dependencies for miniconda
-RUN dnf install -y curl bzip2 awk git \
-    gcc gcc-c++ make python3-devel \
-    && dnf clean all
+RUN dnf install -y curl bzip2 awk git
 
 RUN mkdir /app
 WORKDIR /app
@@ -44,7 +42,7 @@ RUN echo "conda activate env" >> ~/.bashrc
 # Install uv into the env 
 RUN conda run -n env python -m pip install --no-cache-dir uv
 
-COPY docker/code-server/pyproject.toml /app/pyproject.toml
+COPY docker/web-search-server/pyproject.toml /app/pyproject.toml
 
 # Export requirements from pyproject.toml into a file
 RUN conda run -n env uv export --format requirements-txt --no-hashes -o /tmp/requirements.txt
@@ -53,29 +51,17 @@ RUN conda run -n env uv pip install --no-cache-dir --system \
     --python "/opt/conda/envs/env/bin/python" \
     -r /tmp/requirements.txt
 
-# Install Python deps via uv (this replaces `pip install ...`)
-RUN conda run -n env uv pip install \
-    freva-client dill numpy matplotlib pandas xarray xesmf scipy netcdf4 cartopy contourpy \
-    geopy aiohttp requests scikit-learn geopandas healpy easygems astropy tzdata pytz
-
-# These libraries cannot be installed by uv, so we use conda.
-RUN conda install --yes -c conda-forge -n env pytorch
-
-# # Install pytorch with CUDA wheels
-# RUN conda run -n env python -m pip install --no-cache-dir \
-#     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
 # Python env paths
 ENV PATH="/opt/conda/envs/env/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/env/lib/:${LD_LIBRARY_PATH}"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-EXPOSE ${FREVAGPT_MCP_PORT:-8051}
+EXPOSE ${FREVAGPT_MCP_PORT:-8052}
 
 COPY src /app/src
 
-# Launch CI server
-CMD uvicorn src.tools.code.server:app \
+# Launch server
+CMD uvicorn src.tools.web_search.server:app \
     --host ${FREVAGPT_MCP_HOST:-0.0.0.0}\
-    --port ${FREVAGPT_MCP_PORT:-8051} \
+    --port ${FREVAGPT_MCP_PORT:-8052} \
     --proxy-headers

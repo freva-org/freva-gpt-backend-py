@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
+from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd
 from src.services.streaming.stream_orchestrator import get_conversation_history
 from src.core.logging_setup import configure_logging
 
@@ -12,16 +12,16 @@ from src.core.logging_setup import configure_logging
 router = APIRouter()
 
 
-def _post_process(variants: List[StreamVariant]) -> List[dict[str, str | list[str]]]:
+def _post_process(variants: List[StreamVariant]) -> List[StreamVariant]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
     items = [item for item in variants if not is_prompt(item)]
-    cleaned: List[dict[str, str | list[str]]] = []
+    cleaned: List[StreamVariant] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = (i == len(items) - 1)
             if (not is_last) or ("unexpected manner" in (getattr(v, "message", "") or "").lower()):
                 continue
-        cleaned.append(from_sv_to_json(v))
+        cleaned.append(v)
     return cleaned
 
 
@@ -100,11 +100,12 @@ async def get_thread(
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
-    # Note: in the past, the content was retrieved from the Registry here, but not that the messages are returned directly from the prepare_for_stream, 
-    # (Which, through the initialize_conversation, wrote to the Registry; that value was then read back here fallibly)
-    # Since messages are Some, we can be sure that the content that would be returned by the retrieval from the Registry is the same as the messages. 
+    # Note: in the past, the content was retrieved from the Registry here, but now that the messages are returned directly from the get_conversation_history,
+    # (Which, before, used the prepare_for_stream, and through the initialize_conversation, wrote to the Registry; that value was then read back here fallibly)
+    # Since messages are not None, we can be sure that the content that would be returned by the retrieval from the Registry is the same as the messages. 
     content = _post_process(messages)
 
-    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, 
+                                                  "user_id": Auth.username})
 
     return content

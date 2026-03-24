@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.streaming.stream_variants import from_json_to_sv, SVServerHint
-from src.services.streaming.active_conversations import new_thread_id
+from src.services.streaming.stream_variants import from_json_to_sv, from_sv_to_json, SVServerHint
+from src.services.streaming.active_conversations import new_thread_id, check_thread_exists, initialize_conversation
 from src.core.logging_setup import configure_logging
 
 router = APIRouter()
@@ -31,7 +31,6 @@ async def edit_thread(
     Parameters:
         source_thread_id (str):
             The ID of the existing thread to fork from.
-
         fork_from_index (int):
             The zero-based index in the original thread history where the fork
             should occur. The message at this index and everything after it
@@ -94,6 +93,21 @@ async def edit_thread(
     # Load original content
     try:
         orig_json = await Storage.read_thread(thread_id=source_thread_id)
+        orig_sv = [from_json_to_sv(v) for v in orig_json]
+
+        # In case the user edits an input during active stream, frontend calls /stop
+        # right after /editthread. Not to throw 500 if the source thread is not registered,
+        # we check and register it here.
+        is_source_registered = await check_thread_exists(thread_id=source_thread_id)
+        if not is_source_registered:
+            await initialize_conversation(
+                thread_id=source_thread_id,
+                user_id=user_name,
+                messages=orig_sv,
+                auth=Auth,
+                logger=logger
+            )
+
     except FileNotFoundError:
         logger.exception("Cannot read source thread. Thread not found.")
         raise HTTPException(status_code=404, detail="Thread not found.")
@@ -111,14 +125,12 @@ async def edit_thread(
 
     # Cut history BEFORE the edited user message
     # (drop the original user message and everything after)
-    base_json = orig_json[:fork_from_index]
-
-    content_sv = [from_json_to_sv(v) for v in base_json]
+    base_sv = orig_sv[:fork_from_index]
 
     new_id = await new_thread_id()
     logger.info(f"Continuing the edited thread with thread-id: {new_id}")
     logger = configure_logging(__name__, thread_id=new_id, user_id=Auth.username)
-    content_sv = update_threadid_in_content(new_id, content_sv, logger=logger)
+    base_sv = update_threadid_in_content(new_id, base_sv, logger=logger)
 
     root_thread_id = source_thread_id  # TODO: if there are many changes we need to track down the original root
     
@@ -126,15 +138,24 @@ async def edit_thread(
         await Storage.save_thread(
             thread_id=new_id,
             user_id=user_name,
-            content=content_sv,
+            content=base_sv,
             root_thread_id=root_thread_id,
             parent_thread_id=source_thread_id,
             fork_from_index= fork_from_index,
+        )
+        await initialize_conversation(
+                thread_id=new_id,
+                user_id=user_name,
+                messages=base_sv,
+                auth=Auth,
+                logger=logger
         )
     except:
         logger.exception(f"Failed to save new thread. Source thread id: {source_thread_id}.")
         raise HTTPException(status_code=500, 
                             detail="Failed to save new thread with edited user input.")
+
+    base_json = [from_sv_to_json(sv) for sv in base_sv]
 
     # Return the new thread_id and the base history
     return {

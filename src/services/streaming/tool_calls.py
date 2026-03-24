@@ -120,12 +120,13 @@ def parse_tool_result(resp_txt: str, tool_name: str, call_id: str, logger=None):
     log = logger or DEFAULT_LOGGER
     result_json = json.loads(resp_txt)
 
-    if "structuredContent" in result_json.keys():
+    structured_content = result_json.get("structuredContent")
+    if structured_content is not None:
         if tool_name == "code_interpreter":
-            yield from parse_code_interpreter_result(result_json, call_id, logger=log)
+            yield from parse_code_interpreter_result(structured_content, call_id, logger=log)
         else:
             yield from parse_generic_tool_result(
-                result_json, tool_name, call_id, logger=log
+                structured_content, tool_name, call_id, logger=log
             )
     else:
         if result_json.get("error"):
@@ -148,13 +149,11 @@ def parse_tool_result(resp_txt: str, tool_name: str, call_id: str, logger=None):
         )
 
 
-def parse_code_interpreter_result(result_json: Dict, id: str, logger=None):
-    log = logger or DEFAULT_LOGGER
+def parse_code_interpreter_result(result: Dict, id: str, logger=None):
     code_block: List[StreamVariant] = []
     code_msgs: List[OpenAIMessage] = []
 
     # Code output: structured dict of displayed data, image or error
-    result = result_json.get("structuredContent")
 
     # Printed/displayed output + error message if exists
     out = (
@@ -203,10 +202,7 @@ def parse_code_interpreter_result(result_json: Dict, id: str, logger=None):
     yield FinalSummary(var_block=code_block, tool_messages=code_msgs, is_error=isError)
 
 
-def parse_generic_tool_result(result_json: Dict, tool_name: str, id: str, logger=None):
-    log = logger or DEFAULT_LOGGER
-
-    result = result_json.get("structuredContent")
+def parse_generic_tool_result(result: Dict, tool_name: str, id: str, logger=None):
     web_sv = SVToolOutput(output=result.get("result"), tool_name=tool_name, id=id)
     web_msg = help_convert_sv_ccrm([web_sv])
     yield FinalSummary(var_block=[web_sv], tool_messages=web_msg, is_error=False)

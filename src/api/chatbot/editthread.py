@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("/editthread", dependencies=[AuthRequired])
 async def edit_thread(
     source_thread_id: str,
-    fork_from_index: int,
+    user_index: int,
     Auth: Authenticator = Depends(auth_dependency),
 ):
     """
@@ -26,15 +26,15 @@ async def edit_thread(
     - Receives a new unique `thread_id`
     - Stores the truncated message history
     - Keeps a reference to the original thread as its parent
-    - Tracks the `fork_from_index` for lineage metadata
+    - Tracks the `user_index` for lineage metadata
 
     Parameters:
         source_thread_id (str):
             The ID of the existing thread to fork from.
-        fork_from_index (int):
-            The zero-based index in the original thread history where the fork
-            should occur. The message at this index and everything after it
-            will be excluded from the new thread.
+        user_index (int):
+            The zero-based index in reference to user variants in the history 
+            where the fork should occur. The message at this index and everything 
+            after it will be excluded from the new thread.
 
     Dependencies:
         Auth (Authenticator):
@@ -53,7 +53,7 @@ async def edit_thread(
         HTTPException (422):
             - Missing `source_thread_id`
             - Missing `vault_url`
-            - `fork_from_index` out of bounds
+            - `user_index` out of bounds
         HTTPException (404):
             - Source thread not found
         HTTPException (500):
@@ -114,13 +114,28 @@ async def edit_thread(
     except Exception:
         logger.exception("Cannot read source thread. Error reading thread file.")
         raise HTTPException(status_code=500, detail="Error reading thread file.")
-
-    # Check index within bounds
-    if fork_from_index < 0 or fork_from_index >= len(orig_json):
-        logger.exception(f"fork_from_index outside content range: {fork_from_index} content length: {len(orig_json)}.")
+    
+    # Count the number of user messages and check index within bounds
+    user_message_count = sum(1 for msg in orig_json if msg.get("variant") == "User")
+    if user_index < 0 or user_index >= user_message_count:
         raise HTTPException(
             status_code=422,
-            detail="fork_from_index outside content range! Please review query parameters!",
+            detail="fork_from_index outside user message range! Please review query parameters!",
+        )
+        
+    # Find the position of the Nth user message
+    user_msg_seen = 0
+    fork_from_index = None
+    for i, msg in enumerate(orig_json):
+        if msg.get("variant") == "User":
+            if user_msg_seen == user_index:
+                fork_from_index = i
+                break
+            user_msg_seen += 1
+    if fork_from_index is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not find the specified user message index! Please review query parameters!",
         )
 
     # Cut history BEFORE the edited user message
@@ -132,7 +147,7 @@ async def edit_thread(
     logger = configure_logging(__name__, thread_id=new_id, user_id=Auth.username)
     base_sv = update_threadid_in_content(new_id, base_sv, logger=logger)
 
-    root_thread_id = source_thread_id  # TODO: if there are many changes we need to track down the original root
+    root_thread_id = source_thread_id 
     
     try:
         await Storage.save_thread(

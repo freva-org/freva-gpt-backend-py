@@ -105,11 +105,12 @@ class ThreadStorage:
         self,
         user_id: str,
         limit: int = 20,
+        page: int = 0,
     ) -> Tuple[List[Thread], int]:
         logger = configure_logging(__name__, user_id=user_id)
         coll = self.db[MONGODB_COLLECTION_NAME]
         n_threads = await coll.count_documents({"user_id": user_id})
-        cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).limit(limit)
+        cursor = coll.find({"user_id": user_id}).sort([("date", -1)]).skip(page * limit).limit(limit)
         docs = await cursor.to_list(length=limit)
         threads = [
             Thread(

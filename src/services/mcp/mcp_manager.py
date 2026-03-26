@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 
 from src.core.logging_setup import configure_logging
 from src.core.settings import get_settings
@@ -13,10 +13,9 @@ from src.services.streaming.stream_variants import mcp_tool_to_openai_function
 settings = get_settings()
 DEFAULT_LOGGER = configure_logging(__name__)
 
-# Note: as per the specs of the `Literal` type, the Target type cannot be dynamically derived from settings.AVAILABLE_MCP_SERVERS, but would need to be hardcoded.
-# (Python doesn't do compile time checks)
-# As long as there is no corresponding check for validity, Target must be the str type.
-Target = str
+
+Target = Literal[*settings.AVAILABLE_MCP_SERVERS]  # ty:ignore[invalid-type-form]
+# Despite the specification of `Literal` forbidding this, this shows the valid values when debugging, so we keep it as is.
 
 
 class McpManager:

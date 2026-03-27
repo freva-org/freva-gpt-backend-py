@@ -178,7 +178,13 @@ def parse_generic_tool_result(result_json: Dict, tool_name:str, id: str, logger=
     log = logger or DEFAULT_LOGGER
 
     result = result_json.get("structuredContent")
-    web_sv = SVToolOutput(output=result.get("result"), tool_name=tool_name, id=id)
+    if result.get("result"):
+        out = result.get("result")
+    elif result.get("error"):
+        out = result.get("error")
+    else:
+        out = "Unknown response."
+    web_sv = SVToolOutput(output=out, tool_name=tool_name, id=id)
     web_msg = help_convert_sv_ccrm([web_sv])
     yield FinalSummary(var_block=[web_sv], 
                        tool_messages=web_msg, 

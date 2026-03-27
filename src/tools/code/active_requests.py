@@ -42,7 +42,7 @@ def get_request(request_id: str) -> ActiveRequest | None:
         return ACTIVE_REQUESTS.get(request_id)
 
 
-def cancel_request(sid: str, request_id: str) -> None:
+async def cancel_request(sid: str, request_id: str) -> None:
     req= get_request(request_id)
     if req is None:
         logger.info("Cancellation ignored: unknown request_id=%s", request_id)

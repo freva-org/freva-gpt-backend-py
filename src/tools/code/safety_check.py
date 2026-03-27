@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 from src.core.logging_setup import configure_logging
 
@@ -104,14 +104,14 @@ class SafetyViolation:
     match: str
 
 
-def check_code_safety(code: str) -> Tuple[bool, Optional[SafetyViolation]]:
+def check_code_safety(code: str) -> Optional[SafetyViolation]:
     """
-    Returns (is_safe, violation). If not safe, violation explains why.
+    Returns None or a violation. If not safe, violation explains why.
     """
     for rule_id, desc, rx in SAFETY_RULES:
         m = rx.search(code)
         if m:
             # include a small snippet of what matched to show the user
             matched = m.group(0)
-            return False, SafetyViolation(rule_id=rule_id, description=desc, match=matched)
-    return True, None
+            return SafetyViolation(rule_id=rule_id, description=desc, match=matched)
+    return None

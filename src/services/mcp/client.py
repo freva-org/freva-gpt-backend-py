@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, List, Tuple
@@ -376,6 +375,6 @@ class McpClient:
         
 # ──────────────────── Helper functions ──────────────────────────────
 
-def drop_none(d: dict) -> dict:
+def drop_none(d: dict[str, str]) -> dict[str, str]:
     """Remove keys from d whose value is None."""
     return {k: v for k, v in d.items() if v is not None}

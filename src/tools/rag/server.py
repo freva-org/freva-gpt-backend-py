@@ -7,7 +7,7 @@ from pymongo import MongoClient
 
 from fastmcp import FastMCP
 
-from src.tools.rag.helpers import *
+from src.tools.rag.helpers import get_new_or_changes_documents, postprocessing_query_result, add_vector_search_index_to_db, clear_embeddings_collection
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
 from src.tools.header_gate import make_header_gate

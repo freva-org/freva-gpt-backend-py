@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os, importlib
-from typing import Iterable, Dict, Optional, Any
+import os
+import importlib
+from typing import Dict, Any
 
 from src.services.mcp.client import McpClient
 
@@ -33,7 +34,7 @@ def mcp_client_CI():
     return client
 
 
-def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
+def _execute_code_via_mcp(mcp_c, code) -> Dict[str, Any]:
     """
     Adapter layer to  MCP server. 
     The function must return a dict.

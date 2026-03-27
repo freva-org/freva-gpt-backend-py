@@ -1,15 +1,17 @@
 from __future__ import annotations
+from dataclasses import dataclass
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from fastapi import Request
 
-from src.core.settings import get_settings
+from src.core.settings import Settings
 
 # ──────────────────── Base Authenticator Class ──────────────────────────────
 
+
+@dataclass
 class Authenticator(ABC):
     """
     Per-request authenticator.
@@ -19,21 +21,16 @@ class Authenticator(ABC):
       are populated (or HTTPException is raised).
     """
 
-    def __init__(self, request: Request):
-        self.request = request
-        self.settings = get_settings()
-
-        # Populated during run()
-        self.username: Optional[str] = None
-        self.vault_url: Optional[str] = None
-        self.rest_url: Optional[str] = None
-        self.access_token: Optional[str] = None
+    request: Request
+    settings: Settings
+    username: str
+    vault_url: Optional[str]
+    rest_url: str
+    access_token: str
 
     @abstractmethod
-    async def run(self) -> "Authenticator":
+    async def build(request: Request) -> Authenticator:
         """
-        Perform auth. Should either:
-        - raise HTTPException on failure
-        - set attributes and return self on success
+        Builds the Authenticator instance for the given request.
+        Raises HTTPException if authentication fails.
         """
-        ...

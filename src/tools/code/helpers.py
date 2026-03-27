@@ -1,5 +1,6 @@
 import re
-import os, sys
+import os
+import sys
 
 from jupyter_client import KernelManager
 

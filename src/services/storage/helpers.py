@@ -5,8 +5,9 @@ from dataclasses import dataclass
 import httpx
 from fastapi import HTTPException
 from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
-from src.core.settings import get_settings
+from src.core.settings import get_settings, Settings
 from src.core.logging_setup import configure_logging
 from src.services.streaming.stream_variants import StreamVariant, SVUser
 from src.services.streaming.litellm_client import acomplete, first_text
@@ -15,7 +16,7 @@ DEFAULT_LOGGER = configure_logging(__name__)
 
 # ──────────────────── Config from settings.py ────────────────────────────
 
-settings = get_settings()
+settings: Settings = get_settings()
 MONGODB_DATABASE_NAME = settings.MONGODB_DATABASE_NAME
 MONGODB_COLLECTION_NAME = settings.MONGODB_COLLECTION_NAME
 
@@ -61,21 +62,14 @@ def _fallback_topic(raw: str | None) -> str:
     s = " ".join(raw.split())
     return (s[:80] + "…") if len(s) > 80 else s
 
-
-async def summarize_topic(content: List[Dict]) -> str:
+async def summarize_topic(content: List[StreamVariant]) -> str:
     """
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     Only the first user text is taken into account.
     """
-    if isinstance(content[0], Dict):
-        topic = next(
-            (item.get("content", "") for item in content if item.get("variant") == "user"),
-            "Untitled"
-        )
-    else:
-        topic = next(
-            (sv.text for sv in content if isinstance(sv, SVUser)),
-            "Untitled"
+    topic = next(
+        (sv.text for sv in content if isinstance(sv, SVUser)),
+        "Untitled"
         )
 
     prompt = (
@@ -126,7 +120,7 @@ async def get_mongodb_uri(vault_url: str) -> str:
 
 async def get_database(
         vault_url: str
-    ) -> AsyncMongoClient:
+    ) -> AsyncDatabase:
         """
         Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
         If connection fails, retry once without URI options (strip trailing ?query).

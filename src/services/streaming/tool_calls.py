@@ -13,11 +13,10 @@ from src.services.streaming.stream_variants import (
     SVUser,
     SVCodeOutput,
     SVImage,
-    SVAssistant,
-    SVServerError,
     SVToolOutput,
     StreamVariant,
-    help_convert_sv_ccrm, _tool_result_message
+    help_convert_sv_ccrm,
+    OpenAIMessage,
 )
 
 
@@ -26,6 +25,7 @@ DEFAULT_LOGGER = configure_logging(__name__)
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP tool runner
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def run_tool_via_mcp(
     *,
@@ -62,6 +62,7 @@ async def run_tool_via_mcp(
 # Tool-call accumulation helpers (OpenAI-style deltas)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
     choices = delta.get("choices") or []
     if not choices:
@@ -76,14 +77,19 @@ def accumulate_tool_calls(delta: Dict[str, Any], agg: Dict[str, Any]) -> None:
         idx = item.get("index")
         if idx is None:
             continue
-        entry = store.setdefault(idx, {"type": "function", "function": {"name": "", "arguments": ""}})
+        entry = store.setdefault(
+            idx, {"type": "function", "function": {"name": "", "arguments": ""}}
+        )
         if item.get("id"):
             entry["id"] = item["id"]
         f = item.get("function") or {}
         if f.get("name"):
             entry["function"]["name"] = f["name"]
         if f.get("arguments"):
-            entry["function"]["arguments"] = entry["function"].get("arguments", "") + f["arguments"]
+            entry["function"]["arguments"] = (
+                entry["function"].get("arguments", "") + f["arguments"]
+            )
+
 
 def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
     store = agg.get("by_index") or {}
@@ -92,17 +98,21 @@ def finalize_tool_calls(agg: Dict[str, Any]) -> List[Dict[str, Any]]:
         tc = store[idx]
         fn = tc.get("function") or {}
         tc.setdefault("type", "function")
-        tc["function"] = {"name": fn.get("name", ""), "arguments": fn.get("arguments", "")}
+        tc["function"] = {
+            "name": fn.get("name", ""),
+            "arguments": fn.get("arguments", ""),
+        }
         out.append(tc)
     return out
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tool result parsers
 # ──────────────────────────────────────────────────────────────────────────────
 @dataclass
 class FinalSummary:
-    var_block: list
-    tool_messages: list
+    var_block: list[StreamVariant]
+    tool_messages: list[OpenAIMessage]
     is_error: bool
 
 
@@ -110,18 +120,21 @@ def parse_tool_result(resp_txt: str, tool_name: str, call_id: str, logger=None):
     log = logger or DEFAULT_LOGGER
     result_json = json.loads(resp_txt)
 
-    if "structuredContent" in result_json.keys():
+    structured_content = result_json.get("structuredContent")
+    if structured_content is not None:
         if tool_name == "code_interpreter":
-            yield from parse_code_interpreter_result(result_json, call_id, logger=log)
+            yield from parse_code_interpreter_result(structured_content, call_id, logger=log)
         else:
-            yield from parse_generic_tool_result(result_json, tool_name, call_id, logger=log)
+            yield from parse_generic_tool_result(
+                structured_content, tool_name, call_id, logger=log
+            )
     else:
         if result_json.get("error"):
-            out = result_json.get('error')
+            out = result_json.get("error")
         elif isinstance(result_json.get("content", {}), Dict):
             out = result_json.get("content", {}).get("text", "Unknown response.")
         else:
-            out = result_json.get('content', {})
+            out = result_json.get("content", {})
         out_msg = f"{tool_name} error: {out}"
 
         if tool_name == "code_interpreter":
@@ -131,28 +144,30 @@ def parse_tool_result(resp_txt: str, tool_name: str, call_id: str, logger=None):
         yield toolout_v
         tool_msg = help_convert_sv_ccrm([toolout_v])
         isError = True
-        yield FinalSummary(var_block=[toolout_v],
-                           tool_messages=tool_msg,
-                           is_error=isError)
+        yield FinalSummary(
+            var_block=[toolout_v], tool_messages=tool_msg, is_error=isError
+        )
 
 
-def parse_code_interpreter_result(result_json: Dict, id: str, logger=None):
-    log = logger or DEFAULT_LOGGER
-    code_block : List[StreamVariant] = []
-    code_msgs: List[Dict] = []
+def parse_code_interpreter_result(result: Dict, id: str, logger=None):
+    code_block: List[StreamVariant] = []
+    code_msgs: List[OpenAIMessage] = []
 
     # Code output: structured dict of displayed data, image or error
-    result = result_json.get("structuredContent")
 
     # Printed/displayed output + error message if exists
-    out = "" + (("\n" + result["stdout"]) if result["stdout"] else "") + \
-        (("\n" + result["result_repr"]) if result["result_repr"] else "") 
-    out_error =(("\n" + result["stderr"]) if result["stderr"] else "") + \
-        (("\n" + result["error"]) if result["error"] else "")
+    out = (
+        ""
+        + (("\n" + result["stdout"]) if result["stdout"] else "")
+        + (("\n" + result["result_repr"]) if result["result_repr"] else "")
+    )
+    out_error = (("\n" + result["stderr"]) if result["stderr"] else "") + (
+        ("\n" + result["error"]) if result["error"] else ""
+    )
     if out or out_error:
         codeout = out + out_error
     else:
-        codeout = "" # We must send something here, the model expects it.
+        codeout = ""  # We must send something here, the model expects it.
     codeout_v = SVCodeOutput(output=codeout, id=id)
     yield codeout_v
     code_block.append(codeout_v)
@@ -166,8 +181,17 @@ def parse_code_interpreter_result(result_json: Dict, id: str, logger=None):
             image_v = SVImage(b64=base64_image, id=image_id)
             yield image_v
             code_block.append(image_v)
-            code_msgs.extend(help_convert_sv_ccrm([SVUser(text="Here is the image returned by the Code Interpreter."), image_v],
-                                                    include_images=True))
+            code_msgs.extend(
+                help_convert_sv_ccrm(
+                    [
+                        SVUser(
+                            text="Here is the image returned by the Code Interpreter."
+                        ),
+                        image_v,
+                    ],
+                    include_images=True,
+                )
+            )
 
         if "application/json" in r.keys():
             json_v = SVCodeOutput(output=r["application/json"], id=f"{id}:json")
@@ -175,17 +199,10 @@ def parse_code_interpreter_result(result_json: Dict, id: str, logger=None):
             code_block.append(json_v)
             code_msgs.extend(help_convert_sv_ccrm([json_v]))
     isError = True if out_error else False
-    yield FinalSummary(var_block=code_block, 
-                       tool_messages=code_msgs, 
-                       is_error=isError)
+    yield FinalSummary(var_block=code_block, tool_messages=code_msgs, is_error=isError)
 
 
-def parse_generic_tool_result(result_json: Dict, tool_name:str, id: str, logger=None):
-    log = logger or DEFAULT_LOGGER
-
-    result = result_json.get("structuredContent")
+def parse_generic_tool_result(result: Dict, tool_name: str, id: str, logger=None):
     web_sv = SVToolOutput(output=result.get("result"), tool_name=tool_name, id=id)
     web_msg = help_convert_sv_ccrm([web_sv])
-    yield FinalSummary(var_block=[web_sv], 
-                       tool_messages=web_msg, 
-                       is_error=False)
+    yield FinalSummary(var_block=[web_sv], tool_messages=web_msg, is_error=False)

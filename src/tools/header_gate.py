@@ -14,7 +14,7 @@ def make_header_gate(
     logger: logging.Logger | None = None,
     mcp_path: str = "/mcp",
     on_session_close: Optional[Callable[[str], None]] = None,
-    on_cancel_request: Optional[Callable[[str, str], None]] = None,
+    on_cancel_request: Optional[Callable[[str, str], Awaitable[None]]] = None,
 ):
     """
     Wrap the FastMCP ASGI app so every request to `mcp_path`:
@@ -95,7 +95,7 @@ def make_header_gate(
 
                 if on_cancel_request:
                     try:
-                        on_cancel_request(sid, request_id)
+                        await on_cancel_request(sid, request_id)
                     except Exception:
                         log.exception("on_cancel_request failed for sid=%s request_id=%s",
                                       sid, request_id)

@@ -67,12 +67,6 @@ async def summarize_topic(content: List[StreamVariant]) -> str:
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     Only the first user text is taken into account.
     """
-    # if isinstance(content[0], Dict):
-    #     topic = next(
-    #         (item.get("content", "") for item in content if item.get("variant") == "user"),
-    #         "Untitled"
-    #     )
-    # else:
     topic = next(
         (sv.text for sv in content if isinstance(sv, SVUser)),
         "Untitled"

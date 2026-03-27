@@ -89,8 +89,7 @@ async def get_thread(
             thread_id=thread_id, 
             Storage=Storage,
         )
-        # Note: we have passed in a Storage and set read_history to True, so the prepare_for_stream will read the history and return it as StreamVariants.
-        # So if the messages are None, it means there was no Storage to read from and we raise a 404.
+        # If the messages are None, it means there was no Storage to read from and we raise a 404.
         if not messages:
             raise FileNotFoundError(f"Thread with ID {thread_id} not found.")
     except FileNotFoundError:
@@ -100,9 +99,6 @@ async def get_thread(
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
-    # Note: in the past, the content was retrieved from the Registry here, but now that the messages are returned directly from the get_conversation_history,
-    # (Which, before, used the prepare_for_stream, and through the initialize_conversation, wrote to the Registry; that value was then read back here fallibly)
-    # Since messages are not None, we can be sure that the content that would be returned by the retrieval from the Registry is the same as the messages. 
     content = _post_process(messages)
 
     logger.info("Fetched thread content.", extra={"thread_id": thread_id, 

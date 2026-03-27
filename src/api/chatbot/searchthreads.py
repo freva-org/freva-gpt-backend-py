@@ -35,10 +35,6 @@ async def search_threads(
             The maximum number of matching threads to return. Optional, defaults to 20.
         page (int):
             The page number for pagination (reserved for paging logic). Optional, starts at 0.
-        query (str):
-            The search query string. The query may be interpreted as:
-                - A topic search (default mode), or
-                - A variant-based search (if matching variant syntax).
 
     Dependencies:
         auth (Authenticator): Injected authentication object containing

@@ -380,10 +380,6 @@ def help_convert_sv_ccrm(
 
         elif isinstance(v, SVCodeError):
             # Code Errors do not have IDs, so we treat them as system messages rather than tool results.
-            
-            # if include_meta and v.id:
-            #     out.append(_tool_result_message(v.message, v.id, tool_name=TOOL_NAME_CODE))
-            # elif include_meta:
             if include_meta:
                 out.append(_as_system("code_error", v.message))
 

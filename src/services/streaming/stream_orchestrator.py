@@ -108,7 +108,7 @@ async def stream_with_tools(
         full_txt = first_text(resp) or ""
         for p in re.findall(r"\S+\s*", full_txt):
             if p:
-                accumulated_asst_text.append(full_txt) #FIXME: this feels almost definitely wrong, does it work?
+                accumulated_asst_text.append(full_txt)
                 yield SVAssistant(text=full_txt)
 
     # 2) Any tool calls?
@@ -273,7 +273,7 @@ async def prepare_for_stream(
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
     logger=None,
-) -> List[StreamVariant] | None:
+) -> None:
     """ 
     Preparations for the streaming, read history (if needed), add to Registry and 
     set conversation state to "streaming". 
@@ -290,7 +290,6 @@ async def prepare_for_stream(
     
     if messages:
         log.info("Conversation history loaded with %d messages.", len(messages))
-        return messages
     return None
 
 

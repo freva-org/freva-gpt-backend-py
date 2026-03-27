@@ -14,6 +14,7 @@ def make_header_gate(
     logger: logging.Logger | None = None,
     mcp_path: str = "/mcp",
     on_session_close: Optional[Callable[[str], None]] = None,
+    on_cancel_request: Optional[Callable[[str, str], None]] = None,
 ):
     """
     Wrap the FastMCP ASGI app so every request to `mcp_path`:
@@ -46,9 +47,11 @@ def make_header_gate(
                 for k, v in scope.get("headers", [])
             }
 
+            method = (scope.get("method") or "").upper()
+            sid = hdrs.get("mcp-session-id", "")
+
             # handle session close 
-            if scope.get("method") == "DELETE":
-                sid = hdrs.get("mcp-session-id", "")
+            if method == "DELETE":
                 try:
                     log.info("DELETE %s received. Session id=%r", mcp_path, sid)
                 except Exception:
@@ -61,6 +64,42 @@ def make_header_gate(
                         log.exception("on_session_close failed for sid=%s", sid)
 
                 # Respond 204 No Content
+                await send({"type": "http.response.start", "status": 204, "headers": []})
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+                return
+            
+             # handle session interrupt
+            if method == "POST" and "mcp-cancel" in hdrs:
+                request_id = hdrs.get("mcp-request-id", "")
+
+                try:
+                    log.info(
+                        "CANCEL %s received. session_id=%r request_id=%r",
+                        mcp_path, sid, request_id
+                    )
+                except Exception:
+                    pass
+
+                if not sid or not request_id:
+                    await send({
+                        "type": "http.response.start",
+                        "status": 400,
+                        "headers": [(b"content-type", b"application/json")],
+                    })
+                    await send({
+                        "type": "http.response.body",
+                        "body": b'{"error":"Missing Mcp-Session-Id or Mcp-Request-Id"}',
+                        "more_body": False,
+                    })
+                    return
+
+                if on_cancel_request:
+                    try:
+                        on_cancel_request(sid, request_id)
+                    except Exception:
+                        log.exception("on_cancel_request failed for sid=%s request_id=%s",
+                                      sid, request_id)
+                        
                 await send({"type": "http.response.start", "status": 204, "headers": []})
                 await send({"type": "http.response.body", "body": b"", "more_body": False})
                 return

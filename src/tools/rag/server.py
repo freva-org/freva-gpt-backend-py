@@ -20,6 +20,8 @@ LITE_LLM_ADDRESS: str = os.getenv("FREVAGPT_LITE_LLM_ADDRESS", "http://litellm:4
 
 mcp = FastMCP("rag_server")
 
+# TODO: implement cancel routine
+
 # ── Config ───────────────────────────────────────────────────────────────────
 EMBEDDING_MODEL="ollama/mxbai-embed-large:latest"
 EMBEDDING_LENGTH = 1024

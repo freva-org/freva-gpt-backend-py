@@ -1,9 +1,7 @@
 import threading
-
 from dataclasses import dataclass
 
-from src.tools.code.kernels import KERNEL_REGISTRY
-
+from .kernels import KERNEL_REGISTRY
 from src.core.logging_setup import configure_logging
 
 logger = configure_logging(__name__, named_log="code_server")

@@ -7,13 +7,13 @@ from typing import Dict, Any, Optional
 from fastmcp.server.dependencies import get_context
 from contextvars import ContextVar
 
-from src.tools.code.helpers import strip_ansi
-from src.tools.code.kernels import (
+from .helpers import strip_ansi
+from .kernels import (
     get_or_start_kernel, shutdown_kernel,
     KERNEL_LOCKS_GUARD, KERNEL_REGISTRY, KERNEL_LOCKS,
     drain_stale_messages
 )
-from src.tools.code.active_requests import ActiveRequest
+from .active_requests import ActiveRequest
 from src.core.logging_setup import configure_logging
 
 logger = configure_logging(__name__, named_log="code_server")

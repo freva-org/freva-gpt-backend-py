@@ -5,18 +5,14 @@ from fastmcp import FastMCP
 
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
-from src.tools.code.code_execution import (
+from .code_execution import (
     current_sid, current_request_id, get_sid_lock, 
     execute_code, EXEC_TIMEOUT, cleanup_mcp_session
 )
-from src.tools.code.kernels import (
-    shutdown_kernel, KERNEL_REGISTRY
-)
-from src.tools.code.active_requests import (
-    register_request, cancel_request, unregister_request,
-)
-from src.tools.code.helpers import sanitize_code, should_restart_after
-from src.tools.code.safety_check import check_code_safety
+from .kernels import shutdown_kernel, KERNEL_REGISTRY
+from .active_requests import register_request, cancel_request, unregister_request
+from .helpers import sanitize_code, should_restart_after
+from .safety_check import check_code_safety
 
 logger = configure_logging(__name__, named_log="code_server")
 

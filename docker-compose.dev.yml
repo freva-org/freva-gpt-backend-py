@@ -63,6 +63,8 @@ services:
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8052
+    ports: 
+      - 8052:8052
     networks: 
       - freva-gpt
     volumes:
@@ -75,7 +77,7 @@ services:
     command: >
       --config=/app/config.yaml
       --port=4000
-      --num_workers=4
+      --num_workers=1
       --run_gunicorn
     env_file: .env 
     ports: 

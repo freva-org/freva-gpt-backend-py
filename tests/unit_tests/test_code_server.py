@@ -3,7 +3,7 @@ import threading
 
 
 def test_cleanup_mcp_session_removes_kernel_and_lock(monkeypatch):
-    import src.tools.code.server as server  
+    import src.tools.code.code_execution as code_exec
 
     sid = "sid-1"
 
@@ -12,11 +12,11 @@ def test_cleanup_mcp_session_removes_kernel_and_lock(monkeypatch):
         pass
 
     km = DummyKM()
-    server.KERNEL_REGISTRY[sid] = km
+    code_exec.KERNEL_REGISTRY[sid] = km
 
     # Put a lock in lock registry
-    with server.KERNEL_LOCKS_GUARD:
-        server.KERNEL_LOCKS[sid] = threading.Lock()
+    with code_exec.KERNEL_LOCKS_GUARD:
+        code_exec.KERNEL_LOCKS[sid] = threading.Lock()
 
     # Patch shutdown_kernel to verify it was called
     shutdown_called = {"called": False, "arg": None}
@@ -24,16 +24,16 @@ def test_cleanup_mcp_session_removes_kernel_and_lock(monkeypatch):
         shutdown_called["called"] = True
         shutdown_called["arg"] = arg
 
-    monkeypatch.setattr(server, "shutdown_kernel", fake_shutdown_kernel)
+    monkeypatch.setattr(code_exec, "shutdown_kernel", fake_shutdown_kernel)
 
     # Run cleanup
-    server.cleanup_mcp_session(sid)
+    code_exec.cleanup_mcp_session(sid)
 
     # Kernel removed
-    assert sid not in server.KERNEL_REGISTRY
+    assert sid not in code_exec.KERNEL_REGISTRY
     assert shutdown_called["called"] is True
     assert shutdown_called["arg"] is km
 
     # Lock removed
-    with server.KERNEL_LOCKS_GUARD:
-        assert sid not in server.KERNEL_LOCKS
+    with code_exec.KERNEL_LOCKS_GUARD:
+        assert sid not in code_exec.KERNEL_LOCKS

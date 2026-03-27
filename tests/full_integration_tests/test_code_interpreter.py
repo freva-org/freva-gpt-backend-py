@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import contextlib
 import os, importlib
 import random, string
 from typing import Iterable, Dict, Optional, Any
@@ -35,7 +37,7 @@ def mcp_client_CI():
     return client
 
 
-async def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
+async def _execute_code_via_mcp(mcp_c: McpClient, code: Dict[str, Any]) -> Dict[str, Any]:
     """
     Adapter layer to  MCP server. 
     The function must return a dict.
@@ -48,7 +50,7 @@ async def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
                                     args=code,
     )
     # Ensure type and shape of result
-    if not isinstance(results, Dict) and "structuredContent" not in results.keys():
+    if not isinstance(results, Dict) or "structuredContent" not in results.keys():
         raise RuntimeError("MCP client returned unknown result from code-interpreter.")
     return results.get("structuredContent", {})
 
@@ -222,3 +224,115 @@ async def test_timeout_soft_failure_and_recovery(mcp_client_CI):
     assert await _exec_and_get_printed_value(
         mcp_client_CI, {"code": "print('still alive')"}
     ) == "still alive\n"
+
+@pytest.mark.asyncio
+async def test_cancel_before_request_sent_by_client(mcp_client_CI):
+    long_running_code = {
+        "code": (
+            "import time\n"
+            "print('started', flush=True)\n"
+            "while True:\n"
+            "    time.sleep(0.1)\n"
+        )
+    }
+
+    call_task = asyncio.create_task(
+        _execute_code_via_mcp(mcp_client_CI, long_running_code)
+    )
+    await asyncio.sleep(0) # wait for the call to start
+
+    try:
+        cancelled = False
+        last_exc = None
+        for _ in range(20):
+            try:
+                assert mcp_client_CI._pending_request_id is not None
+                assert mcp_client_CI._active_request_id is None
+                await mcp_client_CI.cancel_request()
+                cancelled = True
+                break
+            except Exception as e:
+                last_exc = e
+                await asyncio.sleep(0.05)
+
+        if not cancelled:
+            raise AssertionError(f"cancel_request() never succeeded: {last_exc!r}")
+
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(call_task, timeout=2)
+
+        followup = await _execute_code_via_mcp(
+            mcp_client_CI,
+            {"code": "print('still alive after client pre-send cancel')"},
+        )
+        assert followup.get("stdout", "") == "still alive after client pre-send cancel\n"
+        assert followup.get("error", "") == ""
+
+    finally:
+        if not call_task.done():
+            call_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await call_task
+
+@pytest.mark.asyncio
+async def test_cancel_running_code_preserves_same_kernel_state_timing_based(mcp_client_CI):
+    # This test is not guaranteed to cancel an ongoing execution of the kernel.
+    # It can be verified by the logs that the execution has started or not.
+    # In a future run, the cancel might land during start-up phase which is
+    # already covered.
+    priming = await _execute_code_via_mcp(
+        mcp_client_CI,
+        {"code": "x = 123\nprint('primed')"},
+    )
+    assert priming.get("stdout", "") == "primed\n"
+    assert priming.get("error", "") == ""
+
+    long_running_code = {
+        "code": (
+            "import time\n"
+            "print('started', flush=True)\n"
+            "while True:\n"
+            "    time.sleep(0.1)\n"
+        )
+    }
+
+    call_task = asyncio.create_task(
+        _execute_code_via_mcp(mcp_client_CI, long_running_code)
+    )
+
+    try:
+        # Because the kernel is already warm, this is much more likely to land
+        # after kc.execute() than in the startup path.
+        await asyncio.sleep(1.0)
+
+        cancelled = False
+        last_exc = None
+        for _ in range(10):
+            try:
+                await mcp_client_CI.cancel_request()
+                cancelled = True
+                break
+            except Exception as e:
+                last_exc = e
+                await asyncio.sleep(0.1)
+
+        if not cancelled:
+            raise AssertionError(f"cancel_request() never succeeded: {last_exc!r}")
+
+        result = await asyncio.wait_for(call_task, timeout=10)
+
+        err = result.get("error", "")
+        assert "cancel" in err.lower() or "interrupt" in err.lower(), result
+
+        followup = await _execute_code_via_mcp(
+            mcp_client_CI,
+            {"code": "print(x)"},
+        )
+        assert followup.get("stdout", "") == "123\n"
+        assert followup.get("error", "") == ""
+
+    finally:
+        if not call_task.done():
+            call_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await call_task

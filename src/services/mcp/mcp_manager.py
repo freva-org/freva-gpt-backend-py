@@ -131,7 +131,7 @@ class McpManager:
 
         tools: List[Dict[str, Any]] = []
 
-        res = await cli.tools_list_rpc(logical_session_key="__default__")
+        res = await cli.tools_list_rpc()
         if res.ok and isinstance(res.result, dict):
             items = res.result.get("tools") or res.result.get("items") or res.result
             if isinstance(items, list):
@@ -205,6 +205,11 @@ class McpManager:
                 self.log.debug("tool %s failed on %s: %s", name, tgt, e)
 
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
+    
+
+    async def cancel_tool_call(self, tool_name: str, reason: str | None = None) -> None:
+        client_name = self.get_server_from_tool(tool_name=tool_name)
+        await self._clients.get(client_name).cancel_request(reason)
 
 # ──────────────────── Helper functions ──────────────────────────────
 

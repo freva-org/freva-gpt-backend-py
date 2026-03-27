@@ -159,11 +159,21 @@ async def stream_with_tools(
             
             except asyncio.CancelledError:
                 # /stop or connection close has cancelled this task
+                log.warning("Tool task cancelled; interrupting MCP execution for thread=%s", thread_id)
+
+                try:
+                    await asyncio.shield(mcp.cancel_tool_call(tool_name=name,
+                                                              reason="User requested cancellation"))
+                except Exception:
+                    log.exception("Failed to interrupt MCP session during cancellation.")
+
                 tool_task.cancel()
+                await asyncio.gather(tool_task, return_exceptions=True)
                 raise
 
-            except Exception as e:
+            except Exception:
                 tool_task.cancel()
+                await asyncio.gather(tool_task, return_exceptions=True)
                 raise
 
             finally:

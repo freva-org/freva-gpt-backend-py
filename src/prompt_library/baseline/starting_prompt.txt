@@ -38,7 +38,7 @@ ii. web_search (Documentation Only)
 - DKRZ/HPC infrastructure
 - Slurm job submission
 - ICON model
-- mkexp toolbox (setting up experiments)
+- mkexp toolbox (setting up or making experiments)
 2. When answering using web_search, include inline citations with URLs.
 
 D. DATA ACCESS

@@ -48,10 +48,7 @@ def help(
             "point in an existing thread. This allows you to explore a "\
             "different direction without losing the original conversation.",
         "searchthreads": "Search your conversations by keywords to quickly "\
-            "find specific topics. You can also use prefixes like 'user:', "\
-            "'ai:', or 'code:' to search only within your messages, "\
-            "FrevaGPT's replies, or code blocks. This helps you quickly "\
-            "find specific topics, questions, or messages across your threads.",
+            "find specific topics.",
         "setthreadtopic": "Rename a conversation. This helps you organize "\
             "and quickly identify your threads later.",
         "userfeedback": "Give a thumbs up or thumbs down to rate FrevaGPT's "\

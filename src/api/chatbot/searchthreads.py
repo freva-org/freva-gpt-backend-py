@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import Union, Tuple
-
 from fastapi import APIRouter, HTTPException, Depends
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.storage.helpers import Variant, PREFIX_MAP
 from src.core.logging_setup import configure_logging
 
 router = APIRouter()
@@ -13,27 +10,23 @@ router = APIRouter()
 
 @router.get("/searchthreads", dependencies=[AuthRequired])
 async def search_threads(
-    num_threads: int,
     query: str,
+    num_threads: int = 20,
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
     Search User Threads.
 
     Searches the authenticated user's conversation threads using a query
-    string. Supports topic-based search and variant-based search, depending
-    on the parsed query format.
+    string. Supports only topic-based search.
     Requires a valid authenticated user and vault-url.
 
     Parameters:
-        num_threads (int):
-            The maximum number of matching threads to return.
-        page (int):
-            The page number for pagination (reserved for paging logic).
         query (str):
-            The search query string. The query may be interpreted as:
-                - A topic search (default mode), or
-                - A variant-based search (if matching variant syntax).
+            The search query string.
+        num_threads (int):
+            The maximum number of matching threads to return. Default 
+            value is 20.
 
     Dependencies:
         auth (Authenticator): Injected authentication object containing 
@@ -85,15 +78,8 @@ async def search_threads(
     except:
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
-    # Decide search mode (topic vs variant)
-    mode, _query = parse_query_mode(query)
-
     try:
-        if mode == "variant":
-            variant, content = _query
-            total_num_threads, threads = await Storage.query_by_variant(auth.username, variant, content, num_threads)
-        else:
-            total_num_threads, threads = await Storage.query_by_topic(auth.username, _query, num_threads)
+        total_num_threads, threads = await Storage.query_by_topic(auth.username, query, num_threads)
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to query threads.")
 
@@ -110,26 +96,3 @@ async def search_threads(
         ], 
         total_num_threads
     ]
-
-
-def parse_query_mode(query: str) -> Union[str, Tuple[Variant, str]]:
-    """
-    Returns:
-      - query string OR
-      - (variant, content) if prefix is recognized
-    If prefix is unknown, sliently falls back to plain query search.
-    """
-    q = query.strip().lower() # case-insensitive search
-    if ":" not in q:
-        return "topic", q
-
-    prefix, content = q.split(":", 1)
-    prefix = prefix.strip()
-    content = content.strip()
-
-    variant = PREFIX_MAP.get(prefix)
-    if variant:
-        return "variant", (variant, content)
-
-    # unknown prefix falls back to topic query, not error
-    return "topic", q

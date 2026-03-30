@@ -195,7 +195,8 @@ def patch_mongo_uri(monkeypatch):
 def patch_read_thread(monkeypatch):
     async def _fake(self, thread_id: str):
         return [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
+            {"variant": "ServerHint", "content": {'thread_id': thread_id}},
+            {"variant": "Prompt", "content": "user prompt should be filtered out"},
             {"variant": "User", "text": "kept"},
             {"variant": "Assistant", "text": "also kept"},
         ]

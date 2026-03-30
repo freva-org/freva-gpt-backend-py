@@ -1,7 +1,7 @@
 import pytest
 
 from src.api.chatbot import editthread
-from src.services.streaming.stream_variants import SVPrompt, SVUser
+from src.services.streaming.stream_variants import SVPrompt, SVServerHint
 
 
 @pytest.mark.asyncio
@@ -11,6 +11,7 @@ async def test_editthread_success_path_trims_and_saves(
     GOOD_HEADERS,
     patch_db,
     patch_read_thread,
+    patch_mcp_manager,
     patch_save_thread,
     monkeypatch,
 ):
@@ -23,15 +24,15 @@ async def test_editthread_success_path_trims_and_saves(
         async with client:
             r = await client.get(
                 "/api/chatbot/editthread",
-                params={"source_thread_id": "src-1", "fork_from_index": 2},
+                params={"source_thread_id": "src-1", "fork_from_index": 0},
                 headers=GOOD_HEADERS,
             )
     assert r.status_code == 200
     body = r.json()
     assert body["new_thread_id"] == "new-thread-123"
     assert body["history"] == [
-        {"variant": "Prompt", "text": "user prompt should be filtered out"},
-        {"variant": "User", "text": "kept"},
+        {"variant": "ServerHint", "content": {'thread_id': 'new-thread-123'}},
+        {"variant": "Prompt", "content": "user prompt should be filtered out"},
     ]
 
     assert patch_save_thread
@@ -40,12 +41,12 @@ async def test_editthread_success_path_trims_and_saves(
     assert saved["user_id"] == "alice"  # from stubbed auth response
     assert saved["root_thread_id"] == "src-1"
     assert saved["parent_thread_id"] == "src-1"
-    assert saved["fork_from_index"] == 2
+    assert saved["fork_from_index"] == 0
 
     content = saved["content"]
     assert len(content) == 2
-    assert isinstance(content[0], SVPrompt)
-    assert isinstance(content[1], SVUser)
+    assert isinstance(content[0], SVServerHint)
+    assert isinstance(content[1], SVPrompt)
 
 
 @pytest.mark.asyncio
@@ -73,6 +74,7 @@ async def test_editthread_rejects_out_of_range_index(
     GOOD_HEADERS,
     patch_db,
     patch_read_thread,
+    patch_mcp_manager,
 ):
     with stub_resp:
         async with client:
@@ -82,4 +84,4 @@ async def test_editthread_rejects_out_of_range_index(
                 headers=GOOD_HEADERS,
             )
     assert r.status_code == 422
-    assert r.json()["detail"] == "fork_from_index outside content range! Please review query parameters!"
+    assert r.json()["detail"] == "fork_from_index outside user message range! Please review query parameters!"

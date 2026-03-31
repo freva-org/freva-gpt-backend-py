@@ -13,7 +13,7 @@ from src.core.prompting import get_entire_prompt
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 
-from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVServerHint, SVDict
+from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVDict, SVServerHint
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (

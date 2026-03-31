@@ -12,7 +12,7 @@ async def test_userfeedback_missing_vault_header_returns_503(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "t-1", "feedback_at_index": 0, "feedback": "hi"},
+                params={"thread_id": "t-1", "feedback_index": 0, "feedback": "hi"},
                 headers=headers,
             )
             assert r.status_code == 422
@@ -32,7 +32,7 @@ async def test_userfeedback_empty_thread_id_returns_422(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "", "feedback_at_index": 0, "feedback": "hi"},
+                params={"thread_id": "", "feedback_index": 0, "feedback": "hi"},
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 422
@@ -55,11 +55,11 @@ async def test_userfeedback_index_out_of_range(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "t-1", "feedback_at_index": 5, "feedback": "great"},
+                params={"thread_id": "t-1", "feedback_index": 5, "feedback": "great"},
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 422
-            assert r.json() == {'detail': 'feedback_at_index outside content range! Please review query parameters!'}
+            assert r.json() == {'detail': 'feedback_index outside feedback message range! Please review query parameters!'}
 
 
 @pytest.mark.asyncio
@@ -83,7 +83,7 @@ async def test_userfeedback_save_success(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "t-2", "feedback_at_index": 2, "feedback": "up"},
+                params={"thread_id": "t-2", "feedback_index": 0, "feedback": "up"},
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 200
@@ -127,7 +127,7 @@ async def test_userfeedback_remove_success(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "t-3", "feedback_at_index": 2, "feedback": "remove"},
+                params={"thread_id": "t-3", "feedback_index": 0, "feedback": "remove"},
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 200
@@ -147,8 +147,8 @@ async def test_userfeedback_remove_failure_not_found(
         async with client:
             r = await client.get(
                 "/api/chatbot/userfeedback",
-                params={"thread_id": "t-3", "feedback_at_index": 1, "feedback": "remove"},
+                params={"thread_id": "t-3", "feedback_index": 0, "feedback": "remove"},
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 404
-            assert r.json() == {"detail": "Feedback not found at index 1: t-3"}
+            assert r.json() == {"detail": "Feedback not found at thread index 2: t-3"}

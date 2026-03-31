@@ -109,7 +109,7 @@ async def user_feedback(
     if feedback_index < 0 or feedback_index >= feedback_message_count:
         raise HTTPException(
             status_code=422,
-            detail="fork_from_index outside feedback message range! Please review query parameters!",
+            detail="feedback_index outside feedback message range! Please review query parameters!",
         )
 
     # Find the position of the Nth feedback message
@@ -147,7 +147,7 @@ async def user_feedback(
         if "feedback" not in content_json[feedback_at_thread_index].keys():
             raise HTTPException(
                 status_code=404,
-                detail=f"Feedback not found at index {feedback_at_thread_index}: {thread_id}",
+                detail=f"Feedback not found at thread index {feedback_at_thread_index}: {thread_id}",
             )
         try:
             await delete_feedback(

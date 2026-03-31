@@ -61,6 +61,7 @@ def web_search(query: str) -> str:
         "if claims can be supported by web citations. Include inline citations for "\
         f"URLs found in the web search results.\n\n User query:\n{(query or '')}"
     )
+
     kwargs = {
         "model": WEB_SEARCH_MODEL, 
         "input": [{"role": "user", "content": prompt}], 
@@ -79,6 +80,7 @@ def web_search(query: str) -> str:
 
     try:
         resp = client.responses.create(**kwargs)
+
         logger.info(f"Succesfully completed web search with query {query}.\n")
         return resp.output_text
     except Exception as e:

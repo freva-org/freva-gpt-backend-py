@@ -11,7 +11,7 @@ def make_header_gate(
     *,
     ctx_list: List[ContextVar[str | None]],
     header_name_list: List[str],
-    logger: logging.Logger | None = None,
+    logger: logging.Logger | logging.LoggerAdapter | None = None,
     mcp_path: str = "/mcp",
     on_session_close: Optional[Callable[[str], None]] = None,
 ):

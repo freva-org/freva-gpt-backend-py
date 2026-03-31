@@ -24,7 +24,7 @@ async def test_editthread_success_path_trims_and_saves(
         async with client:
             r = await client.get(
                 "/api/chatbot/editthread",
-                params={"source_thread_id": "src-1", "fork_from_index": 0},
+                params={"source_thread_id": "src-1", "user_index": 0},
                 headers=GOOD_HEADERS,
             )
     assert r.status_code == 200
@@ -41,7 +41,7 @@ async def test_editthread_success_path_trims_and_saves(
     assert saved["user_id"] == "alice"  # from stubbed auth response
     assert saved["root_thread_id"] == "src-1"
     assert saved["parent_thread_id"] == "src-1"
-    assert saved["fork_from_index"] == 0
+    assert saved["fork_from_index"] == 2
 
     content = saved["content"]
     assert len(content) == 2
@@ -60,7 +60,7 @@ async def test_editthread_requires_vault_header(
         async with client:
             r = await client.get(
                 "/api/chatbot/editthread",
-                params={"source_thread_id": "src-1", "fork_from_index": 0},
+                params={"source_thread_id": "src-1", "user_index": 0},
                 headers=headers,
             )
     assert r.status_code == 422
@@ -80,7 +80,7 @@ async def test_editthread_rejects_out_of_range_index(
         async with client:
             r = await client.get(
                 "/api/chatbot/editthread",
-                params={"source_thread_id": "src-1", "fork_from_index": 5},
+                params={"source_thread_id": "src-1", "user_index": 5},
                 headers=GOOD_HEADERS,
             )
     assert r.status_code == 422

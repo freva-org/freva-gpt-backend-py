@@ -15,7 +15,7 @@ async def test_getthread_returns_404_when_thread_missing(
         raise FileNotFoundError("missing")
 
     monkeypatch.setattr(
-        "src.api.chatbot.getthread.prepare_for_stream",
+        "src.api.chatbot.getthread.get_conversation_history",
         _raise_not_found,
         raising=True,
     )
@@ -45,6 +45,7 @@ async def test_getthread_returns_500_when_history_invalid(
         raise ValueError("broken history")
 
     import src.services.storage.mongodb_storage as mongo_store
+
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
         "read_thread",

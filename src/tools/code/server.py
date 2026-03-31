@@ -1,4 +1,5 @@
 import os
+import time
 from contextvars import ContextVar
 
 from fastmcp import FastMCP
@@ -73,10 +74,10 @@ def code_interpreter(code: str) -> dict:
     stripped_code = code.replace("\n", "; ")
     logger.debug(f"Input code: {stripped_code}")
     
-    safe, violation = check_code_safety(code)
+    violation = check_code_safety(code)
 
-    if safe:
-        logger.info(f"Code block is safe to execute..")
+    if violation is None:
+        logger.info("Code block is safe to execute..")
         lock = get_sid_lock(sid) 
         req = register_request(request_id, sid)
 

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Depends
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage, ThreadStorage
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+    ThreadStorage,
+)
 from src.services.streaming.active_conversations import save_feedback_to_registry
 
 router = APIRouter()
@@ -11,7 +17,7 @@ router = APIRouter()
 @router.get("/userfeedback", dependencies=[AuthRequired])
 async def user_feedback(
     thread_id: str,
-    feedback_at_index: int, 
+    feedback_index: int,
     feedback: str,
     auth: Authenticator = Depends(auth_dependency),
 ):
@@ -29,10 +35,10 @@ async def user_feedback(
             Unique identifier of the thread containing the content.
             Must correspond to an existing stored thread.
 
-        feedback_at_index (int):
-            Zero-based index of the message within the thread content
-            where feedback should be added or removed.
-            Must be within the bounds of the thread content list.
+        feedback_index (int):
+            Zero-based index of the message within feedback messages (Code
+            and Assistant) where feedback should be added or removed.
+            Must be within the bounds of the item list in the thread.
 
         feedback (str):
             The feedback value to store (e.g., "up", "down", text note).
@@ -76,13 +82,14 @@ async def user_feedback(
 
     if not auth.vault_url:
         raise HTTPException(
-            status_code=422, 
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+            status_code=422,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
+        )
 
     try:
-        # Thread storage 
+        # Thread storage
         Storage = await get_thread_storage(vault_url=auth.vault_url)
-    except:
+    except Exception:
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Load the thread content
@@ -92,32 +99,74 @@ async def user_feedback(
         raise HTTPException(status_code=404, detail="Thread not found")
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading thread file.")
-    
-    # Check if index within bounds
-    if feedback_at_index < 0 or feedback_at_index >= len(content_json):
+
+    # Count the number of feedback messages (Code and Assistant) and check index within bounds
+    feedback_message_count = sum(
+        1
+        for msg in content_json
+        if msg.get("variant") == "Assistant" or msg.get("variant") == "Code"
+    )
+    if feedback_index < 0 or feedback_index >= feedback_message_count:
         raise HTTPException(
             status_code=422,
-            detail="feedback_at_index outside content range! Please review query parameters!",
+            detail="fork_from_index outside feedback message range! Please review query parameters!",
+        )
+
+    # Find the position of the Nth feedback message
+    feedback_msg_seen = 0
+    feedback_at_thread_index = None
+    for i, msg in enumerate(content_json):
+        if msg.get("variant") == "Assistant" or msg.get("variant") == "Code":
+            if feedback_msg_seen == feedback_index:
+                feedback_at_thread_index = i
+                break
+            feedback_msg_seen += 1
+    if feedback_at_thread_index is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not find the specified feedback message index! Please review query parameters!",
         )
 
     if feedback != "remove":
         try:
-            await save_feedback(Storage, thread_id, auth.username, content_json, feedback_at_index, feedback)
+            await save_feedback(
+                Storage,
+                thread_id,
+                auth.username,
+                content_json,
+                feedback_at_thread_index,
+                feedback,
+            )
             return {"Successfully saved user feedback."}
-        except:
-            raise HTTPException(status_code=500, detail="Failed to save user feedback: {thread_id}")
+        except Exception:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to save user feedback: {thread_id}"
+            )
     else:
         # TODO: delete feedback when user deletes thread?
-        if "feedback" not in content_json[feedback_at_index].keys():
-            raise HTTPException(status_code=404, detail=f"Feedback not found at index {feedback_at_index}: {thread_id}")
+        if "feedback" not in content_json[feedback_at_thread_index].keys():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Feedback not found at index {feedback_at_thread_index}: {thread_id}",
+            )
         try:
-            await delete_feedback(Storage, thread_id, auth.username, content_json, feedback_at_index)
+            await delete_feedback(
+                Storage,
+                thread_id,
+                auth.username,
+                content_json,
+                feedback_at_thread_index,
+            )
             return {"Successfully removed user feedback."}
-        except:
-            raise HTTPException(status_code=500, detail=f"Failed to delete user feedback: {thread_id}")
+        except Exception:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to delete user feedback: {thread_id}"
+            )
 
 
-async def save_feedback(storage: ThreadStorage, thread_id, user_id, content, f_ind, feedback):
+async def save_feedback(
+    storage: ThreadStorage, thread_id, user_id, content, f_ind, feedback
+):
     try:
         await storage.save_feedback(thread_id, user_id, content, f_ind, feedback)
         await save_feedback_to_registry(thread_id, f_ind, feedback)

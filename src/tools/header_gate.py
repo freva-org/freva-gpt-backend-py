@@ -6,6 +6,7 @@ from src.core.logging_setup import configure_logging
 log = logging.getLogger(__name__)
 configure_logging()
 
+
 def make_header_gate(
     inner_app,
     *,
@@ -46,7 +47,7 @@ def make_header_gate(
                 for k, v in scope.get("headers", [])
             }
 
-            # handle session close 
+            # handle session close
             if scope.get("method") == "DELETE":
                 sid = hdrs.get("mcp-session-id", "")
                 try:
@@ -61,36 +62,54 @@ def make_header_gate(
                         log.exception("on_session_close failed for sid=%s", sid)
 
                 # Respond 204 No Content
-                await send({"type": "http.response.start", "status": 204, "headers": []})
-                await send({"type": "http.response.body", "body": b"", "more_body": False})
+                await send(
+                    {"type": "http.response.start", "status": 204, "headers": []}
+                )
+                await send(
+                    {"type": "http.response.body", "body": b"", "more_body": False}
+                )
                 return
 
             tokens: list[tuple[ContextVar, Any]] = []
 
             try:
                 for ctx, header_name in zip(ctx_list, header_name_list):
-
                     v = hdrs.get(header_name)
 
                     # Enforce required conditions on header
                     # We do not do the same for CI because it doesn't have to be that strict, it can operate without freva access. We warn about this
-                    if header_name=="mongodb-uri" and (not v or not (v.startswith("mongodb://") or v.startswith("mongodb+srv://"))):
+                    if header_name == "mongodb-uri" and (
+                        not v
+                        or not (
+                            v.startswith("mongodb://") or v.startswith("mongodb+srv://")
+                        )
+                    ):
                         body = (
-                            b'event: message\r\n'
+                            b"event: message\r\n"
                             b'data: {"jsonrpc":"2.0","error":{"code":-32600,'
-                            b'"message":"Missing or invalid header \'' + header_name.encode("utf-8") + b'\' '
+                            b'"message":"Missing or invalid header \''
+                            + header_name.encode("utf-8")
+                            + b"' "
                             b'(expected mongodb:// or mongodb+srv://)"}}\r\n\r\n'
                         )
-                        await send({
-                            "type": "http.response.start",
-                            "status": 400,
-                            "headers": [
-                                (b"content-type", b"text/event-stream"),
-                                (b"cache-control", b"no-cache, no-transform"),
-                                (b"connection", b"keep-alive"),
-                            ],
-                        })
-                        await send({"type": "http.response.body", "body": body, "more_body": False})
+                        await send(
+                            {
+                                "type": "http.response.start",
+                                "status": 400,
+                                "headers": [
+                                    (b"content-type", b"text/event-stream"),
+                                    (b"cache-control", b"no-cache, no-transform"),
+                                    (b"connection", b"keep-alive"),
+                                ],
+                            }
+                        )
+                        await send(
+                            {
+                                "type": "http.response.body",
+                                "body": body,
+                                "more_body": False,
+                            }
+                        )
                         return
 
                     # Set ContextVars for downstream code

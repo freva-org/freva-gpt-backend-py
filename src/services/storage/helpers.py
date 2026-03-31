@@ -26,6 +26,7 @@ CACHE_ROOT = Path("./cache")
 
 # ──────────────────────────── Model ───────────────────────────────────
 
+
 @dataclass
 class Thread:
     user_id: str
@@ -34,12 +35,11 @@ class Thread:
     topic: str
     content: List[StreamVariant]
 
+
 # ──────────────────── Helper Functions ──────────────────────────────
 
-def create_dir_at_cache(
-    user_id: str, 
-    thread_id: str
-) -> None:
+
+def create_dir_at_cache(user_id: str, thread_id: str) -> None:
     """
     Create cache/{user_id}/{thread_id}. On failure (e.g., non-alphanumeric user_id),
     retry with a sanitized user_id (keep only [A-Za-z0-9]). Logs but never raises.
@@ -50,10 +50,15 @@ def create_dir_at_cache(
         DEFAULT_LOGGER.debug("cache created or exists: %s", cache)
         return
     except Exception as e:
-        DEFAULT_LOGGER.debug("Failed to create cache=%s, err=%s -- retrying with sanitized user_id", cache, e)
+        DEFAULT_LOGGER.debug(
+            "Failed to create cache=%s, err=%s -- retrying with sanitized user_id",
+            cache,
+            e,
+        )
 
 
 # ──────────────────── Summarization for topic ────────────────────
+
 
 def _fallback_topic(raw: str | None) -> str:
     if not raw:
@@ -62,15 +67,13 @@ def _fallback_topic(raw: str | None) -> str:
     s = " ".join(raw.split())
     return (s[:80] + "…") if len(s) > 80 else s
 
+
 async def summarize_topic(content: List[StreamVariant]) -> str:
     """
     Try LiteLLM; on any failure, return a safe fallback so requests don't crash.
     Only the first user text is taken into account.
     """
-    topic = next(
-        (sv.text for sv in content if isinstance(sv, SVUser)),
-        "Untitled"
-        )
+    topic = next((sv.text for sv in content if isinstance(sv, SVUser)), "Untitled")
 
     prompt = (
         "Summarize this chat topic in at most ~12 words, neutral tone.\n\n"
@@ -92,6 +95,7 @@ async def summarize_topic(content: List[StreamVariant]) -> str:
 
 # ──────────────────── Connection ──────────────────────────────
 
+
 async def get_mongodb_uri(vault_url: str) -> str:
     # 1) GET vault_url
     try:
@@ -102,7 +106,10 @@ async def get_mongodb_uri(vault_url: str) -> str:
         raise HTTPException(status_code=503, detail="Error sending request to vault.")
     if not r.is_success:
         # 502 BadGateway
-        raise HTTPException(status_code=502, detail="Failed to get MongoDB URL. Is Nginx running correctly?")
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to get MongoDB URL. Is Nginx running correctly?",
+        )
 
     # 2) Parse JSON and extract key
     try:
@@ -114,18 +121,18 @@ async def get_mongodb_uri(vault_url: str) -> str:
     uri = data.get("mongodb.url") or data.get("mongo.url")
     if not uri:
         # 502 BadGateway
-        raise HTTPException(status_code=502, detail="MongoDB URL not found in vault response.")
+        raise HTTPException(
+            status_code=502, detail="MongoDB URL not found in vault response."
+        )
     return uri.strip()
 
 
-async def get_database(
-        vault_url: str
-    ) -> AsyncDatabase:
-        """
-        Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
-        If connection fails, retry once without URI options (strip trailing ?query).
-        """
-        mongodb_uri = await get_mongodb_uri(vault_url)
+async def get_database(vault_url: str) -> AsyncDatabase:
+    """
+    Parity with Rust: fetch URI from vault via auth.get_mongodb_uri, connect with Motor.
+    If connection fails, retry once without URI options (strip trailing ?query).
+    """
+    mongodb_uri = await get_mongodb_uri(vault_url)
 
-        client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
-        return client[MONGODB_DATABASE_NAME]
+    client = AsyncMongoClient(mongodb_uri, connectTimeoutMS=30000)
+    return client[MONGODB_DATABASE_NAME]

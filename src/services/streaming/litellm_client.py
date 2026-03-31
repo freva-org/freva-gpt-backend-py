@@ -13,16 +13,20 @@ from src.core.settings import get_settings
 # Inside docker-compose: http://litellm:4000
 # For local dev: http://localhost:4000
 
+
 def _completions_url() -> str:
     s = get_settings()
     return f"{s.LITE_LLM_ADDRESS.rstrip('/')}/v1/chat/completions"
 
+
 # Optional bearer to satisfy proxies that require it.
 AUTH_TOKEN = os.getenv("FREVAGPT_OPENAI_API_KEY", "")
+
 
 def _passthrough_params(params: Dict[str, Any] | None) -> Dict[str, Any]:
     # Tiny wrapper to allow future param sanitization
     return dict(params or {})
+
 
 def _headers() -> Dict[str, str]:
     h = {"Content-Type": "application/json"}
@@ -32,6 +36,7 @@ def _headers() -> Dict[str, str]:
         h["Authorization"] = f"Bearer {AUTH_TOKEN}"
     return h
 
+
 async def _post_json(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     timeout = httpx.Timeout(60.0, read=300.0, write=30.0, connect=30.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -39,11 +44,13 @@ async def _post_json(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         r.raise_for_status()
         return r.json()
 
+
 def _extract_text(resp: Any) -> str:
     try:
         return resp["choices"][0]["message"]["content"]
     except Exception:
         return ""
+
 
 # ---------------------------------------------------------------------------
 # Public API (non-streaming)
@@ -87,7 +94,9 @@ async def acomplete(
 
     async def _aiter() -> AsyncIterator[Dict[str, Any]]:
         try:
-            async with client.stream("POST", url, json=payload, headers=_headers()) as r:
+            async with client.stream(
+                "POST", url, json=payload, headers=_headers()
+            ) as r:
                 r.raise_for_status()
                 async for line in r.aiter_lines():
                     if not line or not line.startswith("data:"):
@@ -101,6 +110,7 @@ async def acomplete(
                         continue
         finally:
             await client.aclose()
+
     return _aiter()
 
 
@@ -126,6 +136,7 @@ def tool_calls(resp: Dict[str, Any]) -> List[Dict[str, Any]]:
     except Exception:
         return []
 
+
 def first_message(resp: Dict[str, Any]) -> Dict[str, Any] | None:
     """
     Convenience: return the first assistant message dict or None.
@@ -138,7 +149,10 @@ def first_message(resp: Dict[str, Any]) -> Dict[str, Any] | None:
     except Exception:
         return None
 
+
 __all__ = [
-    "acomplete", "first_text",
-    "tool_calls", "first_message",
+    "acomplete",
+    "first_text",
+    "tool_calls",
+    "first_message",
 ]

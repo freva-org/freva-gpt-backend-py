@@ -158,13 +158,6 @@ async def edit_thread(
             parent_thread_id=source_thread_id,
             fork_from_index= fork_from_index,
         )
-        await initialize_conversation(
-                thread_id=new_id,
-                user_id=user_name,
-                messages=base_sv,
-                auth=Auth,
-                logger=logger
-        )
     except:
         logger.exception(f"Failed to save new thread. Source thread id: {source_thread_id}.")
         raise HTTPException(status_code=500, 

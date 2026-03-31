@@ -24,7 +24,6 @@ async def test_getthread_ok_with_thread_id(
     client, 
     patch_db, 
     patch_read_thread, 
-    patch_mcp_manager, 
     GOOD_HEADERS
 ):
     with  stub_resp:

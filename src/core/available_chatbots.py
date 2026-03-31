@@ -1,6 +1,14 @@
 # src/core/available_chatbots.py
 from __future__ import annotations
 
+import logging
+import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, List, Optional
+
+import yaml  
+
 """
 Model catalog loader for LiteLLM config (YAML-based).
 
@@ -16,14 +24,6 @@ Behavior:
 - model_supports_images: names starting with 'gpt-4o', 'gpt-5', or 'gpt-4.1'
 - model_ends_on_no_choice: names starting with 'qwen2_5'
 """
-
-import logging
-import os
-from functools import lru_cache
-from pathlib import Path
-from typing import Any, List, Optional
-
-import yaml  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,12 @@ def _as_str_or_none(value: Any) -> Optional[str]:
     return None
 
 
-def _collect_model_names(node: Any, sink: List[str]) -> None:
+def _collect_model_names(node: Any) -> list[str]:
     """
     Recursively traverse loaded YAML and collect values under 'model_name' keys
     (mimicking Rust's 'scan anywhere' behavior, but structured).
     """
+    sink: list[str] = []
     if isinstance(node, dict):
         # If we see a model_name at this level, collect it.
         if "model_name" in node:
@@ -60,13 +61,14 @@ def _collect_model_names(node: Any, sink: List[str]) -> None:
 
         # Recurse into all values to catch nested occurrences.
         for v in node.values():
-            _collect_model_names(v, sink)
+            sink.extend(_collect_model_names(v))
 
     elif isinstance(node, list):
         for item in node:
-            _collect_model_names(item, sink)
+            sink.extend(_collect_model_names(item))
     # Other scalar types are ignored.
-
+    
+    return sink
 
 def _discover_config_path() -> Path:
     """
@@ -93,10 +95,10 @@ def _discover_config_path() -> Path:
     for parent in [*here.parents, *Path.cwd().resolve().parents]:
         candidate = parent / DEFAULT_CONFIG_BASENAME
         if candidate.is_file():
-            return candidate
+            return candidate.resolve()
 
     # Fallback to CWD for error messaging
-    return cwd_candidate
+    return cwd_candidate.resolve()
 
 
 def _load_yaml(path: Path) -> Any:
@@ -122,10 +124,9 @@ def available_chatbots() -> List[str]:
     Returns an ordered list of model names discovered under 'model_name' keys
     in litellm_config.yaml. Fatal if empty.
     """
-    path = _discover_config_path()
+    path: Path = _discover_config_path()
     data = _load_yaml(path)
-    names: List[str] = []
-    _collect_model_names(data, names)
+    names: list[str] = _collect_model_names(data)
 
     # Preserve order; do not deduplicate (matches the spirit of the Rust scan).
     filtered = [n for n in names if n]  # already warned on invalids
@@ -190,7 +191,7 @@ def refresh_cache() -> None:
     """
     Clear memoized results (useful in tests or after config changes).
     """
-    available_chatbots.cache_clear()  # type: ignore[attr-defined]
+    available_chatbots.cache_clear() 
 
 
 __all__ = [

@@ -18,6 +18,7 @@ class Settings:
     MONGODB_COLLECTION_NAME: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME", "threads")
     MONGODB_COLLECTION_NAME_EMB: str = os.getenv("FREVAGPT_MONGODB_COLLECTION_NAME_EMB", "embeddings")
     CLEAR_MONGODB_EMBEDDINGS: bool = os.getenv("FREVAGPT_CLEAR_MONGODB_EMBEDDINGS", "").lower() in {"1","true","yes"}
+    MCP_REQUEST_TIMEOUT_SEC: int = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
     DEV: bool = os.getenv("FREVAGPT_DEV", "").lower() in {"1","true","yes"}
 
 
@@ -32,11 +33,11 @@ def get_settings() -> Settings:
     return _SETTINGS
 
 def get_server_url_dict(server_list):
-    url_dict: Dict[str:str] = {}
+    url_dict: Dict[str, str] = {}
     for s in server_list:
         s_url = os.getenv(f"FREVAGPT_{s.upper()}_SERVER_URL", "")
         if s_url:
             url_dict.update({s: s_url})
         else:
-            ValueError(f"Please set url address for MCP server {s}!")
+            raise ValueError(f"Please set url address for MCP server {s}!")
     return url_dict

@@ -1,28 +1,27 @@
 from __future__ import annotations
-from typing import List, Dict
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd, from_sv_to_json
-from src.services.streaming.stream_orchestrator import prepare_for_stream
-from src.services.streaming.active_conversations import get_conv_messages
+from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd
+from src.services.streaming.stream_orchestrator import get_conversation_history
 from src.core.logging_setup import configure_logging
 
 
 router = APIRouter()
 
 
-def _post_process(v: List[StreamVariant]) -> List[StreamVariant]:
+def _post_process(variants: List[StreamVariant]) -> List[StreamVariant]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
-    items = [item for item in v if not is_prompt(item)]
-    cleaned: List[Dict] = []
+    items = [item for item in variants if not is_prompt(item)]
+    cleaned: List[StreamVariant] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = (i == len(items) - 1)
             if (not is_last) or ("unexpected manner" in (getattr(v, "message", "") or "").lower()):
                 continue
-        cleaned.append(from_sv_to_json(v))
+        cleaned.append(v)
     return cleaned
 
 
@@ -81,18 +80,18 @@ async def get_thread(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=Auth.vault_url)
-    except:
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        await prepare_for_stream(
+        messages = await get_conversation_history(
             thread_id=thread_id, 
-            user_id=Auth.username,
-            Auth=Auth,
             Storage=Storage,
-            read_history=True,
-            logger=logger,
         )
+        # If the messages are None, it means there was no Storage to read from and we raise a 404.
+        if not messages:
+            raise FileNotFoundError(f"Thread with ID {thread_id} not found.")
     except FileNotFoundError:
         logger.exception("Thread not found.", extra={"thread_id": thread_id})
         raise HTTPException(status_code=404, detail="Thread not found.")
@@ -100,10 +99,9 @@ async def get_thread(
         logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
         
-    content = await get_conv_messages(thread_id)
+    content = _post_process(messages)
 
-    content = _post_process(content)
-
-    logger.info("Fetched thread content.", extra={"thread_id": thread_id, "user_id": Auth.username})
+    logger.info("Fetched thread content.", extra={"thread_id": thread_id, 
+                                                  "user_id": Auth.username})
 
     return content

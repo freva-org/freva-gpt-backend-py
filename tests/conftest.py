@@ -139,6 +139,9 @@ class DummyCollection:
             return len(self.storage)
         return sum(1 for doc in self.storage.values() if doc.get("user_id") == user_id)
 
+    async def create_index(self, ind, unique=False):
+        pass
+
 
 class DummyDB:
     def __init__(self):
@@ -240,7 +243,7 @@ def patch_save_thread(monkeypatch):
 
 @pytest.fixture
 def patch_user_threads(monkeypatch):
-    async def fake_get_user_threads(self, user_id: str, limit: int = 20):
+    async def fake_get_user_threads(self, user_id: str, limit: int = 20, page:int = 0):
         # Return objects with attributes, matching what the route expects
         threads = [
             SimpleNamespace(

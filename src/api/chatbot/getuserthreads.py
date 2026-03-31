@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.services.storage.mongodb_storage import ThreadStorage
 
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -9,7 +10,8 @@ router = APIRouter()
 
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(
-    num_threads: int,
+    num_threads: int = 20,
+    page: int = 0,
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
@@ -22,6 +24,8 @@ async def get_user_threads(
     Parameters:
         num_threads (int):
             The maximum number of recent threads to return.
+        page (int):
+            The page number of results to return.
 
     Dependencies:
         auth (Authenticator): Injected authentication object containing 
@@ -64,12 +68,13 @@ async def get_user_threads(
 
     try:
         # Thread storage 
-        Storage = await get_thread_storage(vault_url=auth.vault_url)
-    except:
+        Storage: ThreadStorage = await get_thread_storage(vault_url=auth.vault_url)
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        threads, total_num_threads = await Storage.list_recent_threads(auth.username, limit=num_threads)
+        threads, total_num_threads = await Storage.list_recent_threads(auth.username, limit=num_threads, page=page)
 
         logger.info(
             "Fetched recent threads",
@@ -89,6 +94,7 @@ async def get_user_threads(
             ], 
             total_num_threads
         ]
-    except:
+    except Exception as e:
+        logger.warning("Failed to fetch user history from storage", extra={"error": str(e)})
         raise HTTPException(status_code=500,
                             detail="Failed to fetch user history from storage.")

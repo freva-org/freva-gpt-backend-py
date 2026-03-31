@@ -1,12 +1,12 @@
 from src.services.streaming.stream_variants import (
     SVUser, SVAssistant, SVCode, SVCodeOutput, SVStreamEnd, SVServerHint, SVServerError,
     cleanup_conversation, normalize_conv_for_prompt, help_convert_sv_ccrm,
-    from_sv_to_json, from_json_to_sv,
+    from_sv_to_json, from_json_to_sv, StreamVariant
 )
 
 
 def test_cleanup_inserts_codeoutput_and_end():
-    conv = [SVUser(text="hi"), SVCode(code="print(1)", id="call_1")]
+    conv: list[StreamVariant] = [SVUser(text="hi"), SVCode(code="print(1)", id="call_1")]
     out = cleanup_conversation(conv, append_stream_end=True)  # default: append_stream_end=True
     # Expect: User, Code, (inserted) CodeOutput, StreamEnd
     assert isinstance(out[-1], SVStreamEnd)
@@ -18,21 +18,7 @@ def test_cleanup_inserts_codeoutput_and_end():
 
 
 def test_cleanup_no_extra_end_if_existing():
-    conv = [
-        SVUser(text="hi"),
-        SVCode(code="print(1)", id="call_1"),
-        SVCodeOutput(output="1", id="call_1"),
-        SVStreamEnd(message="Done"),
-    ]
-    out = cleanup_conversation(conv, append_stream_end=True)
-    kinds = [v.variant for v in out]
-    # No duplicate StreamEnd
-    assert kinds == ["User", "Code", "CodeOutput", "StreamEnd"]
-
-
-
-def test_cleanup_no_extra_end_if_existing():
-    conv = [
+    conv: list[StreamVariant] = [
         SVUser(text="hi"),
         SVCode(code="print(1)", id="call_1"),
         SVCodeOutput(output="1", id="call_1"),
@@ -45,7 +31,7 @@ def test_cleanup_no_extra_end_if_existing():
 
 
 def test_normalize_conv_for_prompt_filters_meta():
-    conv = [
+    conv: list[StreamVariant] = [
         SVServerHint(data={"thread_id": "abc"}),
         SVUser(text="hi"),
         SVAssistant(text="hello"),
@@ -59,7 +45,7 @@ def test_normalize_conv_for_prompt_filters_meta():
 
 
 def test_ccrm_conversion_basic():
-    conv = [
+    conv: list[StreamVariant] = [
         SVUser(text="hi"),
         SVAssistant(text="hello"),
         SVStreamEnd(message="Done"),

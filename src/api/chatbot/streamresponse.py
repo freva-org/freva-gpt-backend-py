@@ -23,6 +23,7 @@ from src.services.streaming.stream_variants import (
     from_sv_to_json,
     IMAGE,
     SVDict,
+    SVServerHint,
 )
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
@@ -116,7 +117,9 @@ async def streamresponse(
     """
     logger = configure_logging(__name__)
     read_history = False
+    is_new_thread = False
     if not thread_id:
+        is_new_thread = True
         thread_id = await new_thread_id()
         logger.info(f"Starting a new conversation with thread_id: {thread_id}...")
     else:
@@ -208,6 +211,12 @@ async def streamresponse(
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
     async def event_stream():
+        if is_new_thread:
+            # Append ServerHint with thread_id
+            hint_v = SVServerHint(data={"thread_id": thread_id})
+            for data in _sse_data(from_sv_to_json(hint_v)):
+                yield data
+            await add_to_conversation(thread_id, [hint_v])
 
         last_check = time.monotonic()
         async for variant in run_stream(

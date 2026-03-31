@@ -29,7 +29,7 @@ loader_kwargs_dict={
 
 class CustomDirectoryLoader(DirectoryLoader):
     def __init__(self, path: str, **kwargs):
-        super().__init__(path, kwargs)
+        super().__init__(path, **kwargs)
         self.dir_name = path.split("/")[-1]
         self.extensions = self.list_extensions()
 
@@ -60,7 +60,7 @@ class CustomDirectoryLoader(DirectoryLoader):
                         docs = self.standardize_metadata(docs)
                     all_documents.extend(docs)
                 else:
-                    raise (TypeError, f"The directory contains an unsupported file extension. Please add a document loader mapping for {doc_type} files.")
+                    raise TypeError(f"The directory contains an unsupported file extension. Please add a document loader mapping for {doc_type} files.")
         else:
             logger.warning(f"The directory is empty: {self.path}")
             

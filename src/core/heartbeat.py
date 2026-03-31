@@ -1,7 +1,5 @@
-import asyncio
 import os
 import psutil
-import json
 
 from src.services.streaming.stream_variants import SVServerHint
 
@@ -29,7 +27,9 @@ async def heartbeat_content():
 
     # --- CPU Info ---
     heartbeat["cpu_usage"] = psutil.cpu_percent(interval=None)
-    heartbeat["cpu_last_minute"] = psutil.getloadavg()[0]  # 1-minute load average
+    # psutil isn't guaranteed to have getloadavg on all platforms.
+    if hasattr(psutil, "getloadavg"):
+        heartbeat["cpu_last_minute"] = psutil.getloadavg()[0]  # 1-minute load average
 
     # --- Process Tree: include self and all descendants ---
     process_list = [pid]

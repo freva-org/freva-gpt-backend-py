@@ -92,7 +92,7 @@ def web_search(query: str) -> str:
         "For DKRZ/HPC and ICON doxs, use SEARCHTEAM 1 and 2 to find relevant information. "\
         "When asked about mkexp or seting up an experiment, consult ICON docs AND mkexp toolbox docs."
         "Only answer questions if claims can be supported by web citations. Include inline citations for "\
-        f"URLs found in the web search results."
+        "URLs found in the web search results."
     )
 
     user_content = [
@@ -128,6 +128,7 @@ def web_search(query: str) -> str:
     logger.info(kwargs)
     try:
         resp = client.responses.create(**kwargs)
+
         logger.info(f"Succesfully completed web search with query {query}.\n")
         return resp.output_text
     except Exception as e:

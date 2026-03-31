@@ -3,7 +3,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from src.services.service_factory import AuthRequired
 from src.core.logging_setup import configure_logging
-from src.services.streaming.active_conversations import request_stop, cancel_tool_tasks
+from src.services.streaming.active_conversations import request_stop
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ async def stop_get(
     Raises:
         HTTPException (422):
             - If `thread_id` is missing or empty.
-        HTTPException (500):
+        HTTPException (404):
             - If no active conversation with the given thread ID was found
               or the stop request failed.
     """
@@ -51,4 +51,4 @@ async def stop_get(
     if ok:
         return {"Conversation stopped."}
     else:
-        raise HTTPException(status_code=500, detail="Conversation with given thread-id not found.")
+        raise HTTPException(status_code=404, detail="Conversation with given thread-id not found.")

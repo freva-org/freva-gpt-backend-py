@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 from contextvars import ContextVar
 import threading
@@ -15,7 +14,7 @@ from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.code.helpers import (
     strip_ansi, sanitize_code, 
-    start_kernel, restart_kernel, 
+    start_kernel,
     shutdown_kernel, should_restart_after
 )
 from src.tools.code.safety_check import check_code_safety
@@ -340,9 +339,9 @@ def code_interpreter(code: str) -> dict:
     logger.debug(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
     logger.debug(f"Input code:'{code}'")
     
-    safe, violation = check_code_safety(code)
-    if safe:
-        logger.info(f"Code block is safe to execute..")
+    violation = check_code_safety(code)
+    if violation is None:
+        logger.info("Code block is safe to execute..")
         lock = _get_sid_lock(sid) 
         # Allowing only one _execute_code() at a time per sid 
         with lock: 

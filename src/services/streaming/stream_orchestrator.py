@@ -6,7 +6,7 @@ import re
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
 from dataclasses import dataclass
 
-from src.services.service_factory import Authenticator, ThreadStorage, McpManager
+from src.services.service_factory import Authenticator, ThreadStorage
 
 from src.services.streaming.litellm_client import acomplete, first_text
 from src.services.streaming.stream_variants import (
@@ -51,7 +51,7 @@ async def stream_with_tools(
     thread_id: str,
     messages: List[Dict[str, Any]], # system_prompt
     acomplete_func=acomplete,
-    stream_state: StreamState = None,
+    stream_state: StreamState,
     logger=None,
 ) -> AsyncIterator[StreamVariant]:
     log = logger or DEFAULT_LOGGER
@@ -67,12 +67,11 @@ async def stream_with_tools(
     # 1) First request
     tool_agg: Dict[str, Any] = {}
     tools = mcp.openai_tools() if hasattr(mcp, "openai_tools") else []
-    kwargs = {"model": model, "messages": messages, "stream": True}
+    
     if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-
-    resp = await acomplete_func(**kwargs)
+        resp = await acomplete_func(model=model, messages=messages, stream=True, tools=tools, tool_choice="auto")
+    else:
+        resp = await acomplete_func(model=model, messages=messages, stream=True)
 
     accumulated_asst_text: List[str] = []
 
@@ -161,7 +160,7 @@ async def stream_with_tools(
                 tool_task.cancel()
                 raise
 
-            except Exception as e:
+            except Exception:
                 tool_task.cancel()
                 raise
 
@@ -217,7 +216,7 @@ async def stream_with_tools(
 async def run_stream(
     *,
     model: str,
-    thread_id: Optional[str],
+    thread_id: str,
     user_input: str,
     system_prompt: List[Dict[str, Any]],
     logger=None,
@@ -264,31 +263,36 @@ async def run_stream(
 
 
 async def prepare_for_stream(
-    thread_id, 
-    user_id,
-    Auth: Optional[Authenticator] = None, 
+    thread_id: str, 
+    user_id: str,
+    Auth: Authenticator, 
     Storage: Optional[ThreadStorage] = None,
     read_history: Optional[bool] = False, 
     logger=None,
-) :
+) -> None:
     """ 
     Preparations for the streaming, read history (if needed), add to Registry and 
-    set conversation state to "streaming
+    set conversation state to "streaming". 
+    Returns the conversation history as StreamVariants if `read_history` is True.
     """
     log = logger or DEFAULT_LOGGER
-    messages: List[Dict[str, Any]] = []
+    messages: List[StreamVariant] = []
     if read_history and Storage:
         messages = await get_conversation_history(thread_id, Storage)
 
     # Check if the conversation already exists in registry
     # If not initialize it, and add the first messages 
     await initialize_conversation(thread_id, user_id, messages=messages, auth=Auth, logger=log)
+    
+    if messages:
+        log.info("Conversation history loaded with %d messages.", len(messages))
+    return None
 
 
 async def get_conversation_history(
-    thread_id: Optional[str],
+    thread_id: str,
     Storage: ThreadStorage,
-    ):
+    ) -> List[StreamVariant]:
     # Build messages for ongoing conversation
     prior_json: List[dict] = await Storage.read_thread(thread_id)
     prior_sv: List[StreamVariant] = [from_json_to_sv(item) for item in prior_json]

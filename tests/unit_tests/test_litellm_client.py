@@ -44,7 +44,9 @@ async def test_acomplete_success_roundtrip(monkeypatch):
         "src.services.streaming.litellm_client.httpx.AsyncClient.post",
         new=fake_post,
     ):
-        result = await acomplete(model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}])
+        result = await acomplete(
+            model="qwen2.5:3b", messages=[{"role": "user", "content": "hi"}]
+        )
 
     assert first_text(result) == "hello world"
 

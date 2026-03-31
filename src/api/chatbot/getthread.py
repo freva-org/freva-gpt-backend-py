@@ -3,8 +3,19 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
-from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+)
+from src.services.streaming.stream_variants import (
+    StreamVariant,
+    is_prompt,
+    SVStreamEnd,
+    from_sv_to_json,
+    SVDict,
+)
 from src.services.streaming.stream_orchestrator import get_conversation_history
 from src.core.logging_setup import configure_logging
 
@@ -12,16 +23,18 @@ from src.core.logging_setup import configure_logging
 router = APIRouter()
 
 
-def _post_process(variants: List[StreamVariant]) -> List[StreamVariant]:
+def _post_process(variants: List[StreamVariant]) -> List[SVDict]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
     items = [item for item in variants if not is_prompt(item)]
-    cleaned: List[StreamVariant] = []
+    cleaned: List[SVDict] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
-            is_last = (i == len(items) - 1)
-            if (not is_last) or ("unexpected manner" in (getattr(v, "message", "") or "").lower()):
+            is_last = i == len(items) - 1
+            if (not is_last) or (
+                "unexpected manner" in (getattr(v, "message", "") or "").lower()
+            ):
                 continue
-        cleaned.append(v)
+        cleaned.append(from_sv_to_json(v))
     return cleaned
 
 
@@ -43,8 +56,8 @@ async def get_thread(
             as a query parameter.
 
     Dependencies:
-        Auth (Authenticator): Injected authentication object containing 
-            username and vault_url 
+        Auth (Authenticator): Injected authentication object containing
+            username and vault_url
 
     Returns:
         List[dict]:
@@ -71,14 +84,14 @@ async def get_thread(
 
     if not Auth.vault_url:
         raise HTTPException(
-            status_code=422, 
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String."
+            status_code=422,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
 
     logger = configure_logging(__name__, thread_id=thread_id, user_id=Auth.username)
 
     try:
-        # Thread storage 
+        # Thread storage
         Storage = await get_thread_storage(vault_url=Auth.vault_url)
     except Exception as e:
         logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
@@ -86,7 +99,7 @@ async def get_thread(
 
     try:
         messages = await get_conversation_history(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             Storage=Storage,
         )
         # If the messages are None, it means there was no Storage to read from and we raise a 404.
@@ -96,12 +109,16 @@ async def get_thread(
         logger.exception("Thread not found.", extra={"thread_id": thread_id})
         raise HTTPException(status_code=404, detail="Thread not found.")
     except ValueError as e:
-        logger.exception(f"Error reading thread file: {e}", extra={"thread_id": thread_id})
+        logger.exception(
+            f"Error reading thread file: {e}", extra={"thread_id": thread_id}
+        )
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
-        
-    content = _post_process(messages)
 
-    logger.info("Fetched thread content.", extra={"thread_id": thread_id, 
-                                                  "user_id": Auth.username})
+    content: list[SVDict] = _post_process(messages)
+
+    logger.info(
+        "Fetched thread content.",
+        extra={"thread_id": thread_id, "user_id": Auth.username},
+    )
 
     return content

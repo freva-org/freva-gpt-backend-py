@@ -7,13 +7,14 @@ from src.services.service_factory import AuthRequired
 
 router = APIRouter()
 
+
 @router.get("/availablechatbots", response_model=List[str], dependencies=[AuthRequired])
 async def available_chatbots_endpoint() -> List[str]:
     """
     Retrieve Available Chatbots.
 
     Returns an ordered list of available chatbot model names defined in
-    the LiteLLM config file. Models containing the substring "embed" are 
+    the LiteLLM config file. Models containing the substring "embed" are
     excluded from the result.
     Requires a valid authenticated user.
 
@@ -35,7 +36,7 @@ async def available_chatbots_endpoint() -> List[str]:
         chatbot_list = available_chatbots()
 
         return [c for c in chatbot_list if "embed" not in c]
-    
+
     except FileNotFoundError:
         raise HTTPException(
             status_code=500,
@@ -50,7 +51,7 @@ async def available_chatbots_endpoint() -> List[str]:
 
     except ValueError as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail="No available chatbots found in LiteLLM config file.",
         ) from e
 

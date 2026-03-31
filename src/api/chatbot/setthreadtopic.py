@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException,Depends
+from fastapi import APIRouter, HTTPException, Depends
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+)
 from src.core.logging_setup import configure_logging
 
 router = APIRouter()
@@ -11,7 +16,7 @@ router = APIRouter()
 @router.get("/setthreadtopic", dependencies=[AuthRequired])
 async def set_thread_topic(
     thread_id: str,
-    topic: str, 
+    topic: str,
     auth: Authenticator = Depends(auth_dependency),
 ):
     """
@@ -27,10 +32,10 @@ async def set_thread_topic(
             as a query parameter.
         topic (str):
             The new topic/title string to assign to the thread.
-    
+
     Dependencies:
-        auth (Authenticator): Injected authentication object containing 
-            username and vault_url 
+        auth (Authenticator): Injected authentication object containing
+            username and vault_url
 
     Returns:
         dict:
@@ -53,13 +58,14 @@ async def set_thread_topic(
 
     if not auth.vault_url:
         raise HTTPException(
-            status_code=422, 
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+            status_code=422,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
+        )
 
     logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
 
     try:
-        # Thread storage 
+        # Thread storage
         Storage = await get_thread_storage(vault_url=auth.vault_url)
     except Exception as e:
         logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
@@ -67,8 +73,14 @@ async def set_thread_topic(
 
     try:
         await Storage.update_thread_topic(thread_id, topic)
-        logger.info("Updated thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
+        logger.info(
+            "Updated thread topic",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
         return {"Successfully updated thread topic."}
     except Exception as e:
-        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username, "error": str(e)})
+        logger.warning(
+            "Failed to update thread topic",
+            extra={"thread_id": thread_id, "user_id": auth.username, "error": str(e)},
+        )
         raise HTTPException(status_code=500, detail="Failed to update thread topic.")

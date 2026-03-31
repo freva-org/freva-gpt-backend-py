@@ -92,7 +92,9 @@ async def search_threads(
     page = page or 0  # default to 0 if not provided
 
     try:
-        total_num_threads, threads = await Storage.query_by_topic(auth.username, query, num_threads, page)
+        total_num_threads, threads = await Storage.query_by_topic(
+            auth.username, query, num_threads, page
+        )
     except Exception as e:
         logger.warning("Failed to query threads: %s", e)
         raise HTTPException(status_code=500, detail="Failed to query threads.")

@@ -3,7 +3,7 @@ import threading
 
 
 def test_cleanup_mcp_session_removes_kernel_and_lock(monkeypatch):
-    import src.tools.code.server as server  
+    import src.tools.code.server as server
 
     sid = "sid-1"
 
@@ -20,6 +20,7 @@ def test_cleanup_mcp_session_removes_kernel_and_lock(monkeypatch):
 
     # Patch shutdown_kernel to verify it was called
     shutdown_called = {"called": False, "arg": None}
+
     def fake_shutdown_kernel(arg):
         shutdown_called["called"] = True
         shutdown_called["arg"] = arg

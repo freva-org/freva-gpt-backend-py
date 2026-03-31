@@ -14,7 +14,7 @@ class DevAuthenticator(Authenticator):
         - no real token validation
         - username, vault_url, rest_url come from headers or defaults
         """
-        
+
         if request:
             username = request.headers.get("x-dev-user", "janedoe")
             vault_url = request.headers.get("x-dev-vault-url", "http://dev-vault")
@@ -30,7 +30,7 @@ class DevAuthenticator(Authenticator):
             "DEV auth applied",
             extra={"user_id": username, "vault_url": vault_url, "rest_url": rest_url},
         )
-        
+
         return DevAuthenticator(
             request=request,
             settings=get_settings(),

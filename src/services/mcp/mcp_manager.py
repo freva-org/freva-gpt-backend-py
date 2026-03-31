@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional, Dict, Any, Literal, List
+from typing import Optional, Dict, Any, List, Literal
 
 from src.core.logging_setup import configure_logging
 from src.core.settings import get_settings
@@ -13,7 +13,9 @@ from src.services.streaming.stream_variants import mcp_tool_to_openai_function
 settings = get_settings()
 DEFAULT_LOGGER = configure_logging(__name__)
 
-Target = Literal[*settings.AVAILABLE_MCP_SERVERS]
+
+Target = Literal[*settings.AVAILABLE_MCP_SERVERS]  # ty:ignore[invalid-type-form]
+# Despite the specification of `Literal` forbidding this, this shows the valid values when debugging, so we keep it as is.
 
 
 class McpManager:
@@ -40,7 +42,7 @@ class McpManager:
         self._server_urls = server_urls
         self._default_headers =  {t:default_headers or {} for t in self._servers}
 
-        self._clients: Optional[Dict[Target,McpClient]] = {t:None for t in self._servers}
+        self._clients: dict[Target, McpClient | None] = {t:None for t in self._servers}
 
         # Cache of MCP tool descriptors and OpenAI tool schemas
         self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {t:[] for t in self._servers}
@@ -51,13 +53,14 @@ class McpManager:
     def close(self):
         with self._lock:
             for s in self._servers:
-                if self._clients.get(s):
-                    self._clients.get(s).close()
+                client = self._clients.get(s)
+                if client:
+                    client.close()
                     self._clients.update({s: None})
 
     # ────────── internal clients ──────────
 
-    def _build_client(self, target: Target) -> McpClient:
+    def _build_client(self, target: Target):
         with self._lock:
             if not self._clients.get(target):
                 self._clients.update({
@@ -95,7 +98,7 @@ class McpManager:
                 # build OpenAI tool list (merged)
                 self._openai_tools_cache = []
                 for tgt in self._servers:
-                    for t in self._tools_by_target[tgt]:  # type: ignore[index]
+                    for t in self._tools_by_target[tgt]:
                         self._openai_tools_cache.append(mcp_tool_to_openai_function(t))
 
                 self.log.info(

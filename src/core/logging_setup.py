@@ -45,9 +45,10 @@ class ThreadFilter(ContextFilter):
         self.expected = thread_id or "-"
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.thread_id = getattr(record, "thread_id", self.thread_id) or "-"
+        thread_id = getattr(record, "thread_id", self.thread_id) or "-"
+        record.thread_id = thread_id
         record.user_id = getattr(record, "user_id", self.user_id) or "-"
-        return record.thread_id == self.expected
+        return thread_id == self.expected
 
 
 def _ensure_base_logging() -> None:

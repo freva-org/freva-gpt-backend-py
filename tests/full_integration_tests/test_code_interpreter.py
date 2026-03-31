@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-import os, importlib
+import os
+import importlib
 import random, string
-from typing import Iterable, Dict, Optional, Any
+from typing import Dict, Any
 
 from src.services.mcp.client import McpClient
 
@@ -19,7 +20,6 @@ logger = logging.getLogger(__name__)
 def _force_dev(monkeypatch):
     monkeypatch.setenv("FREVAGPT_DEV", "1")
     monkeypatch.setenv("FREVAGPT_CODE_SERVER_URL", "http://localhost:8051")
-    monkeypatch.setenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "20")
     import src.core.settings as settings
     importlib.reload(settings)
     yield
@@ -36,7 +36,7 @@ def mcp_client_CI():
     return client
 
 
-def _execute_code_via_mcp(mcp_c, code: str) -> Dict[str: Any]:
+def _execute_code_via_mcp(mcp_c, code) -> Dict[str, Any]:
     """
     Adapter layer to  MCP server. 
     The function must return a dict.

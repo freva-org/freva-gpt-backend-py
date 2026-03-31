@@ -33,7 +33,7 @@ import random
 import json
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import asyncio
 from contextlib import asynccontextmanager
@@ -60,10 +60,10 @@ class ActiveConversation:
     thread_id: str
     user_id: str
     state: ConversationState
-    mcp_manager: McpManager
+    mcp_manager: Optional[McpManager]
     tool_tasks: set[asyncio.Task] = field(default_factory=set)
     messages: List[StreamVariant] = field(default_factory=list)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 Registry: Dict[str, ActiveConversation] = {}
@@ -111,49 +111,67 @@ async def check_thread_exists(thread_id: str) -> bool:
 async def initialize_conversation(
     thread_id: str, 
     user_id: str,
-    messages: Optional[List[Dict[str, Any]]] = [],
-    auth: Optional[Authenticator] = None,
+    messages: List[StreamVariant],
+    auth: Authenticator,
     logger=None,
-) -> ActiveConversation:
+):
+    """
+    Initialize and register a new conversation in the registry with the given thread_id and user_id.
+    If a conversation with the same thread_id already exists, it will be updated to STREAMING state
+    and the last_activity timestamp will be refreshed, but the existing conversation will stay unchanged.
+    """
     log = logger or configure_logging(__name__, thread_id=thread_id, user_id=user_id)
     now = datetime.now(timezone.utc)      
-    if not await check_thread_exists(thread_id):
-        log.debug("Initializing the conversation and saving it to Registry...")
-
-        if auth:
-            mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
-        else:
-            log.warning(f"The conversation {thread_id} initialized without MCPManager! "
-                        "Please note that the MCP servers cannot be connected!")
-
-        conv = ActiveConversation(
-            thread_id=thread_id,
-            user_id=user_id,
-            state=ConversationState.STREAMING,
-            mcp_manager= mcp_mgr,
-            messages=messages,
-            last_activity=now,
-        )
-        # register conversation
-        Registry[thread_id] = conv
-        REGISTRY_SIZE.set(len(Registry))
-
-        # send tool calls to MCP server if there are Code variants present in messages
-        if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(_replay_code_history(thread_id))
-            await register_tool_task(thread_id, task)
-            task.add_done_callback(
-                # to be unregistered when done
-                lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
-            )
-
-    else:
-        log.debug("Conversation was found in the Registry. Starting streaming...")
-        async with registry_lock():
-            conv = Registry.get(thread_id)
+    # if auth:
+    mcp_mgr = await get_mcp_manager(authenticator=auth, thread_id=thread_id)
+    # else:
+    #     log.warning(f"The conversation {thread_id} initialized without MCPManager! "
+    #                 "Please note that the MCP servers cannot be connected!")
+    
+    # Precreate the conversation object to reduce time spent under lock
+    maybe_new_conv = ActiveConversation(
+        thread_id=thread_id,
+        user_id=user_id,
+        state=ConversationState.STREAMING,
+        mcp_manager= mcp_mgr,
+        messages=messages,
+        last_activity=now,
+    )
+    
+    async with RegistryLock:
+        conv = Registry.get(thread_id)
+        if conv:
+            # We posess the lock and know the conversation exists. 
+            # However, if at this point, it is already streaming, we hit a race condition where
+            # between the check at the start of the streamresponse endpoint and now, another request has initialized the same conversation and started streaming.
+            # To avoid conflicts, we will abort here immediately without updating the conversation, and the streamresponse endpoint will raise a 409.
+            if conv.state == ConversationState.STREAMING:
+                raise ValueError(f"Conversation with thread_id: {thread_id} already exists. This should not happen due to the check at the start of the streaming endpoint, so it indicates"
+                                "a race condition. Aborting to avoid conflicts; the streaming endpoint should raise a 409 Conflict response to the client.")
+            
+            log.debug("Conversation was found in the Registry. Starting streaming...")
+            
             conv.state = ConversationState.STREAMING
             conv.last_activity = datetime.now(timezone.utc)
+            return # Don't continue with initialization if conversation already exists; we just update the state and timestamp.
+    
+        # In order to not have any race conditions, we keep the lock until we've written to the registry
+    
+        # register conversation
+        Registry[thread_id] = maybe_new_conv
+        REGISTRY_SIZE.set(len(Registry))
+    
+    log.debug("Initialized the conversation and saved to Registry. ")
+
+    # send tool calls to MCP server if there are Code variants present in messages
+    if mcp_mgr is not None and any(isinstance(v, SVCode) for v in messages):
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(_replay_code_history(thread_id))
+        await register_tool_task(thread_id, task)
+        task.add_done_callback(
+            # to be unregistered when done
+            lambda t: asyncio.create_task(unregister_tool_task(thread_id, t)) 
+        )
         
 
 async def add_to_conversation(

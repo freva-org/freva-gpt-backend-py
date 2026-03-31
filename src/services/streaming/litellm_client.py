@@ -23,9 +23,7 @@ LITELLM_STREAM_RESPONSES = Counter(
 
 import os
 import json
-import time
-import asyncio
-from typing import Any, Dict, List, Tuple, Optional, Iterable, AsyncIterator
+from typing import Any, Dict, List, Optional, Iterable, AsyncIterator
 
 import httpx
 

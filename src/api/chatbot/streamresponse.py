@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Optional
+from typing import Optional, Generator
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 from starlette.responses import StreamingResponse
 
 from src.core.logging_setup import configure_logging
-from src.core.available_chatbots import default_chatbot
+from src.core.available_chatbots import default_chatbot, available_chatbots
 from src.core.prompting import get_entire_prompt
 
 from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
 
-from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVServerHint
+from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVDict, SVServerHint
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
@@ -31,12 +31,13 @@ router = APIRouter()
 CHECK_INTERVAL = 3  # seconds, the interval to wait before check STOP request
 
 
-def _sse_data(obj: dict):
+def _sse_data(obj: SVDict) -> Generator[bytes]:
     if obj.get("variant") == IMAGE:
         image_b64 = obj.get("content")
         id = obj.get("id")
         CHUNK_SIZE = 16_384  # 16 KiB per JSON line
 
+        # The fact that image_b64 will always be a string is implied by requiring the input to be a SVDict, which is only constructed from StreamVariants, which have strict types.
         for frag in chunks(image_b64, CHUNK_SIZE):
             payload = json.dumps({"variant":"Image", "content":frag, "id":id})
             yield f"{payload}\n".encode("utf-8")
@@ -98,6 +99,7 @@ async def streamresponse(
             - If the thread id is missing or empty.
             - If the user input is missing or empty.
             - If the vault URL header is missing or empty.
+            - If the specified chatbot model is not found in the available chatbots.
         HTTPException (503):
             - If the storage backend (e.g., MongoDB) connection fails.
         HTTPException (500):
@@ -112,14 +114,20 @@ async def streamresponse(
             detail="Thread-id not found. Please request a new thread-id and provide it in the query parameters, of type String."
             )
 
-    user_input = input or None
-    if user_input is None:
+    if input is None:
         raise HTTPException(
             status_code=422, 
             detail="Input not found. Please provide a non-empty input in the query parameters, of type String."
             )
 
     model_name = chatbot or default_chatbot()
+    available = available_chatbots()
+    if model_name not in available:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Chatbot model '{model_name}' not found. Please provide a valid model name from the available chatbots: {available}."
+        )
+
 
     user_name = Auth.username
     logger = configure_logging(__name__, thread_id=thread_id, user_id=user_name)
@@ -178,6 +186,9 @@ async def streamresponse(
             read_history=read_history,
             logger=logger,
         )
+    except ValueError as e:
+        logger.warning(f"ValueError during stream preparation; most likely a race condition: {e}", extra={"thread_id": thread_id, "user_id": user_name})
+        raise HTTPException(status_code=409, detail="Another stream with the same thread_id is already active. Please wait for the current stream to finish or use a different thread_id.")
     except Exception as e:
         msg = f"Stream preparation has failed: {e}"
         logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
@@ -198,7 +209,7 @@ async def streamresponse(
             async for variant in run_stream(
                 model=model_name,
                 thread_id=thread_id,
-                user_input=user_input,
+                user_input=input,
                 system_prompt=system_prompt,
                 logger=logger,
             ):

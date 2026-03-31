@@ -250,7 +250,7 @@ def patch_save_thread(monkeypatch):
 
 @pytest.fixture
 def patch_user_threads(monkeypatch):
-    async def fake_get_user_threads(self, user_id: str, limit: int = 20):
+    async def fake_get_user_threads(self, user_id: str, limit: int = 20, page:int = 0):
         # Return objects with attributes, matching what the route expects
         threads = [
             SimpleNamespace(

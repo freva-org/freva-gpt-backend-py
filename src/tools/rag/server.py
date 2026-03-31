@@ -7,11 +7,10 @@ from pymongo import MongoClient
 
 from fastmcp import FastMCP
 
-from src.tools.rag.helpers import *
+from src.tools.rag.helpers import get_new_or_changes_documents, postprocessing_query_result, add_vector_search_index_to_db, clear_embeddings_collection
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
 from src.tools.asgi_wrapper import wrap_asgi_app
-from src.tools.server_auth import jwt_verifier
 
 from src.core.logging_setup import configure_logging
 
@@ -19,8 +18,7 @@ logger = configure_logging(__name__, named_log="rag_server")
 
 LITE_LLM_ADDRESS: str = os.getenv("FREVAGPT_LITE_LLM_ADDRESS", "http://litellm:4000")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}  # for local testing
-mcp = FastMCP("rag_server", auth=None if _disable_auth else jwt_verifier)
+mcp = FastMCP("rag_server")
 
 # ── Config ───────────────────────────────────────────────────────────────────
 EMBEDDING_MODEL="ollama/mxbai-embed-large:latest"
@@ -42,8 +40,8 @@ MONGODB_URI_HDR = "mongodb-uri"
 mongo_uri_ctx: ContextVar[str | None] = ContextVar("mongo_uri_ctx", default=None)
 
 # Configure Streamable HTTP transport 
-logger.info("Starting RAG MCP server on %s:%s%s (auth=%s)",
-            HOST, PORT, PATH, "off" if _disable_auth else "on")
+logger.info("Starting RAG MCP server on %s:%s%s",
+            HOST, PORT, PATH)
 
 # Start the MCP server using Streamable HTTP transport
 app = wrap_asgi_app(

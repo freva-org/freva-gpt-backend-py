@@ -36,7 +36,7 @@ async def available_chatbots_endpoint() -> List[str]:
 
         return [c for c in chatbot_list if "embed" not in c]
     
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         raise HTTPException(
             status_code=500,
             detail="LiteLLM config file not found.",

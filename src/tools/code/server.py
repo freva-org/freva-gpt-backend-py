@@ -21,7 +21,6 @@ from fastmcp import FastMCP
 
 from src.core.logging_setup import configure_logging
 from src.tools.asgi_wrapper import wrap_asgi_app
-from src.tools.server_auth import jwt_verifier
 from src.tools.code.helpers import (
     sanitize_code, shutdown_kernel, should_restart_after
 )
@@ -33,8 +32,7 @@ from src.tools.code.safety_check import check_code_safety
 
 logger = configure_logging(__name__, named_log="code_server")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
-mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
+mcp = FastMCP("code-interpreter-server")
 
 
 # ── App ───────────────────────────────────────────────────────────────────
@@ -48,8 +46,8 @@ PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
 PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
 # Configure Streamable HTTP transport 
-logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
-            HOST, PORT, PATH, "off" if _disable_auth else "on")
+logger.info("Starting code-interpreter MCP server on %s:%s%s",
+            HOST, PORT, PATH)
 
 
 # Start the MCP server using Streamable HTTP transport
@@ -73,9 +71,9 @@ def code_interpreter(code: str) -> dict:
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
         
-    safe, violation = check_code_safety(code)
-    if safe:
-        logger.info(f"Code block is safe to execute..")
+    violation = check_code_safety(code)
+    if violation is None:
+        logger.info("Code block is safe to execute..")
         lock = get_sid_lock(sid) 
         # Allowing only one _execute_code() at a time per sid 
         with lock: 

@@ -9,7 +9,13 @@ from src.services.service_factory import (
     auth_dependency,
     get_thread_storage,
 )
-from src.services.streaming.stream_variants import StreamVariant, is_prompt, SVStreamEnd
+from src.services.streaming.stream_variants import (
+    StreamVariant,
+    is_prompt,
+    SVStreamEnd,
+    from_sv_to_json,
+    SVDict,
+)
 from src.services.streaming.stream_orchestrator import get_conversation_history
 from src.core.logging_setup import configure_logging
 
@@ -17,10 +23,10 @@ from src.core.logging_setup import configure_logging
 router = APIRouter()
 
 
-def _post_process(variants: List[StreamVariant]) -> List[StreamVariant]:
+def _post_process(variants: List[StreamVariant]) -> List[SVDict]:
     """Remove Prompt variants before returning, drop any StreamEnd except the final one, and drop 'unexpected manner' ones anywhere."""
     items = [item for item in variants if not is_prompt(item)]
-    cleaned: List[StreamVariant] = []
+    cleaned: List[SVDict] = []
     for i, v in enumerate(items):
         if isinstance(v, SVStreamEnd):
             is_last = i == len(items) - 1
@@ -28,7 +34,7 @@ def _post_process(variants: List[StreamVariant]) -> List[StreamVariant]:
                 "unexpected manner" in (getattr(v, "message", "") or "").lower()
             ):
                 continue
-        cleaned.append(v)
+        cleaned.append(from_sv_to_json(v))
     return cleaned
 
 
@@ -108,7 +114,7 @@ async def get_thread(
         )
         raise HTTPException(status_code=500, detail=f"Error reading thread file: {e}")
 
-    content = _post_process(messages)
+    content: list[SVDict] = _post_process(messages)
 
     logger.info(
         "Fetched thread content.",

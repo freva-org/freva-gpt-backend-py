@@ -30,7 +30,7 @@ class McpManager:
     def __init__(
         self,
         *,
-        servers: List, 
+        servers: List,
         server_urls: Dict[Target, str],
         default_headers: Optional[Dict[str, str]] = None,
         logger=None,
@@ -40,14 +40,16 @@ class McpManager:
 
         self._servers = servers
         self._server_urls = server_urls
-        self._default_headers =  {t:default_headers or {} for t in self._servers}
+        self._default_headers = {t: default_headers or {} for t in self._servers}
 
-        self._clients: dict[Target, McpClient | None] = {t:None for t in self._servers}
+        self._clients: dict[Target, McpClient | None] = {t: None for t in self._servers}
 
         # Cache of MCP tool descriptors and OpenAI tool schemas
-        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {t:[] for t in self._servers}
+        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {
+            t: [] for t in self._servers
+        }
         self._openai_tools_cache: Optional[List[Dict[str, Any]]] = None
-        
+
     # ────────── lifecycle ──────────
 
     def close(self):
@@ -63,18 +65,19 @@ class McpManager:
     def _build_client(self, target: Target):
         with self._lock:
             if not self._clients.get(target):
-                self._clients.update({
-                    target: McpClient(
-                        self._server_urls.get(target),
-                        default_headers=self._default_headers.get(target),
-                        logger=self.log,
-                    )
-                })
-           
+                self._clients.update(
+                    {
+                        target: McpClient(
+                            self._server_urls.get(target),
+                            default_headers=self._default_headers.get(target),
+                            logger=self.log,
+                        )
+                    }
+                )
 
     # ────────── initialization / discovery ──────────
 
-    def initialize(self, headers:Optional[dict]=None) -> None:
+    def initialize(self, headers: Optional[dict] = None) -> None:
         """
         Eagerly connect to MCP servers and discover tools so the LLM can be given
         the function schemas before first token is generated.
@@ -93,7 +96,9 @@ class McpManager:
                     try:
                         self._discover_tools(s)  # populates _tools_by_target[tgt]
                     except Exception as e:
-                        self.log.warning("MCP tool discovery failed for %s: %s", s, e, exc_info=True)
+                        self.log.warning(
+                            "MCP tool discovery failed for %s: %s", s, e, exc_info=True
+                        )
 
                 # build OpenAI tool list (merged)
                 self._openai_tools_cache = []
@@ -102,13 +107,21 @@ class McpManager:
                         self._openai_tools_cache.append(mcp_tool_to_openai_function(t))
 
                 self.log.info(
-                    f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} " + \
-                    " ".join([s+':' + str(len(self._tools_by_target[s])) for s in self._servers])
+                    f"MCP initialized. Tools discovered: total:{len(self._openai_tools_cache)} "
+                    + " ".join(
+                        [
+                            s + ":" + str(len(self._tools_by_target[s]))
+                            for s in self._servers
+                        ]
+                    )
                 )
         except Exception as e:
             # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-            self.log.warning("MCP manager initialization failed (tools may be unavailable): %s", e, exc_info=True)
-
+            self.log.warning(
+                "MCP manager initialization failed (tools may be unavailable): %s",
+                e,
+                exc_info=True,
+            )
 
     def _discover_tools(self, target: Target) -> None:
         """
@@ -133,7 +146,9 @@ class McpManager:
             name = tool.get("name") or tool.get("tool_name") or ""
             desc = tool.get("description") or ""
             schema = tool.get("input_schema") or tool.get("parameters") or {}
-            normalized.append({"name": name, "description": desc, "input_schema": schema})
+            normalized.append(
+                {"name": name, "description": desc, "input_schema": schema}
+            )
 
         with self._lock:
             self._tools_by_target[target] = normalized
@@ -176,19 +191,23 @@ class McpManager:
         *,
         name: str,
         arguments: Dict[str, Any],
-        extra_headers: Optional[Dict]=None,
+        extra_headers: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """
-        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS, 
+        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS,
         all the available servers are called as best-effort.
         """
         if target in self._servers:
-            return self._clients.get(target).call_tool(name=name, args=arguments, extra_headers=extra_headers)
-        
+            return self._clients.get(target).call_tool(
+                name=name, args=arguments, extra_headers=extra_headers
+            )
+
         # fallback routing: best-effort
         for tgt in self._servers:
             try:
-                return self._clients.get(tgt).call_tool(name=name, args=arguments, extra_headers=extra_headers)
+                return self._clients.get(tgt).call_tool(
+                    name=name, args=arguments, extra_headers=extra_headers
+                )
             except Exception as e:
                 self.log.debug("tool %s failed on %s: %s", name, tgt, e)
         raise RuntimeError(f"Tool invocation failed on all targets: {name}")
@@ -196,13 +215,20 @@ class McpManager:
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[str, str]:
+
+async def get_mcp_headers(
+    auth: Authenticator, cache: str, logger=None
+) -> Dict[str, str]:
     log = logger or DEFAULT_LOGGER
-    mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
-    
+    mongodb_uri = (
+        await get_mongodb_uri(auth.vault_url)
+        if not settings.DEV
+        else settings.MONGODB_URI_DEV
+    )
+
     headers = {
         "rag": {
-            "mongodb-uri":  mongodb_uri,
+            "mongodb-uri": mongodb_uri,
         },
         "code": {
             "working-dir": str(cache),

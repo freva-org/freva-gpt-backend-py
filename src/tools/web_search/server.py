@@ -15,11 +15,11 @@ mcp = FastMCP("web-search-server")
 
 
 # ── Config ───────────────────────────────────────────────────────────────────
-WEB_SEARCH_MODEL="gpt-4.1"
-ALLOWED_DOMAINS=[
+WEB_SEARCH_MODEL = "gpt-4.1"
+ALLOWED_DOMAINS = [
     "docs.dkrz.de",
     "docs.icon-model.org",
-    ]
+]
 
 MKEXP_PDF_URL = "https://gitlab.dkrz.de/esmenv/mkexp/-/raw/master/doc/mkexp.pdf"
 
@@ -30,16 +30,15 @@ PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
 # ─── App ────────────────────────────────────────────────────────────────────
 
-logger.info("Starting Web-Search MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+logger.info("Starting Web-Search MCP server on %s:%s%s", HOST, PORT, PATH)
 
 # Start the MCP server using Streamable HTTP transport
 app = make_header_gate(
     mcp.http_app(),
     ctx_list=[],
     header_name_list=[],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
 )
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -69,6 +68,7 @@ def should_attach_mkexp_pdf(query: str) -> bool:
         "reinitialization",
     ]
     return any(k in q for k in keywords)
+
 
 
 @mcp.tool()
@@ -109,20 +109,15 @@ def web_search(query: str) -> str:
 
 
     kwargs = {
-        "model": WEB_SEARCH_MODEL, 
+        "model": WEB_SEARCH_MODEL,
         "input": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
-        ], 
+        ],
         "stream": False,
         "tool_choice": "auto",
         "tools": [
-            {
-                "type": "web_search",
-                "filters": {
-                    "allowed_domains": ALLOWED_DOMAINS
-                }
-            }
+            {"type": "web_search", "filters": {"allowed_domains": ALLOWED_DOMAINS}}
         ],
         "include": ["web_search_call.action.sources"],
     }
@@ -134,7 +129,7 @@ def web_search(query: str) -> str:
         return resp.output_text
     except Exception as e:
         logger.warning("Web-search failed due to error: %s", e)
-        return 
+        return
 
 
 def debug():

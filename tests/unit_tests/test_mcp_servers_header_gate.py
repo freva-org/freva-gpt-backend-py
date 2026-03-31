@@ -1,6 +1,7 @@
 import pytest
 from contextvars import ContextVar
 
+
 @pytest.mark.asyncio
 async def test_header_gate_delete_triggers_cleanup_and_returns_204():
     # Import your make_header_gate from wherever it lives
@@ -9,6 +10,7 @@ async def test_header_gate_delete_triggers_cleanup_and_returns_204():
 
     # Dummy inner app that should NOT be called on DELETE
     inner_called = {"called": False}
+
     async def inner_app(scope, receive, send):
         inner_called["called"] = True
         await send({"type": "http.response.start", "status": 200, "headers": []})
@@ -16,6 +18,7 @@ async def test_header_gate_delete_triggers_cleanup_and_returns_204():
 
     # Capture cleanup callback calls
     cleanup_called = {"sid": None}
+
     def on_session_close(sid: str):
         cleanup_called["sid"] = sid
 
@@ -35,6 +38,7 @@ async def test_header_gate_delete_triggers_cleanup_and_returns_204():
         return {"type": "http.request", "body": b"", "more_body": False}
 
     sent = []
+
     async def send(message):
         sent.append(message)
 

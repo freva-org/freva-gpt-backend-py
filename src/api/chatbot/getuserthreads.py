@@ -3,10 +3,16 @@ from src.services.storage.mongodb_storage import ThreadStorage
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+)
 from src.core.logging_setup import configure_logging
 
 router = APIRouter()
+
 
 @router.get("/getuserthreads", dependencies=[AuthRequired])
 async def get_user_threads(
@@ -28,8 +34,8 @@ async def get_user_threads(
             The page number of results to return.
 
     Dependencies:
-        auth (Authenticator): Injected authentication object containing 
-            username and vault_url 
+        auth (Authenticator): Injected authentication object containing
+            username and vault_url
 
     Returns:
         List[Any]:
@@ -62,39 +68,48 @@ async def get_user_threads(
 
     if not auth.vault_url:
         raise HTTPException(
-            status_code=422, 
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String."
+            status_code=422,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
 
     try:
-        # Thread storage 
+        # Thread storage
         Storage: ThreadStorage = await get_thread_storage(vault_url=auth.vault_url)
     except Exception as e:
         logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
-        threads, total_num_threads = await Storage.list_recent_threads(auth.username, limit=num_threads, page=page)
+        threads, total_num_threads = await Storage.list_recent_threads(
+            auth.username, limit=num_threads, page=page
+        )
 
         logger.info(
             "Fetched recent threads",
-            extra={"user_id": auth.username, "thread_count": len(threads), "requested": num_threads},
+            extra={
+                "user_id": auth.username,
+                "thread_count": len(threads),
+                "requested": num_threads,
+            },
         )
 
         return [
             [
                 {
-                    "user_id": t.user_id, 
+                    "user_id": t.user_id,
                     "thread_id": t.thread_id,
                     "date": t.date,
                     "topic": t.topic,
                     "content": t.content,
                 }
                 for t in threads
-            ], 
-            total_num_threads
+            ],
+            total_num_threads,
         ]
     except Exception as e:
-        logger.warning("Failed to fetch user history from storage", extra={"error": str(e)})
-        raise HTTPException(status_code=500,
-                            detail="Failed to fetch user history from storage.")
+        logger.warning(
+            "Failed to fetch user history from storage", extra={"error": str(e)}
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch user history from storage."
+        )

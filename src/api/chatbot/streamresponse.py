@@ -11,15 +11,29 @@ from src.core.logging_setup import configure_logging
 from src.core.available_chatbots import default_chatbot, available_chatbots
 from src.core.prompting import get_entire_prompt
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+)
 
-from src.services.streaming.stream_variants import SVStreamEnd, from_sv_to_json, IMAGE, SVDict, SVServerHint
+from src.services.streaming.stream_variants import (
+    SVStreamEnd,
+    from_sv_to_json,
+    IMAGE,
+    SVDict,
+    SVServerHint,
+)
 from src.services.streaming.stream_orchestrator import run_stream, prepare_for_stream
 from src.services.streaming.helpers import chunks
 from src.services.streaming.active_conversations import (
-    ConversationState, get_conversation_state, 
-    end_and_save_conversation, add_to_conversation,
-    check_thread_exists, cancel_tool_tasks
+    ConversationState,
+    get_conversation_state,
+    end_and_save_conversation,
+    add_to_conversation,
+    check_thread_exists,
+    cancel_tool_tasks,
 )
 
 router = APIRouter()
@@ -35,12 +49,11 @@ def _sse_data(obj: SVDict) -> Generator[bytes]:
 
         # The fact that image_b64 will always be a string is implied by requiring the input to be a SVDict, which is only constructed from StreamVariants, which have strict types.
         for frag in chunks(image_b64, CHUNK_SIZE):
-            payload = json.dumps({"variant":"Image", "content":frag, "id":id})
+            payload = json.dumps({"variant": "Image", "content": frag, "id": id})
             yield f"{payload}\n".encode("utf-8")
     else:
         payload = json.dumps(obj)
         yield f"{payload}\n".encode("utf-8")
-
 
 
 @router.get("/streamresponse", dependencies=[AuthRequired])
@@ -54,7 +67,7 @@ async def streamresponse(
     Stream Chatbot Response.
 
     Streams a chatbot response for a given user input using Server-Sent
-    Events (NDJSON format). Acts as a HTTP wrapper delegating the actual 
+    Events (NDJSON format). Acts as a HTTP wrapper delegating the actual
     orchestration and model execution to the streaming backend.
     Requires a valid authenticated user and vault-url.
 
@@ -77,10 +90,10 @@ async def streamresponse(
         chatbot (Optional[str]):
             The model name to use for the response. If not provided,
             the default chatbot model is selected.
-    
+
     Dependencies:
-        Auth (Authenticator): Injected authentication object containing 
-            username and vault_url 
+        Auth (Authenticator): Injected authentication object containing
+            username and vault_url
 
     Returns:
         StreamingResponse:
@@ -112,18 +125,17 @@ async def streamresponse(
 
     if input is None:
         raise HTTPException(
-            status_code=422, 
-            detail="Input not found. Please provide a non-empty input in the query parameters, of type String."
-            )
+            status_code=422,
+            detail="Input not found. Please provide a non-empty input in the query parameters, of type String.",
+        )
 
     model_name = chatbot or default_chatbot()
     available = available_chatbots()
     if model_name not in available:
         raise HTTPException(
             status_code=422,
-            detail=f"Chatbot model '{model_name}' not found. Please provide a valid model name from the available chatbots: {available}."
+            detail=f"Chatbot model '{model_name}' not found. Please provide a valid model name from the available chatbots: {available}.",
         )
-
 
     user_name = Auth.username
     logger = configure_logging(__name__, thread_id=thread_id, user_id=user_name)
@@ -133,12 +145,17 @@ async def streamresponse(
             status_code=422,
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
-    
+
     try:
         # Get thread storage
-        Storage = await get_thread_storage(vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id)
+        Storage = await get_thread_storage(
+            vault_url=Auth.vault_url, user_name=user_name, thread_id=thread_id
+        )
     except Exception as e:
-        logger.exception("Failed to connect to MongoDB", extra={"thread_id": thread_id, "user_id": user_name, "error": str(e)})
+        logger.exception(
+            "Failed to connect to MongoDB",
+            extra={"thread_id": thread_id, "user_id": user_name, "error": str(e)},
+        )
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Check if thread-id exists in DB
@@ -174,7 +191,7 @@ async def streamresponse(
 
     try:
         await prepare_for_stream(
-            thread_id=thread_id, 
+            thread_id=thread_id,
             user_id=user_name,
             Auth=Auth,
             Storage=Storage,
@@ -182,8 +199,14 @@ async def streamresponse(
             logger=logger,
         )
     except ValueError as e:
-        logger.warning(f"ValueError during stream preparation; most likely a race condition: {e}", extra={"thread_id": thread_id, "user_id": user_name})
-        raise HTTPException(status_code=409, detail="Another stream with the same thread_id is already active. Please wait for the current stream to finish or use a different thread_id.")
+        logger.warning(
+            f"ValueError during stream preparation; most likely a race condition: {e}",
+            extra={"thread_id": thread_id, "user_id": user_name},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="Another stream with the same thread_id is already active. Please wait for the current stream to finish or use a different thread_id.",
+        )
     except Exception as e:
         msg = f"Stream preparation has failed: {e}"
         logger.exception(msg, extra={"thread_id": thread_id, "user_id": user_name})
@@ -211,7 +234,7 @@ async def streamresponse(
 
             now = time.monotonic()
             # Check if there is STOP request from
-            if now-last_check > CHECK_INTERVAL:
+            if now - last_check > CHECK_INTERVAL:
                 last_check = now
                 state = await get_conversation_state(thread_id)
                 if state == ConversationState.STOPPING:
@@ -220,17 +243,23 @@ async def streamresponse(
                             yield data
                     await cancel_tool_tasks(thread_id)
                     await end_and_save_conversation(thread_id, Storage)
-                    logger.info("Stopped streaming after client request", extra={"thread_id": thread_id, "user_id": user_name})
+                    logger.info(
+                        "Stopped streaming after client request",
+                        extra={"thread_id": thread_id, "user_id": user_name},
+                    )
                     return
-                
+
         await end_and_save_conversation(thread_id, Storage)
-        logger.info("Completed streaming and saved conversation", extra={"thread_id": thread_id, "user_id": user_name})
+        logger.info(
+            "Completed streaming and saved conversation",
+            extra={"thread_id": thread_id, "user_id": user_name},
+        )
 
     return StreamingResponse(
         event_stream(),
         media_type="application/x-ndjson",
         headers={
             "X-Accel-Buffering": "no",
-            "Cache-Control": "no-cache, no-transform", 
-            },
+            "Cache-Control": "no-cache, no-transform",
+        },
     )

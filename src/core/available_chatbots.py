@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, List, Optional
 
-import yaml  
+import yaml
 
 """
 Model catalog loader for LiteLLM config (YAML-based).
@@ -39,7 +39,9 @@ def _as_str_or_none(value: Any) -> Optional[str]:
     if isinstance(value, (int, float)):
         s = str(value).strip()
         if s:
-            logger.warning("Coercing non-string model_name=%r to string '%s'.", value, s)
+            logger.warning(
+                "Coercing non-string model_name=%r to string '%s'.", value, s
+            )
             return s
     return None
 
@@ -57,7 +59,9 @@ def _collect_model_names(node: Any) -> list[str]:
             if name:
                 sink.append(name)
             else:
-                logger.warning("Ignoring non-string/empty model_name: %r", node.get("model_name"))
+                logger.warning(
+                    "Ignoring non-string/empty model_name: %r", node.get("model_name")
+                )
 
         # Recurse into all values to catch nested occurrences.
         for v in node.values():
@@ -67,8 +71,9 @@ def _collect_model_names(node: Any) -> list[str]:
         for item in node:
             sink.extend(_collect_model_names(item))
     # Other scalar types are ignored.
-    
+
     return sink
+
 
 def _discover_config_path() -> Path:
     """
@@ -115,7 +120,7 @@ def _load_yaml(path: Path) -> Any:
         return yaml.safe_load(text)
     except Exception as e:
         logger.exception(f"Failed to parse YAML at {path}: {e}")
-        raise 
+        raise
 
 
 @lru_cache(maxsize=1)
@@ -134,7 +139,7 @@ def available_chatbots() -> List[str]:
     if not filtered:
         logger.error(f"No available chatbots found in LiteLLM file at {path}.")
         raise ValueError(f"No available chatbots found in LiteLLM file at {path}.")
-    
+
     logger.info("Available chatbots (%d): %s", len(filtered), filtered)
     return filtered
 
@@ -150,6 +155,7 @@ def default_chatbot() -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper predicates
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def model_is_reasoning(model: str) -> bool:
     """
@@ -169,7 +175,13 @@ def model_is_ollama(model: str) -> bool:
     """
     True for names starting with 'mistral', 'ministral', 'qwen', 'llama' or 'deepseek'.
     """
-    ollama_list = ('mistral', 'ministral', 'qwen', 'llama', 'deepseek',)
+    ollama_list = (
+        "mistral",
+        "ministral",
+        "qwen",
+        "llama",
+        "deepseek",
+    )
     return model.startswith(ollama_list)
 
 
@@ -191,7 +203,7 @@ def refresh_cache() -> None:
     """
     Clear memoized results (useful in tests or after config changes).
     """
-    available_chatbots.cache_clear() 
+    available_chatbots.cache_clear()
 
 
 __all__ = [

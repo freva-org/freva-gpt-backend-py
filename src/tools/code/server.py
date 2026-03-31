@@ -45,9 +45,8 @@ HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
 PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
 PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
-# Configure Streamable HTTP transport 
-logger.info("Starting code-interpreter MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+# Configure Streamable HTTP transport
+logger.info("Starting code-interpreter MCP server on %s:%s%s", HOST, PORT, PATH)
 
 
 # Start the MCP server using Streamable HTTP transport
@@ -55,9 +54,10 @@ app = wrap_asgi_app(
     mcp.http_app(),
     ctx_list=[cwd_ctx],
     header_name_list=[CODE_INTERPRETER_CWD_HDR],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
 )
+
 
 # ── MCP tool ───────────────────────────────────────────────────────────────────
 
@@ -70,22 +70,27 @@ def code_interpreter(code: str) -> dict:
     sid = current_sid()
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
-        
+
+    logger.debug(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
+    logger.debug(f"Input code:'{code}'")
+
     violation = check_code_safety(code)
     if violation is None:
         logger.info("Code block is safe to execute..")
-        lock = get_sid_lock(sid) 
-        # Allowing only one _execute_code() at a time per sid 
-        with lock: 
+        lock = get_sid_lock(sid)
+        # Allowing only one _execute_code() at a time per sid
+        with lock:
             sanitized_code = sanitize_code(code)
             MCP_CODE_IN_PROGRESS.inc()
             t0 = time.perf_counter()
             try:
-                out = execute_code(sid, sanitized_code) 
+                out = execute_code(sid, sanitized_code)
                 if should_restart_after(sanitized_code):
                     # Check if exit() / quit() is present in the code block
-                    # If so, discard kernel 
-                    logger.warning("exit()/quit() detected; discarding kernel for sid=%s", sid)
+                    # If so, discard kernel
+                    logger.warning(
+                        "exit()/quit() detected; discarding kernel for sid=%s", sid
+                    )
                     km = KERNEL_REGISTRY.get(sid)
                     if km is not None:
                         shutdown_kernel(km)
@@ -115,8 +120,10 @@ def code_interpreter(code: str) -> dict:
                 MCP_CODE_EXEC_SECONDS.observe(time.perf_counter() - t0)
                 MCP_CODE_IN_PROGRESS.dec()
     else:
-        msg = f"Code execution blocked by safety rule '{violation.rule_id}': " \
+        msg = (
+            f"Code execution blocked by safety rule '{violation.rule_id}': "
             f"{violation.description} (matched: {violation.match!r})"
+        )
         logger.warning(msg)
         return {
             "stdout": "",

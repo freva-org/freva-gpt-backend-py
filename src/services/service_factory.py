@@ -20,10 +20,12 @@ settings = get_settings()
 
 CACHE_ROOT = Path("./cache")
 
+
 def get_authenticator() -> type[Authenticator]:
     if settings.DEV:
         return DevAuthenticator
     return FullAuthenticator
+
 
 async def auth_dependency(
     request: Request,
@@ -38,12 +40,13 @@ async def auth_dependency(
     auth = await AuthCls.build(request)
     return auth
 
+
 # Convenience alias for router-wide protection:
 AuthRequired = Depends(auth_dependency)
 
 
 async def get_thread_storage(
-    vault_url: Optional[str]= None,
+    vault_url: Optional[str] = None,
     user_name: Optional[str] = None,
     thread_id: Optional[str] = None,
 ) -> ThreadStorage:
@@ -52,7 +55,9 @@ async def get_thread_storage(
     return await ThreadStorage.create(vault_url=vault_url)
 
 
-async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpManager | None:
+async def get_mcp_manager(
+    authenticator: Authenticator, thread_id: str
+) -> McpManager | None:
     """
     Build and eagerly initialize a manager so tools are ready for prompting.
     """
@@ -67,7 +72,9 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
         "thread-id": thread_id,
         }
 
-    logger = configure_logging(__name__, thread_id=thread_id, user_id=authenticator.username)
+    logger = configure_logging(
+        __name__, thread_id=thread_id, user_id=authenticator.username
+    )
 
     mgr = McpManager(
         servers=settings.AVAILABLE_MCP_SERVERS,
@@ -86,5 +93,7 @@ async def get_mcp_manager(authenticator: Authenticator, thread_id: str) -> McpMa
         return mgr
     except Exception as e:
         # Non-fatal: we can still run without tools; LLM just won't emit tool_calls.
-        logger.warning("MCP manager initialization failed (tools may be unavailable): %s", e)
+        logger.warning(
+            "MCP manager initialization failed (tools may be unavailable): %s", e
+        )
         return None

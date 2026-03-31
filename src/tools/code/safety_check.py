@@ -24,7 +24,6 @@ SAFETY_RULES = [
         "Use of compile() which can be combined with exec/eval.",
         re.compile(r"\bcompile\s*\("),
     ),
-
     # --- Imports / dynamic import ---
     (
         "import_os",
@@ -46,7 +45,6 @@ SAFETY_RULES = [
         "Use of importlib.import_module (dynamic import).",
         re.compile(r"\bimportlib\s*\.\s*import_module\s*\("),
     ),
-
     # --- Process / system ---
     (
         "os_system",
@@ -58,14 +56,12 @@ SAFETY_RULES = [
         "Use of subprocess (process spawning).",
         re.compile(r"\bsubprocess\b"),
     ),
-
     # --- Network ---
     (
         "socket",
         "Use of socket (network access).",
         re.compile(r"\bsocket\b"),
     ),
-
     # --- Potentially risky modules ---
     (
         "ctypes",
@@ -82,7 +78,6 @@ SAFETY_RULES = [
         "Use of shutil (filesystem manipulation).",
         re.compile(r"\bshutil\b"),
     ),
-
     # --- Notebook escapes ---
     (
         "get_ipython",

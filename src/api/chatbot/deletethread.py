@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from src.services.service_factory import Authenticator, AuthRequired, auth_dependency, get_thread_storage
+from src.services.service_factory import (
+    Authenticator,
+    AuthRequired,
+    auth_dependency,
+    get_thread_storage,
+)
 from src.core.logging_setup import configure_logging
 
 router = APIRouter()
@@ -25,7 +30,7 @@ async def delete_thread(
             as a query parameter.
 
     Dependencies:
-        auth (Authenticator): Injected authentication object containing 
+        auth (Authenticator): Injected authentication object containing
             username and vault_url
 
     Returns:
@@ -49,19 +54,24 @@ async def delete_thread(
 
     if not auth.vault_url:
         raise HTTPException(
-            status_code=422, 
-            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.")
+            status_code=422,
+            detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
+        )
 
     Storage = await get_thread_storage(vault_url=auth.vault_url)
 
     try:
         await Storage.delete_thread(thread_id)
-        logger.info("Deleted thread from storage", 
-                    extra={"thread_id": thread_id, "user_id": auth.username})
+        logger.info(
+            "Deleted thread from storage",
+            extra={"thread_id": thread_id, "user_id": auth.username},
+        )
         return {"Successfully removed thread from storage."}
     except Exception as e:
-        logger.warning("Failed to delete thread from storage", 
-                       extra={"thread_id": thread_id, "user_id": auth.username, "error": str(e)})
+        logger.warning(
+            "Failed to delete thread from storage",
+            extra={"thread_id": thread_id, "user_id": auth.username, "error": str(e)},
+        )
         raise HTTPException(
-            status_code=500, 
-            detail="Failed to remove thread from storage.")
+            status_code=500, detail="Failed to remove thread from storage."
+        )

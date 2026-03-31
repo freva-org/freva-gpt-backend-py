@@ -7,17 +7,15 @@ router = APIRouter()
 
 @router.get("/ping")
 def ping():
-    """ Simple liveness probe """
+    """Simple liveness probe"""
     return {"status": "ok"}
 
 
 @router.get("/help")
-def help(
-    endpoint: Optional[str | None] = None
-):
+def help(endpoint: Optional[str | None] = None):
     """
-    Retrieve help information for available API endpoints. 
-    It targets users, providing help on how to use features. 
+    Retrieve help information for available API endpoints.
+    It targets users, providing help on how to use features.
 
     If no endpoint is specified, this function returns a dictionary
     containing descriptions of all supported endpoints.
@@ -42,18 +40,18 @@ def help(
     """
 
     help_dict: Dict[str, str] = {
-        "deletethread": "Delete a conversation permanently. "\
-            "Once deleted, the thread and its messages cannot be recovered.",
-        "editthread": "Create a new conversation by branching off from a "\
-            "point in an existing thread. This allows you to explore a "\
-            "different direction without losing the original conversation.",
-        "searchthreads": "Search your conversations by keywords to quickly "\
-            "find specific topics.",
-        "setthreadtopic": "Rename a conversation. This helps you organize "\
-            "and quickly identify your threads later.",
-        "userfeedback": "Give a thumbs up or thumbs down to rate FrevaGPT's "\
-            "response. You can update or remove your feedback later. Your "\
-            "feedback helps us improve accuracy and usefulness over time.",
+        "deletethread": "Delete a conversation permanently. "
+        "Once deleted, the thread and its messages cannot be recovered.",
+        "editthread": "Create a new conversation by branching off from a "
+        "point in an existing thread. This allows you to explore a "
+        "different direction without losing the original conversation.",
+        "searchthreads": "Search your conversations by keywords to quickly "
+        "find specific topics.",
+        "setthreadtopic": "Rename a conversation. This helps you organize "
+        "and quickly identify your threads later.",
+        "userfeedback": "Give a thumbs up or thumbs down to rate FrevaGPT's "
+        "response. You can update or remove your feedback later. Your "
+        "feedback helps us improve accuracy and usefulness over time.",
     }
 
     if not endpoint:
@@ -64,6 +62,5 @@ def help(
         else:
             raise HTTPException(
                 status_code=422,
-                detail="Help for the requested endpoint not found. " \
-                "Please try another."
+                detail="Help for the requested endpoint not found. Please try another.",
             )

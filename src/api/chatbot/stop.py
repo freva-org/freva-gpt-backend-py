@@ -10,8 +10,10 @@ router = APIRouter()
 
 @router.get("/stop", dependencies=[AuthRequired])
 async def stop_get(
-    thread_id: str | None = Query(default=None, description="Thread to stop (optional)")
-):  
+    thread_id: str | None = Query(
+        default=None, description="Thread to stop (optional)"
+    ),
+):
     """
     Stop Active Conversation Streaming.
 
@@ -51,4 +53,6 @@ async def stop_get(
     if ok:
         return {"Conversation stopped."}
     else:
-        raise HTTPException(status_code=404, detail="Conversation with given thread-id not found.")
+        raise HTTPException(
+            status_code=404, detail="Conversation with given thread-id not found."
+        )

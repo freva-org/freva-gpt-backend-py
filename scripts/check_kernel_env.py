@@ -1,6 +1,7 @@
 from __future__ import annotations
 import sys
 import pathlib
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import os
@@ -15,21 +16,31 @@ freva_env_var = {"EVALUATION_SYSTEM_CONFIG_FILE": freva_config_path}
 os.environ["EVALUATION_SYSTEM_CONFIG_FILE"] = freva_config_path
 
 _KERNEL_REGISTRY: dict[str, KernelManager] = {}
-    
+
 # ── Execution helpers ─────────────────────────────────────────────────────────
 
-def _get_or_start_kernel(sid: str, session_env: dict[str, str] | None = None) -> KernelManager:
+
+def _get_or_start_kernel(
+    sid: str, session_env: dict[str, str] | None = None
+) -> KernelManager:
     km = _KERNEL_REGISTRY.get(sid)
     if km is None:
-        # We preserve the env variables set in Dockerfile and add freva-config-path 
+        # We preserve the env variables set in Dockerfile and add freva-config-path
         env = os.environ.copy()
         if session_env:
             env.update({k: str(v) for k, v in session_env.items()})
         km = KernelManager()
-        km.kernel_cmd = [sys.executable, "-m", "ipykernel", "-f", "{connection_file}"]  # Otherwise "No such kernel named python3"
+        km.kernel_cmd = [
+            sys.executable,
+            "-m",
+            "ipykernel",
+            "-f",
+            "{connection_file}",
+        ]  # Otherwise "No such kernel named python3"
         km.start_kernel(env=env)
         _KERNEL_REGISTRY[sid] = km
     return km
+
 
 def show_kernel_env(km: KernelManager, keys: list[str] | None = None):
     """Ask the kernel to print its environment (optionally filtered)."""
@@ -41,7 +52,9 @@ def show_kernel_env(km: KernelManager, keys: list[str] | None = None):
         else:
             expr = "dict(list(os.environ.items())[:20])"  # limit output
         code = f"import os, json; print(json.dumps({expr}))"
-        msg_id = kc.execute(code, store_history=False, allow_stdin=False, stop_on_error=True)
+        msg_id = kc.execute(
+            code, store_history=False, allow_stdin=False, stop_on_error=True
+        )
         kc.get_shell_msg(timeout=5)
         while True:
             msg = kc.get_iopub_msg(timeout=5)
@@ -53,21 +66,33 @@ def show_kernel_env(km: KernelManager, keys: list[str] | None = None):
                     return data
                 except json.JSONDecodeError:
                     print(text)
-            if msg["header"]["msg_type"] == "status" and msg["content"]["execution_state"] == "idle":
+            if (
+                msg["header"]["msg_type"] == "status"
+                and msg["content"]["execution_state"] == "idle"
+            ):
                 break
     finally:
         kc.stop_channels()
+
 
 def _run_cell(sid: str, code: str) -> dict:
     km = _get_or_start_kernel(sid, session_env=freva_env_var)
     kc = km.client()
     kc.start_channels()
     try:
-        msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
-        stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
-        # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
+        msg_id = kc.execute(
+            code, store_history=True, allow_stdin=False, stop_on_error=False
+        )
+        stdout_parts, stderr_parts, display_data, result_repr, error = (
+            [],
+            [],
+            [],
+            None,
+            None,
+        )
+        # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data".
         # For these, we keep only the last updated version.
-        display_data_dict = {} 
+        display_data_dict = {}
 
         # Since Jupyter kernel runs asynchronously, it streams outputs, errors, and state messages while it executes the code.
         # We loop to collect them in real time until the status is "idle".
@@ -82,18 +107,30 @@ def _run_cell(sid: str, code: str) -> dict:
             if msg_type == "status" and msg["content"]["execution_state"] == "idle":
                 break
             elif msg_type == "stream":
-                (stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts).append(msg["content"]["text"])
-            elif msg_type in ("display_data", "update_display_data"): # Jupyter also returns rich outputs (image/png, text/html, etc.)
+                (
+                    stdout_parts if msg["content"]["name"] == "stdout" else stderr_parts
+                ).append(msg["content"]["text"])
+            elif msg_type in (
+                "display_data",
+                "update_display_data",
+            ):  # Jupyter also returns rich outputs (image/png, text/html, etc.)
                 display_id = msg["content"].get("transient", {}).get("display_id", "")
-                if display_id: 
-                    display_data_dict.update({display_id: msg["content"].get("data", {})})
-                else: 
+                if display_id:
+                    display_data_dict.update(
+                        {display_id: msg["content"].get("data", {})}
+                    )
+                else:
                     display_data.append(msg["content"].get("data", {}))
             elif msg_type == "execute_result":
                 result_repr = msg["content"].get("data", {}).get("text/plain")
-            elif msg_type == "error":  # Present only if an exception occurred. We record non-exception in stderr
+            elif (
+                msg_type == "error"
+            ):  # Present only if an exception occurred. We record non-exception in stderr
                 tb = "\n".join(msg["content"].get("traceback", []))
-                error = tb or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+                error = (
+                    tb
+                    or f"{msg['content'].get('ename')}: {msg['content'].get('evalue')}"
+                )
 
         # If we got any updated display in dict, we append them to the list.
         # Here, we are sending a list of unique output
@@ -104,7 +141,7 @@ def _run_cell(sid: str, code: str) -> dict:
             "stdout": "".join(stdout_parts),
             "stderr": "".join(stderr_parts),
             "result_repr": result_repr if result_repr else "",
-            "display_data": display_data, 
+            "display_data": display_data,
             "error": error if error else "",
         }
     finally:

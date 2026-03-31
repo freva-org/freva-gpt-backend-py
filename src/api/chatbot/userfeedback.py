@@ -9,7 +9,11 @@ from src.services.service_factory import (
     get_thread_storage,
     ThreadStorage,
 )
-from src.services.streaming.active_conversations import save_feedback_to_registry
+from src.services.streaming.active_conversations import (
+    save_feedback_to_registry,
+    check_thread_exists,
+)
+from src.core.logging_setup import configure_logging
 
 router = APIRouter()
 
@@ -36,7 +40,7 @@ async def user_feedback(
             Must correspond to an existing stored thread.
 
         feedback_index (int):
-            Zero-based index of the message within feedback messages (Code
+            Zero-based index of the message within feedback variants (Code
             and Assistant) where feedback should be added or removed.
             Must be within the bounds of the item list in the thread.
 
@@ -86,6 +90,8 @@ async def user_feedback(
             detail="Vault URL not found. Please provide a non-empty vault URL in the headers, of type String.",
         )
 
+    logger = configure_logging(__name__, thread_id=thread_id, user_id=auth.username)
+
     try:
         # Thread storage
         Storage = await get_thread_storage(vault_url=auth.vault_url)
@@ -96,27 +102,29 @@ async def user_feedback(
     try:
         content_json = await Storage.read_thread(thread_id=thread_id)
     except FileNotFoundError:
+        logger.exception(f"Thread not found: {thread_id}")
         raise HTTPException(status_code=404, detail="Thread not found")
     except Exception:
+        logger.exception(f"Error reading thread file: {thread_id}")
         raise HTTPException(status_code=500, detail="Error reading thread file.")
+
+    feedback_variants = ["Assistant", "Code"]
 
     # Count the number of feedback messages (Code and Assistant) and check index within bounds
     feedback_message_count = sum(
-        1
-        for msg in content_json
-        if msg.get("variant") == "Assistant" or msg.get("variant") == "Code"
+        1 for msg in content_json if msg.get("variant") in feedback_variants
     )
     if feedback_index < 0 or feedback_index >= feedback_message_count:
         raise HTTPException(
             status_code=422,
-            detail="feedback_index outside feedback message range! Please review query parameters!",
+            detail="feedback_index outside feedback variant range! Please review query parameters!",
         )
 
     # Find the position of the Nth feedback message
     feedback_msg_seen = 0
     feedback_at_thread_index = None
     for i, msg in enumerate(content_json):
-        if msg.get("variant") == "Assistant" or msg.get("variant") == "Code":
+        if msg.get("variant") in feedback_variants:
             if feedback_msg_seen == feedback_index:
                 feedback_at_thread_index = i
                 break
@@ -137,14 +145,17 @@ async def user_feedback(
                 feedback_at_thread_index,
                 feedback,
             )
+            logger.info(f"Successfully saved user feedback at index {feedback_at_thread_index}: {thread_id}")
             return {"Successfully saved user feedback."}
         except Exception:
+            logger.exception(f"Failed to save user feedback at index {feedback_at_thread_index}: {thread_id}")
             raise HTTPException(
                 status_code=500, detail=f"Failed to save user feedback: {thread_id}"
             )
     else:
         # TODO: delete feedback when user deletes thread?
         if "feedback" not in content_json[feedback_at_thread_index].keys():
+            logger.exception(f"Feedback not found at thread index {feedback_at_thread_index}: {thread_id}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Feedback not found at thread index {feedback_at_thread_index}: {thread_id}",
@@ -157,10 +168,12 @@ async def user_feedback(
                 content_json,
                 feedback_at_thread_index,
             )
+            logger.info(f"Successfully removed user feedback at index {feedback_at_thread_index}: {thread_id}")
             return {"Successfully removed user feedback."}
         except Exception:
+            logger.exception(f"Failed to delete user feedback: {thread_id}")
             raise HTTPException(
-                status_code=500, detail=f"Failed to delete user feedback: {thread_id}"
+                status_code=500, detail=f"Failed to delete user feedback at index {feedback_at_thread_index}: {thread_id}"
             )
 
 
@@ -169,7 +182,8 @@ async def save_feedback(
 ):
     try:
         await storage.save_feedback(thread_id, user_id, content, f_ind, feedback)
-        await save_feedback_to_registry(thread_id, f_ind, feedback)
+        if await check_thread_exists(thread_id):
+            await save_feedback_to_registry(thread_id, f_ind, feedback)
     except:
         raise
 

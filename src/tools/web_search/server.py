@@ -14,11 +14,11 @@ OPENAI_API_KEY: str = os.getenv("FREVAGPT_OPENAI_API_KEY")
 mcp = FastMCP("web-search-server")
 
 # ── Config ───────────────────────────────────────────────────────────────────
-WEB_SEARCH_MODEL="gpt-4.1"
-ALLOWED_DOMAINS=[
+WEB_SEARCH_MODEL = "gpt-4.1"
+ALLOWED_DOMAINS = [
     "docs.dkrz.de",
     "docs.icon-model.org",
-    ]
+]
 
 HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
 PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8052"))
@@ -26,19 +26,19 @@ PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
 # ─── App ────────────────────────────────────────────────────────────────────
 
-logger.info("Starting Web-Search MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+logger.info("Starting Web-Search MCP server on %s:%s%s", HOST, PORT, PATH)
 
 # Start the MCP server using Streamable HTTP transport
 app = make_header_gate(
     mcp.http_app(),
     ctx_list=[],
     header_name_list=[],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
 )
 
 client = OpenAI(api_key=OPENAI_API_KEY)
+
 
 @mcp.tool()
 def web_search(query: str) -> str:
@@ -49,31 +49,28 @@ def web_search(query: str) -> str:
     Returns:
         str: Relevant context extracted from web-page.
     """
-    logger.info("Searching for DKRZ/HPC- or ICON-related context in documentation "\
-                f"for query: {query}")
+    logger.info(
+        "Searching for DKRZ/HPC- or ICON-related context in documentation "
+        f"for query: {query}"
+    )
     prompt = (
-        "You are a web-search agent that can search documentations for ICON model "\
-        "and DKRZ/HPC. Use the documentation websites for searching and creating "\
-        "answers. Make sure the information provided is accurate and up-to-date. "\
-        "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
-        "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
-        "Use SEARCHTEAM 1 and 2 to find relevant information. Only answer questions "\
-        "if claims can be supported by web citations. Include inline citations for "\
+        "You are a web-search agent that can search documentations for ICON model "
+        "and DKRZ/HPC. Use the documentation websites for searching and creating "
+        "answers. Make sure the information provided is accurate and up-to-date. "
+        "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "
+        "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "
+        "Use SEARCHTEAM 1 and 2 to find relevant information. Only answer questions "
+        "if claims can be supported by web citations. Include inline citations for "
         f"URLs found in the web search results.\n\n User query:\n{(query or '')}"
     )
 
     kwargs = {
-        "model": WEB_SEARCH_MODEL, 
-        "input": [{"role": "user", "content": prompt}], 
+        "model": WEB_SEARCH_MODEL,
+        "input": [{"role": "user", "content": prompt}],
         "stream": False,
         "tool_choice": "auto",
         "tools": [
-            {
-                "type": "web_search",
-                "filters": {
-                    "allowed_domains": ALLOWED_DOMAINS
-                }
-            }
+            {"type": "web_search", "filters": {"allowed_domains": ALLOWED_DOMAINS}}
         ],
         "include": ["web_search_call.action.sources"],
     }
@@ -85,7 +82,7 @@ def web_search(query: str) -> str:
         return resp.output_text
     except Exception as e:
         logger.warning("Web-search failed due to error: %s", e)
-        return 
+        return
 
 
 def debug():

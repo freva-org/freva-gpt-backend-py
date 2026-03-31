@@ -13,13 +13,14 @@ log = configure_logging(__name__)
 class FullAuthenticator(Authenticator):
     """
     Checks the Authorization header (Bearer token) or x-freva-user-token + x-f
-    The user must send an Authorization header. No fallback logic to the 
+    The user must send an Authorization header. No fallback logic to the
     previous auth system.
     Returns:
       - self (Authenticator instance)
     Errors:
       - 422/400/401/502/503
     """
+
     async def build(request: Request) -> Authenticator:
         settings = get_settings()
 
@@ -27,7 +28,9 @@ class FullAuthenticator(Authenticator):
         headers: Headers = request.headers
 
         # Checking Authorization header OR x-freva-user-token
-        header_val: str | None = headers.get("Authorization") or headers.get("x-freva-user-token")
+        header_val: str | None = headers.get("Authorization") or headers.get(
+            "x-freva-user-token"
+        )
 
         # Checking vault_url. If it is not found, the exception is raised in the endpoints, where this is a must-have
         vault_url: str | None = headers.get("x-freva-vault-url")
@@ -50,7 +53,9 @@ class FullAuthenticator(Authenticator):
                 )
 
             try:
-                username: str = await get_username_from_token(token, rest_url, logger=configure_logging(__name__, user_id=None))
+                username: str = await get_username_from_token(
+                    token, rest_url, logger=configure_logging(__name__, user_id=None)
+                )
                 return FullAuthenticator(
                     request=request,
                     settings=settings,
@@ -66,8 +71,10 @@ class FullAuthenticator(Authenticator):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Some necessary field weren't found, check whether the nginx proxy and sets the right headers.",
         )
-    
+
+
 # ──────────────────── Helper functions ──────────────────────────────
+
 
 def bearer_token_from_header(header_val: str) -> str:
     # The header can be any value, we only allow String.

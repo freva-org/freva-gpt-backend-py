@@ -13,9 +13,11 @@ from jupyter_client import KernelManager
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
 from src.tools.code.helpers import (
-    strip_ansi, sanitize_code, 
+    strip_ansi,
+    sanitize_code,
     start_kernel,
-    shutdown_kernel, should_restart_after
+    shutdown_kernel,
+    should_restart_after,
 )
 from src.tools.code.safety_check import check_code_safety
 
@@ -29,10 +31,13 @@ REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
 # We leave 5 seconds buffer so server responds before client timeout
 EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
 
-logger.info("MCP Code-Server timeouts configured", extra={
-    "request_timeout": REQUEST_TIMEOUT,
-    "exec_timeout": EXEC_TIMEOUT,
-})
+logger.info(
+    "MCP Code-Server timeouts configured",
+    extra={
+        "request_timeout": REQUEST_TIMEOUT,
+        "exec_timeout": EXEC_TIMEOUT,
+    },
+)
 
 IOPUB_DRAIN_AFTER_REPLY: float = 0.25
 IOPUB_POLL = 0.1
@@ -51,9 +56,8 @@ CODE_INTERPRETER_CWD_HDR = "working-dir"
 cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
 
 
-# Configure Streamable HTTP transport 
-logger.info("Starting code-interpreter MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+# Configure Streamable HTTP transport
+logger.info("Starting code-interpreter MCP server on %s:%s%s", HOST, PORT, PATH)
 
 
 # Start the MCP server using Streamable HTTP transport
@@ -61,22 +65,26 @@ app = make_header_gate(
     mcp.http_app(),
     ctx_list=[cwd_ctx],
     header_name_list=[CODE_INTERPRETER_CWD_HDR],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
 )
+
 
 def _get_cwd():
     cwd = cwd_ctx.get()
     if not cwd:
-        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
-                       "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data.")
+        logger.warning(
+            f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "
+            "Not setting CWD for code server, this MAY result in errors when the code interpreter saves data."
+        )
         return
     else:
         return cwd
 
+
 # ── Kernel persistence ───────────────────────────────────────────────────────
 
-KERNEL_REGISTRY: dict[str, KernelManager] = {} 
+KERNEL_REGISTRY: dict[str, KernelManager] = {}
 KERNEL_LOCKS: dict[str, threading.Lock] = {}
 KERNEL_LOCKS_GUARD = threading.Lock()
 
@@ -84,7 +92,7 @@ KERNEL_LOCKS_GUARD = threading.Lock()
 def cleanup_mcp_session(sid: str) -> None:
     """
     Best-effort cleanup for one MCP session.
-    Removes the kernel and kernel lock from registry is session is closed 
+    Removes the kernel and kernel lock from registry is session is closed
     by MCP client
     """
     if not sid:
@@ -93,12 +101,14 @@ def cleanup_mcp_session(sid: str) -> None:
     km = KERNEL_REGISTRY.pop(sid, None)
     if km is not None:
         logger.info("Cleaning up kernel for closed session sid=%s", sid)
-        shutdown_kernel(km) 
+        shutdown_kernel(km)
 
     with KERNEL_LOCKS_GUARD:
         KERNEL_LOCKS.pop(sid, None)
 
+
 # ── Execution helpers ─────────────────────────────────────────────────────────
+
 
 def _get_sid_lock(sid: str) -> threading.Lock:
     # Make lock creation thread-safe
@@ -127,7 +137,7 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
         # TODO: maybe we should have a code history registry?
         logger.warning("Kernel for sid=%s is dead; restarting", sid)
         shutdown_kernel(km)
-        KERNEL_REGISTRY.pop(sid, None) # discard
+        KERNEL_REGISTRY.pop(sid, None)  # discard
         km = None
     elif km and km.is_alive():
         # Report alive kernel
@@ -137,7 +147,7 @@ def _get_or_start_kernel(sid: str, cwd_str: str) -> KernelManager:
         logger.info("Starting new kernel for sid=%s", sid)
         # We preserve the env variables set in Dockerfile
         km = start_kernel(cwd_str)
-        KERNEL_REGISTRY[sid] = km # register
+        KERNEL_REGISTRY[sid] = km  # register
     return km
 
 
@@ -155,19 +165,27 @@ def _run_shell(kc, code: str) -> dict:
     Completion is driven by SHELL execute_reply for msg_id.
     IOPub is used to collect stdout/stderr/rich outputs/errors.
     """
-    msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
+    msg_id = kc.execute(
+        code, store_history=True, allow_stdin=False, stop_on_error=False
+    )
 
-    stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
-    # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
+    stdout_parts, stderr_parts, display_data, result_repr, error = (
+        [],
+        [],
+        [],
+        None,
+        None,
+    )
+    # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data".
     # For these, we keep only the last updated version.
-    display_data_by_id = {} 
+    display_data_by_id = {}
 
     start = time.time()
     deadline = start + EXEC_TIMEOUT
 
-    got_shell_reply = False # authoritative “execution finished” signal
+    got_shell_reply = False  # authoritative “execution finished” signal
     shell_status: Optional[str] = None  # "ok" or "error"
-    
+
     def handle_iopub(msg: Dict[str, Any]) -> None:
         nonlocal error, result_repr
         msg_type = (msg.get("header") or {}).get("msg_type")
@@ -216,8 +234,8 @@ def _run_shell(kc, code: str) -> dict:
                 pass
 
         # 2) iopub outputs
-        try: # short-poll iopub messages
-            # Since Jupyter kernel runs asynchronously, it streams outputs, errors, 
+        try:  # short-poll iopub messages
+            # Since Jupyter kernel runs asynchronously, it streams outputs, errors,
             # and state messages while it executes the code.
             # We loop to collect them in real time until the status is "idle".
             io = kc.get_iopub_msg(timeout=IOPUB_POLL)
@@ -261,7 +279,7 @@ def _run_shell(kc, code: str) -> dict:
         "stdout": strip_ansi("".join(stdout_parts)),
         "stderr": strip_ansi("".join(stderr_parts)),
         "result_repr": result_repr or "",
-        "display_data": display_data, 
+        "display_data": display_data,
         "error": strip_ansi(error) if error else "",
     }
 
@@ -272,14 +290,14 @@ def _execute_code(sid: str, code: str) -> dict:
     km = _get_or_start_kernel(sid, cwd_str=working_dir)
 
     def _attempt_once() -> Dict[str, Any]:
-        """ 
-        Single execution attempt against the current kernel, 
-        with clean channel lifecycle 
+        """
+        Single execution attempt against the current kernel,
+        with clean channel lifecycle
         """
         kc = km.client()
         kc.start_channels()
         try:
-            _drain_iopub(kc) # removes stale queued messages from earlier runs
+            _drain_iopub(kc)  # removes stale queued messages from earlier runs
             out = _run_shell(kc, code)
             return out
         finally:
@@ -304,8 +322,13 @@ def _execute_code(sid: str, code: str) -> dict:
         except Exception as e:
             # A) KernelClient / channel / ZMQ state is bad (kernel may still be fine)
             # B) Kernel is alive but unresponsive (kernel is effectively broken)
-            logger.warning("Kernel/channel failure (sid=%s, attempt=%d/%d): %s",
-                            sid, attempt + 1, MAX_RECOVERY_RETRIES + 1, e)
+            logger.warning(
+                "Kernel/channel failure (sid=%s, attempt=%d/%d): %s",
+                sid,
+                attempt + 1,
+                MAX_RECOVERY_RETRIES + 1,
+                e,
+            )
             last_exc = e
             # retry with a new client
             continue
@@ -335,23 +358,25 @@ def code_interpreter(code: str) -> dict:
     sid = _current_sid()
     if not sid:
         raise RuntimeError("Missing Mcp-Session-Id")
-    
+
     logger.debug(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
     logger.debug(f"Input code:'{code}'")
-    
+
     violation = check_code_safety(code)
     if violation is None:
         logger.info("Code block is safe to execute..")
-        lock = _get_sid_lock(sid) 
-        # Allowing only one _execute_code() at a time per sid 
-        with lock: 
+        lock = _get_sid_lock(sid)
+        # Allowing only one _execute_code() at a time per sid
+        with lock:
             sanitized_code = sanitize_code(code)
             try:
-                out = _execute_code(sid, sanitized_code) 
+                out = _execute_code(sid, sanitized_code)
                 if should_restart_after(sanitized_code):
                     # Check if exit() / quit() is present in the code block
-                    # If so, discard kernel 
-                    logger.warning("exit()/quit() detected; discarding kernel for sid=%s", sid)
+                    # If so, discard kernel
+                    logger.warning(
+                        "exit()/quit() detected; discarding kernel for sid=%s", sid
+                    )
                     km = KERNEL_REGISTRY.get(sid)
                     if km is not None:
                         shutdown_kernel(km)
@@ -378,8 +403,10 @@ def code_interpreter(code: str) -> dict:
                     "error": msg,
                 }
     else:
-        msg = f"Code execution blocked by safety rule '{violation.rule_id}': " \
+        msg = (
+            f"Code execution blocked by safety rule '{violation.rule_id}': "
             f"{violation.description} (matched: {violation.match!r})"
+        )
         logger.warning(msg)
         return {
             "stdout": "",

@@ -18,18 +18,22 @@ from src.services.mcp.client import McpClient
 # GLOBAL / COMMON
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def app():
     # Reload settings after environment patching
     import src.core.settings as settings
     import importlib
+
     importlib.reload(settings)
 
     # Reload service_factory so that get_authenticator picks up new settings.DEV
     import src.services.service_factory as sf
+
     importlib.reload(sf)
 
     from src.app import app as fastapi_app
+
     return fastapi_app
 
 
@@ -38,7 +42,7 @@ def client(app):
     try:
         transport = httpx.ASGITransport(app=app, lifespan="on")  # httpx >= 0.28
     except TypeError:
-        transport = httpx.ASGITransport(app=app)                 # older httpx
+        transport = httpx.ASGITransport(app=app)  # older httpx
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
@@ -69,6 +73,7 @@ def GOOD_HEADERS():
 # NETWORK STUBS
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def stub_resp(respx_mock):
     """
@@ -84,6 +89,7 @@ def stub_resp(respx_mock):
 # ──────────────────────────────────────────────────────────────────────────────
 # MONGODB FAKES and PATCHES
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class DummyCollection:
     def __init__(self):
@@ -195,7 +201,9 @@ def patch_read_thread(monkeypatch):
             {"variant": "User", "text": "kept"},
             {"variant": "Assistant", "text": "also kept"},
         ]
+
     import src.services.storage.mongodb_storage as mongo_store
+
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
         "read_thread",
@@ -203,7 +211,7 @@ def patch_read_thread(monkeypatch):
         raising=False,
     )
 
-    return _fake 
+    return _fake
 
 
 @pytest.fixture
@@ -234,6 +242,7 @@ def patch_save_thread(monkeypatch):
         )
         return 
     import src.services.storage.mongodb_storage as mongo_store
+
     monkeypatch.setattr(
         mongo_store.ThreadStorage,
         "save_thread",
@@ -246,7 +255,7 @@ def patch_save_thread(monkeypatch):
 
 @pytest.fixture
 def patch_user_threads(monkeypatch):
-    async def fake_get_user_threads(self, user_id: str, limit: int = 20, page:int = 0):
+    async def fake_get_user_threads(self, user_id: str, limit: int = 20, page: int = 0):
         # Return objects with attributes, matching what the route expects
         threads = [
             SimpleNamespace(
@@ -276,30 +285,35 @@ def patch_user_threads(monkeypatch):
     )
 
     return fake_get_user_threads
-    
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # STREAM PATCH
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def patch_stream(monkeypatch):
     async def fake_run_stream(**kwargs):
         from src.services.streaming.stream_variants import SVAssistant, SVServerHint
+
         yield SVServerHint(data={"thread_id": "t-abc"})
         yield SVAssistant(text="hello")
         return
 
     # IMPORTANT: patch where the route resolves it
     monkeypatch.setattr(
-        "src.api.chatbot.streamresponse.run_stream",  
+        "src.api.chatbot.streamresponse.run_stream",
         fake_run_stream,
         raising=True,
     )
     return fake_run_stream
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # MCP FAKES and PATCHES
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class DummyMcpManager:
     async def close(self) -> None:
@@ -308,6 +322,7 @@ class DummyMcpManager:
     # add any methods you might accidentally call, as no-ops
     async def ensure_connected(self) -> None:
         pass
+
 
 @pytest.fixture
 def patch_mcp_manager(monkeypatch):

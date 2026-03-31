@@ -19,6 +19,7 @@ logger = configure_logging(__name__)
 # FastAPI app (skeleton)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup (was @app.on_event("startup"))
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 # Don’t crash the task; log and continue
                 logger.warning(f"Daily cleanup failed: {e}")
-                
+
     # Launch background task
     app.state.periodic_cleanup = asyncio.create_task(periodic_cleanup_task())
 
@@ -52,17 +53,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FrevaGPT Backend (Python)",
     version=get_settings().VERSION,
-    docs_url="/api/chatbot/docs", # exposing FasAPI docs
+    docs_url="/api/chatbot/docs",  # exposing FasAPI docs
     redoc_url="/api/chatbot/redoc",
     openapi_url="/api/chatbot/openapi.json",
-    lifespan=lifespan,  
+    lifespan=lifespan,
 )
 
 
 # CORS – mirror the permissive defaults (might need to adjust later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

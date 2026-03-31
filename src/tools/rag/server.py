@@ -7,7 +7,12 @@ from pymongo import MongoClient
 
 from fastmcp import FastMCP
 
-from src.tools.rag.helpers import get_new_or_changes_documents, postprocessing_query_result, add_vector_search_index_to_db, clear_embeddings_collection
+from src.tools.rag.helpers import (
+    get_new_or_changes_documents,
+    postprocessing_query_result,
+    add_vector_search_index_to_db,
+    clear_embeddings_collection,
+)
 from src.tools.rag.document_loaders import CustomDirectoryLoader
 from src.tools.rag.text_splitters import CustomDocumentSplitter
 from src.tools.header_gate import make_header_gate
@@ -23,11 +28,11 @@ mcp = FastMCP("rag_server")
 # TODO: implement cancel routine
 
 # ── Config ───────────────────────────────────────────────────────────────────
-EMBEDDING_MODEL="ollama/mxbai-embed-large:latest"
+EMBEDDING_MODEL = "ollama/mxbai-embed-large:latest"
 EMBEDDING_LENGTH = 1024
 
-RESOURCE_DIRECTORY="resources"
-AVAILABLE_LIBRARIES={"stableclimgen"}
+RESOURCE_DIRECTORY = "resources"
+AVAILABLE_LIBRARIES = {"stableclimgen"}
 
 CLEAR_MONGODB_EMBEDDINGS = False
 
@@ -41,24 +46,25 @@ PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 MONGODB_URI_HDR = "mongodb-uri"
 mongo_uri_ctx: ContextVar[str | None] = ContextVar("mongo_uri_ctx", default=None)
 
-# Configure Streamable HTTP transport 
-logger.info("Starting RAG MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+# Configure Streamable HTTP transport
+logger.info("Starting RAG MCP server on %s:%s%s", HOST, PORT, PATH)
 
 # Start the MCP server using Streamable HTTP transport
 app = make_header_gate(
     mcp.http_app(),
     ctx_list=[mongo_uri_ctx],
     header_name_list=[MONGODB_URI_HDR],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
 )
 
 # ── Mongo helpers ────────────────────────────────────────────────────────────
 
+
 @lru_cache(maxsize=32)
 def _client_for(uri: str) -> MongoClient:
     return MongoClient(uri, serverSelectionTimeoutMS=5000)
+
 
 def _collection():
     uri = mongo_uri_ctx.get()
@@ -67,22 +73,25 @@ def _collection():
     db = _client_for(uri)["rag"]
     return db["embeddings"]
 
+
 def get_embedding(text):
     """Get embedding for a given text"""
     payload = {
-        "model": EMBEDDING_MODEL, 
+        "model": EMBEDDING_MODEL,
         "input": text,
         "temperature": 0.2,
-        }
+    }
     r = requests.post(
-            f"{LITE_LLM_ADDRESS}/v1/embeddings",
-            json=payload,
-            timeout=60,
-            )
+        f"{LITE_LLM_ADDRESS}/v1/embeddings",
+        json=payload,
+        timeout=60,
+    )
     try:
         r.raise_for_status()
     except requests.HTTPError as e:
-        raise RuntimeError(f"Embeddings proxy error {r.status_code}: {r.text[:300]}") from e
+        raise RuntimeError(
+            f"Embeddings proxy error {r.status_code}: {r.text[:300]}"
+        ) from e
 
     response = r.json()
     data = response.get("data")
@@ -96,15 +105,17 @@ def get_embedding(text):
 
 def create_db_entry_for_document(document):
     entry = {
-        "resource_type": "example" if ".json" in document.metadata.get("source") else "document", 
-        "resource_name": document.metadata.get("resource_name"), 
+        "resource_type": "example"
+        if ".json" in document.metadata.get("source")
+        else "document",
+        "resource_name": document.metadata.get("resource_name"),
         "document": document.metadata.get("source"),
         "chunk_id": document.metadata.get("chunk_id"),
         "file_hash": document.metadata.get("file_hash"),
         "content": document.page_content,
         "embedded_content": document.metadata["embedded_content"],
         "embedding": get_embedding(document.metadata["embedded_content"]),
-        }
+    }
     return entry
 
 
@@ -136,32 +147,31 @@ def get_query_results(query: str, resource_name):
     src_types = col.distinct("resource_type")
     for src_t in src_types:
         pipeline = [
-        {
+            {
                 "$vectorSearch": {
-                "index": "vector_index",
-                "queryVector": query_embedding,
-                "filter": {
-                    "$and": [
-                        { "resource_type": src_t },
-                        { "resource_name": resource_name} 
-                        ] 
-                },
-                "path": "embedding",
-                "numCandidates": 15,
-                "limit": 3
+                    "index": "vector_index",
+                    "queryVector": query_embedding,
+                    "filter": {
+                        "$and": [
+                            {"resource_type": src_t},
+                            {"resource_name": resource_name},
+                        ]
+                    },
+                    "path": "embedding",
+                    "numCandidates": 15,
+                    "limit": 3,
                 }
-        }, {
+            },
+            {
                 "$project": {
-                "content": 1,
-                "resource_type": 1,
-                "resource_name":1,
-                "document":1,
-                "chunk_id":1,
-                'score': {
-                    '$meta': 'vectorSearchScore'
-                    }
-            }
-        }
+                    "content": 1,
+                    "resource_type": 1,
+                    "resource_name": 1,
+                    "document": 1,
+                    "chunk_id": 1,
+                    "score": {"$meta": "vectorSearchScore"},
+                }
+            },
         ]
 
         query_results.append(list(col.aggregate(pipeline)))
@@ -183,7 +193,9 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
     Returns:
         str: Relevant context extracted from the library documentation.
     """
-    logger.info(f"Searching for context in {resources_to_retrieve_from} documentation for question: {question}")
+    logger.info(
+        f"Searching for context in {resources_to_retrieve_from} documentation for question: {question}"
+    )
     if resources_to_retrieve_from not in AVAILABLE_LIBRARIES:
         logger.error(f"Library '{resources_to_retrieve_from}' is not supported.")
         return f"Library '{resources_to_retrieve_from}' is not supported."
@@ -194,10 +206,12 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
     src_dir = os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from)
     if not os.path.isdir(src_dir):
         return f"Resource directory not found: {src_dir}"
-    
+
     dir_loader = CustomDirectoryLoader(src_dir)
     documents = dir_loader.load()
-    doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
+    doc_splitter = CustomDocumentSplitter(
+        documents, chunk_size=500, chunk_overlap=50, separators="\n\n"
+    )
     chunked_documents = doc_splitter.split()
 
     store_documents_in_mongodb(chunked_documents)
@@ -206,13 +220,18 @@ def get_context_from_resources(question: str, resources_to_retrieve_from: str) -
 
     return context
 
+
 def debug():
     resources_to_retrieve_from = "stableclimgen"
     question = "Get global temperature data from February 2nd 1940"
 
-    dir_loader = CustomDirectoryLoader(os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from))
+    dir_loader = CustomDirectoryLoader(
+        os.path.join(RESOURCE_DIRECTORY, resources_to_retrieve_from)
+    )
     documents = dir_loader.load()
-    doc_splitter = CustomDocumentSplitter(documents, chunk_size=500, chunk_overlap=50, separators="\n\n")
+    doc_splitter = CustomDocumentSplitter(
+        documents, chunk_size=500, chunk_overlap=50, separators="\n\n"
+    )
     chunked_documents = doc_splitter.split()
 
     if CLEAR_MONGODB_EMBEDDINGS:

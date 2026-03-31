@@ -3,14 +3,20 @@ from src.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-#TODO: code-interpreter tests
+# TODO: code-interpreter tests
 # TODO: ping to LiteLLM for liveliness (warning only)
+
 
 def run_startup_checks(settings: Settings) -> None:
 
     # LITE_LLM_ADDRESS sanity note
-    if not (settings.LITE_LLM_ADDRESS.startswith("http://") or settings.LITE_LLM_ADDRESS.startswith("https://")):
-        logger.warning("LITE_LLM_ADDRESS does not look like a URL: %s", settings.LITE_LLM_ADDRESS)
+    if not (
+        settings.LITE_LLM_ADDRESS.startswith("http://")
+        or settings.LITE_LLM_ADDRESS.startswith("https://")
+    ):
+        logger.warning(
+            "LITE_LLM_ADDRESS does not look like a URL: %s", settings.LITE_LLM_ADDRESS
+        )
 
     logger.info(
         "Startup checks passed. Port=%s LiteLLM=%s Version=%s",

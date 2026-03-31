@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.asyncio
 async def test_streamresponse_returns_500_on_prepare_failure(
     stub_resp,

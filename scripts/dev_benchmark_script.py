@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sys, pathlib
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 """
@@ -37,7 +38,7 @@ USER_ID = "dev_user"
 PROMPT = "Make an annual mean temperature global map plot for the year 2023"
 
 RUNS = 1
-CONCURRENCY = 1           # ← set to 1 for clean mode
+CONCURRENCY = 1  # ← set to 1 for clean mode
 WARMUP_RUNS = 0
 
 NEW_THREAD_PER_RUN = True
@@ -51,6 +52,7 @@ PRINT_FINAL_SUMMARY = True
 
 log = logging.getLogger("dev_script")
 configure_logging()
+
 
 @dataclass
 class RunResult:
@@ -68,7 +70,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
 
         Storage = get_thread_storage(user_name=USER_ID, thread_id=thread_id)
         Auth = get_authenticator()
-        
+
         await prepare_for_stream(thread_id, USER_ID, Auth)
 
         system_prompt = get_entire_prompt(USER_ID, thread_id, MODEL)
@@ -84,7 +86,7 @@ async def _run_once(idx: int, sem: asyncio.Semaphore) -> RunResult:
                 thread_id=(None if NEW_THREAD_PER_RUN else thread_id),
                 user_id=USER_ID,
                 user_input=PROMPT,
-                system_prompt=system_prompt,                 # ← reuse single McpManager
+                system_prompt=system_prompt,  # ← reuse single McpManager
             ):
                 if getattr(variant, "variant", None) == "Assistant":
                     txt = getattr(variant, "text", "") or ""
@@ -138,9 +140,13 @@ async def main() -> None:
         total_chars = sum(r.chars for r in results)
 
         print("\n=== Summary ===")
-        print(f"model={MODEL} runs={RUNS} concurrency={CONCURRENCY} warmups={WARMUP_RUNS}")
+        print(
+            f"model={MODEL} runs={RUNS} concurrency={CONCURRENCY} warmups={WARMUP_RUNS}"
+        )
         print(f"success={len(ok)} errors={len(errs)}")
-        print(f"avg_time={avg:.3f}s p50_time={p50:.3f}s fastest={fastest.duration_s:.3f}s slowest={slowest.duration_s:.3f}s")
+        print(
+            f"avg_time={avg:.3f}s p50_time={p50:.3f}s fastest={fastest.duration_s:.3f}s slowest={slowest.duration_s:.3f}s"
+        )
         print(f"total_chunks={total_chunks} total_chars={total_chars}")
         if errs:
             print("errors:")

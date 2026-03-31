@@ -30,7 +30,7 @@ class McpManager:
     def __init__(
         self,
         *,
-        servers: List, 
+        servers: List,
         server_urls: Dict[Target, str],
         default_headers: Optional[Dict[str, str]] = None,
         logger=None,
@@ -40,14 +40,16 @@ class McpManager:
 
         self._servers = servers
         self._server_urls = server_urls
-        self._default_headers =  {t:default_headers or {} for t in self._servers}
+        self._default_headers = {t: default_headers or {} for t in self._servers}
 
-        self._clients: dict[Target, McpClient | None] = {t:None for t in self._servers}
+        self._clients: dict[Target, McpClient | None] = {t: None for t in self._servers}
 
         # Cache of MCP tool descriptors and OpenAI tool schemas
-        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {t:[] for t in self._servers}
+        self._tools_by_target: Dict[Target, List[Dict[str, Any]]] = {
+            t: [] for t in self._servers
+        }
         self._openai_tools_cache: Optional[List[Dict[str, Any]]] = None
-        
+
     # ────────── lifecycle ──────────
 
     async def close(self):
@@ -77,7 +79,7 @@ class McpManager:
 
     # ────────── initialization / discovery ──────────
 
-    async def initialize(self, headers:Optional[dict]=None) -> None:
+    async def initialize(self, headers: Optional[dict] = None) -> None:
         """
         Eagerly connect to MCP servers and discover tools so the LLM can be given
         the function schemas before first token is generated.
@@ -98,7 +100,9 @@ class McpManager:
                 try:
                     discovered_by_target[s] = await self._discover_tools(s)
                 except Exception as e:
-                    self.log.warning("MCP tool discovery failed for %s: %s", s, e, exc_info=True)
+                    self.log.warning(
+                            "MCP tool discovery failed for %s: %s", s, e, exc_info=True
+                        )
 
             merged: List[Dict[str, Any]] = []
             async with self._lock:
@@ -147,7 +151,9 @@ class McpManager:
             name = tool.get("name") or tool.get("tool_name") or ""
             desc = tool.get("description") or ""
             schema = tool.get("input_schema") or tool.get("parameters") or {}
-            normalized.append({"name": name, "description": desc, "input_schema": schema})
+            normalized.append(
+                {"name": name, "description": desc, "input_schema": schema}
+            )
 
         return normalized
     
@@ -183,10 +189,10 @@ class McpManager:
         *,
         name: str,
         arguments: Dict[str, Any],
-        extra_headers: Optional[Dict]=None,
+        extra_headers: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """
-        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS, 
+        Call a tool on the chosen target. If 'target' isn't in AVAILABLE_MCP_SERVERS,
         all the available servers are called as best-effort.
         """
         async with self._lock:
@@ -202,7 +208,9 @@ class McpManager:
             if client is None:
                 continue
             try:
-                return await client.call_tool(name=name, args=arguments, extra_headers=extra_headers)
+                return await client.call_tool(
+                    name=name, args=arguments, extra_headers=extra_headers
+                )
             except Exception as e:
                 self.log.debug("tool %s failed on %s: %s", name, tgt, e)
 
@@ -215,13 +223,16 @@ class McpManager:
 
 # ──────────────────── Helper functions ──────────────────────────────
 
-async def get_mcp_headers(auth: Authenticator, cache: str, logger=None) -> Dict[str, str]:
+
+async def get_mcp_headers(
+    auth: Authenticator, cache: str, logger=None
+) -> Dict[str, str]:
     log = logger or DEFAULT_LOGGER
     mongodb_uri = await get_mongodb_uri(auth.vault_url) if not settings.DEV else settings.MONGODB_URI_DEV
     
     headers = {
         "rag": {
-            "mongodb-uri":  mongodb_uri,
+            "mongodb-uri": mongodb_uri,
         },
         "code": {
             "working-dir": str(cache),

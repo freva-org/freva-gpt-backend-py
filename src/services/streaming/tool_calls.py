@@ -117,7 +117,9 @@ def parse_tool_result(resp_txt: str, tool_name: str, call_id: str, logger=None):
     structured_content = result_json.get("structuredContent")
     if structured_content is not None:
         if tool_name == "code_interpreter":
-            yield from parse_code_interpreter_result(structured_content, call_id, logger=log)
+            yield from parse_code_interpreter_result(
+                structured_content, call_id, logger=log
+            )
         else:
             yield from parse_generic_tool_result(
                 structured_content, tool_name, call_id, logger=log

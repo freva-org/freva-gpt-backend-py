@@ -28,9 +28,8 @@ HOST = os.getenv("FREVAGPT_MCP_HOST", "0.0.0.0")
 PORT = int(os.getenv("FREVAGPT_MCP_PORT", "8051"))
 PATH = os.getenv("FREVAGPT_MCP_PATH", "/mcp")  # standard path
 
-# Configure Streamable HTTP transport 
-logger.info("Starting code-interpreter MCP server on %s:%s%s",
-            HOST, PORT, PATH)
+# Configure Streamable HTTP transport
+logger.info("Starting code-interpreter MCP server on %s:%s%s", HOST, PORT, PATH)
 
 
 # Start the MCP server using Streamable HTTP transport
@@ -38,18 +37,22 @@ app = make_header_gate(
     mcp.http_app(),
     ctx_list=[cwd_ctx],
     header_name_list=[CODE_INTERPRETER_CWD_HDR],
-    logger=logger,       
-    mcp_path=PATH,  
+    logger=logger,
+    mcp_path=PATH,
     on_session_close=cleanup_mcp_session,
     on_cancel_request=cancel_request,
 )
 
+
+
 def get_cwd():
     cwd = cwd_ctx.get()
     if not cwd:
-        logger.warning(f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "\
-                       "Not setting CWD for code server, this MAY result in errors "\
-                       "when the code interpreter saves data.")
+        logger.warning(
+            f"Missing required header '{CODE_INTERPRETER_CWD_HDR}'! "
+            "Not setting CWD for code server, this MAY result in errors "\
+                       "when the code interpreter saves data."
+        )
         return
     else:
         return cwd
@@ -69,11 +72,11 @@ def code_interpreter(code: str) -> dict:
         raise RuntimeError("Missing Mcp-Session-Id")
     if not request_id:
         raise RuntimeError("Missing MCP request id")
-    
+
     logger.debug(f"Session id:{sid}\nRequest id:{request_id}\nKernel execution timeout:{EXEC_TIMEOUT}")
     stripped_code = code.replace("\n", "; ")
     logger.debug(f"Input code: {stripped_code}")
-    
+
     violation = check_code_safety(code)
 
     if violation is None:
@@ -146,8 +149,10 @@ def code_interpreter(code: str) -> dict:
         finally:
             unregister_request(request_id)    
     else:
-        msg = f"Code execution blocked by safety rule '{violation.rule_id}': " \
+        msg = (
+            f"Code execution blocked by safety rule '{violation.rule_id}': "
             f"{violation.description} (matched: {violation.match!r})"
+        )
         logger.warning(msg)
         return {
             "stdout": "",

@@ -12,20 +12,19 @@ from src.core.logging_setup import configure_logging
 logger = configure_logging(__name__, named_log="rag_server")
 
 
-loader_cls_dict={
+loader_cls_dict = {
     ".txt": TextLoader,
     ".json": JSONLoader,
     ".jsonl": JSONLoader,
     ".pdf": PyPDFLoader,
 }
-loader_kwargs_dict={
+loader_kwargs_dict = {
     ".txt": {},
     ".json": {},
-    ".jsonl": {"text_content": False,
-               "jq_schema": ".",
-               "json_lines": True},
+    ".jsonl": {"text_content": False, "jq_schema": ".", "json_lines": True},
     ".pdf": {},
 }
+
 
 class CustomDirectoryLoader(DirectoryLoader):
     def __init__(self, path: str, **kwargs):
@@ -41,7 +40,9 @@ class CustomDirectoryLoader(DirectoryLoader):
         if not directory.is_dir():
             raise NotADirectoryError(f"Path is not a directory: {self.path}")
 
-        extensions = sorted({file.suffix for file in directory.iterdir() if file.is_file()})
+        extensions = sorted(
+            {file.suffix for file in directory.iterdir() if file.is_file()}
+        )
         return extensions
 
     def load(self) -> List[Document]:
@@ -50,7 +51,7 @@ class CustomDirectoryLoader(DirectoryLoader):
         if self.extensions:
             for doc_type in self.extensions:
                 if doc_type in loader_cls_dict.keys():
-                    self.glob = '*'+doc_type
+                    self.glob = "*" + doc_type
                     self.loader_cls = loader_cls_dict[doc_type]
                     self.loader_kwargs = loader_kwargs_dict[doc_type]
                     docs = list(self.lazy_load())
@@ -60,12 +61,14 @@ class CustomDirectoryLoader(DirectoryLoader):
                         docs = self.standardize_metadata(docs)
                     all_documents.extend(docs)
                 else:
-                    raise TypeError(f"The directory contains an unsupported file extension. Please add a document loader mapping for {doc_type} files.")
+                    raise TypeError(
+                        f"The directory contains an unsupported file extension. Please add a document loader mapping for {doc_type} files."
+                    )
         else:
             logger.warning(f"The directory is empty: {self.path}")
-            
+
         return all_documents
-    
+
     def parse_examples(self, json_lines: List[Document]) -> List[Document]:
         """
         Parse examples from a JSONL file, grouping a user query and returned answers so that each example is one document.
@@ -73,7 +76,7 @@ class CustomDirectoryLoader(DirectoryLoader):
         """
         examples = []
         current_trace = None
-        
+
         example_id = 1
         for line in json_lines:
             content = ast.literal_eval(line.page_content)
@@ -83,8 +86,10 @@ class CustomDirectoryLoader(DirectoryLoader):
                     examples.append(current_trace)
                 current_trace = line
                 current_trace.metadata["chunk_id"] = example_id
-                current_trace.metadata["embedded_content"] = user_prompt  # For examples: no need to embed the whole content, just the user input.
-                current_trace.metadata["resource_name"] = self.dir_name 
+                current_trace.metadata["embedded_content"] = (
+                    user_prompt  # For examples: no need to embed the whole content, just the user input.
+                )
+                current_trace.metadata["resource_name"] = self.dir_name
                 example_id += 1
                 del current_trace.metadata["seq_num"]
             elif current_trace:
@@ -94,7 +99,7 @@ class CustomDirectoryLoader(DirectoryLoader):
             examples.append(current_trace)
 
         return examples
-    
+
     def standardize_metadata(self, docs: List[Document]) -> List[Document]:
         """
         Add missing fields ("embedded_content") to metadata for Document object for uniform data fields.

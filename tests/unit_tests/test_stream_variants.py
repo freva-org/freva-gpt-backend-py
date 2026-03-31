@@ -1,13 +1,28 @@
 from src.services.streaming.stream_variants import (
-    SVUser, SVAssistant, SVCode, SVCodeOutput, SVStreamEnd, SVServerHint, SVServerError,
-    cleanup_conversation, normalize_conv_for_prompt, help_convert_sv_ccrm,
-    from_sv_to_json, from_json_to_sv, StreamVariant
+    SVUser,
+    SVAssistant,
+    SVCode,
+    SVCodeOutput,
+    SVStreamEnd,
+    SVServerHint,
+    SVServerError,
+    cleanup_conversation,
+    normalize_conv_for_prompt,
+    help_convert_sv_ccrm,
+    from_sv_to_json,
+    from_json_to_sv,
+    StreamVariant,
 )
 
 
 def test_cleanup_inserts_codeoutput_and_end():
-    conv: list[StreamVariant] = [SVUser(text="hi"), SVCode(code="print(1)", id="call_1")]
-    out = cleanup_conversation(conv, append_stream_end=True)  # default: append_stream_end=True
+    conv: list[StreamVariant] = [
+        SVUser(text="hi"),
+        SVCode(code="print(1)", id="call_1"),
+    ]
+    out = cleanup_conversation(
+        conv, append_stream_end=True
+    )  # default: append_stream_end=True
     # Expect: User, Code, (inserted) CodeOutput, StreamEnd
     assert isinstance(out[-1], SVStreamEnd)
     kinds = [v.variant for v in out]

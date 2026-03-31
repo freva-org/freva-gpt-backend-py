@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 from contextvars import ContextVar
 import threading
@@ -13,24 +12,27 @@ from jupyter_client import KernelManager
 
 from src.core.logging_setup import configure_logging
 from src.tools.header_gate import make_header_gate
-from src.tools.server_auth import jwt_verifier
 from src.tools.code.helpers import (
     strip_ansi, sanitize_code, 
-    start_kernel, restart_kernel, 
+    start_kernel,
     shutdown_kernel, should_restart_after
 )
 from src.tools.code.safety_check import check_code_safety
 
 logger = configure_logging(__name__, named_log="code_server")
 
-_disable_auth = os.getenv("FREVAGPT_MCP_DISABLE_AUTH", "0").lower() in {"1","true","yes"}
-mcp = FastMCP("code-interpreter-server", auth=None if _disable_auth else jwt_verifier)
+mcp = FastMCP("code-interpreter-server")
 
 # ── Config ───────────────────────────────────────────────────────────────────
 REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
 
 # We leave 5 seconds buffer so server responds before client timeout
 EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
+
+logger.info("MCP Code-Server timeouts configured", extra={
+    "request_timeout": REQUEST_TIMEOUT,
+    "exec_timeout": EXEC_TIMEOUT,
+})
 
 IOPUB_DRAIN_AFTER_REPLY: float = 0.25
 IOPUB_POLL = 0.1
@@ -50,8 +52,8 @@ cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
 
 
 # Configure Streamable HTTP transport 
-logger.info("Starting code-interpreter MCP server on %s:%s%s (auth=%s)",
-            HOST, PORT, PATH, "off" if _disable_auth else "on")
+logger.info("Starting code-interpreter MCP server on %s:%s%s",
+            HOST, PORT, PATH)
 
 
 # Start the MCP server using Streamable HTTP transport
@@ -337,9 +339,9 @@ def code_interpreter(code: str) -> dict:
     logger.debug(f"Session id:{sid}\nKernel execution timeout:{EXEC_TIMEOUT}")
     logger.debug(f"Input code:'{code}'")
     
-    safe, violation = check_code_safety(code)
-    if safe:
-        logger.info(f"Code block is safe to execute..")
+    violation = check_code_safety(code)
+    if violation is None:
+        logger.info("Code block is safe to execute..")
         lock = _get_sid_lock(sid) 
         # Allowing only one _execute_code() at a time per sid 
         with lock: 

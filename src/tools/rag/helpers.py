@@ -1,4 +1,3 @@
-from glob import glob
 import hashlib
 import json
 import time
@@ -19,8 +18,8 @@ def json_to_str(data) -> str:
 
 def compute_hash(doc):
     """Compute a hash for the document based on its content and source."""
-    if type(doc.page_content) == list or str:
-        content = doc.page_content.strip() if type(doc.page_content) == str else json_to_str(doc.page_content)
+    if isinstance(doc.page_content, (list, str)):
+        content = doc.page_content.strip() if isinstance(doc.page_content, str) else json_to_str(doc.page_content)
     else:
         raise TypeError("Unknown content type in document. The content should either be string or a list.")
     source = doc.metadata.get("source")
@@ -107,11 +106,11 @@ def postprocessing_query_result(query_results):
             if context: 
                 context += "\n\n"
             context += "Here are some examples that can help you answer the question:\n\n"\
-                       f"### EXAMPLES BEGIN ###\n\n"
+                       "### EXAMPLES BEGIN ###\n\n"
             chunks_sorted = sorted(result, key=itemgetter("document", "chunk_id"))
             context += "\n\n".join(document["content"] for document in chunks_sorted)
             context += "\n\n### EXAMPLES END ###"
 
         else:
-            raise (ValueError, f"Unknown resource type: {resource_type}")
+            raise ValueError(f"Unknown resource type: {resource_type}")
     return context

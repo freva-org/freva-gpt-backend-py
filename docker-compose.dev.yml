@@ -27,7 +27,6 @@ services:
     environment:
       FREVAGPT_DEV: ${FREVAGPT_DEV}
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
-      FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8050
     volumes: 
@@ -44,7 +43,6 @@ services:
     environment:
       FREVAGPT_DEV: ${FREVAGPT_DEV}
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
-      FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8051
     ports: 
@@ -63,7 +61,6 @@ services:
     environment:
       FREVAGPT_DEV: ${FREVAGPT_DEV}
       FREVAGPT_DEBUG: ${FREVAGPT_DEBUG:-0}
-      FREVAGPT_MCP_DISABLE_AUTH: ${FREVAGPT_MCP_DISABLE_AUTH}
       FREVAGPT_MCP_HOST: 0.0.0.0
       FREVAGPT_MCP_PORT: 8052
     networks: 
@@ -98,11 +95,81 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: secret
     hostname: mongodb
     ports:
-      - "27016:27017"
+      - "27017:27017"
     command: --quiet --logpath /dev/null 
+
+  freva-db:
+    networks:
+      - freva-gpt
+    hostname: freva-db
+    container_name: freva-db
+    image: ghcr.io/freva-org/freva-mysql:9.3.0
+    environment:
+      - ROOT_PW=T3st
+      - HOST=localhost
+      - PROJECT=freva-dev
+      - MYSQL_USER=freva
+      - MYSQL_PASSWORD=T3st
+      - MYSQL_DATABASE=frevadb
+      - MYSQL_ROOT_PASSWORD=test_password_please_ignore
+    ports:
+      - "3306:3306"
+
+  freva-vault:
+    networks:
+      - freva-gpt
+    image: ghcr.io/freva-org/freva-vault:latest
+    hostname: freva-vault
+    container_name: freva-vault
+    cap_add:
+      - IPC_LOCK
+      - SYS_NICE
+    environment:
+      - ROOT_PW=T3st
+      - KEY_FILE=/vault/file/keys
+      - VAULT_ADD_VAR_DB_DB=frevadb
+      - VAULT_ADD_VAR_DB_HOST=freva-db
+      - VAULT_ADD_VAR_DB_PASSWD=T3st
+      - VAULT_ADD_VAR_MONGO_DB=search_stats
+      - VAULT_ADD_VAR_MONGO_PASSWD=secret
+      - VAULT_ADD_VAR_MONGO_USER=mongo
+      - VAULT_ADD_VAR_MONGO_URL='mongodb://mongo:secret@freva-mongo:27017'
+
+  freva-web:
+    networks:
+      - freva-gpt
+    image: ghcr.io/freva-org/freva-web:2604.0.0
+    ports:
+      - "8000:8000"
+    container_name: freva-web
+    hostname: freva-web
+    environment:
+      - EVALUATION_SYSTEM_CONFIG_FILE=/data/evaluation_system.conf
+      - DJANGO_SUPERUSER_PASSWORD=T3st
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - SCHEDULER_HOST=localhost
+      - REDIS_HOST=freva-cache
+      - CSRF_TRUSTED_ORIGINS=http://127.0.0.1,http://localhost
+      - FREVA_REST_URL=http://regiklim-dev.dkrz.de:7777
+      - CHAT_BOT_URL=http://freva-gpt-backend:8502
+      - ACTIVATE_CHAT_BOT=1
+      - STAC_BROWSER=1
+      - DEV_MODE=1
+      - CHAT_BOT=1
+    volumes:
+      - ./docker/freva.conf:/data/evaluation_system.conf
+
+  freva-cache:
+    networks:
+      - freva-gpt
+    image: ghcr.io/freva-org/freva-redis:latest
+    hostname: freva-cache
+    container_name: freva-cache
+
 
 networks:
   freva-gpt:
     driver: bridge
+
 # The subnet is not set to avoid conflicts with other potentially running networks on the same machine.
 # Note: Named networks by default aren't shared between different docker-compose projects, even if they have the same name, as long as they are in separate directories.

@@ -61,13 +61,14 @@ async def set_thread_topic(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=auth.vault_url)
-    except:
+    except Exception as e:
+        logger.warning("Failed to connect to MongoDB", extra={"error": str(e)})
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     try:
         await Storage.update_thread_topic(thread_id, topic)
         logger.info("Updated thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
         return {"Successfully updated thread topic."}
-    except:
-        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username})
-        raise HTTPException(status_code=500, detail=f"Failed to update thread topic.")
+    except Exception as e:
+        logger.warning("Failed to update thread topic", extra={"thread_id": thread_id, "user_id": auth.username, "error": str(e)})
+        raise HTTPException(status_code=500, detail="Failed to update thread topic.")

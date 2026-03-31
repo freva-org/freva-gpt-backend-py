@@ -1,31 +1,41 @@
+from fastapi import Request
 from src.core.logging_setup import configure_logging
 from .authenticator import Authenticator
+
+from src.core.settings import get_settings
 
 log = configure_logging(__name__)
 
 
 class DevAuthenticator(Authenticator):
-    async def run(self) -> "DevAuthenticator":
+    async def build(request: Request) -> Authenticator:
         """
         DEV mode:
         - no real token validation
         - username, vault_url, rest_url come from headers or defaults
         """
-        request = self.request
-
+        
         if request:
-            self.username = request.headers.get("x-dev-user", "janedoe")
-            self.vault_url = request.headers.get("x-dev-vault-url", "http://dev-vault")
-            self.rest_url = request.headers.get("x-dev-rest-url", "http://dev-rest")
-            self.access_token = request.headers.get("Authorization", "Access-token")
+            username = request.headers.get("x-dev-user", "janedoe")
+            vault_url = request.headers.get("x-dev-vault-url", "http://dev-vault")
+            rest_url = request.headers.get("x-dev-rest-url", "http://dev-rest")
+            access_token = request.headers.get("Authorization", "Access-token")
         else:
-            self.username = "janedoe"
-            self.vault_url = "http://dev-vault"
-            self.rest_url = "http://dev-rest"
-            self.access_token = "Access-token"
+            username = "janedoe"
+            vault_url = "http://dev-vault"
+            rest_url = "http://dev-rest"
+            access_token = "Access-token"
 
         log.info(
             "DEV auth applied",
-            extra={"user_id": self.username, "vault_url": self.vault_url, "rest_url": self.rest_url},
+            extra={"user_id": username, "vault_url": vault_url, "rest_url": rest_url},
         )
-        return self
+        
+        return DevAuthenticator(
+            request=request,
+            settings=get_settings(),
+            username=username,
+            vault_url=vault_url,
+            rest_url=rest_url,
+            access_token=access_token,
+        )

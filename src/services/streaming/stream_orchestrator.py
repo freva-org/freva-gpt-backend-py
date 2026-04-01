@@ -109,7 +109,7 @@ async def stream_with_tools(
             if tc_list:
                 accumulate_tool_calls({"choices": [{"delta": delta}]}, tool_agg)
                 tool_name = (
-                    tool_agg.get("by_index")[0].get("function").get("name")
+                    tool_agg.get("by_index", [])[0].get("function").get("name")
                     if tool_agg
                     else None
                 )
@@ -152,6 +152,14 @@ async def stream_with_tools(
         name = (tc.get("function") or {}).get("name", "")
         id = tc.get("id", id)
         args_txt = (tc.get("function") or {}).get("arguments", "")
+
+        if name == "code_interpreter":
+            # accumulated code text to be appended to thread
+            tool_v = SVCode(code=args_txt, id=id)
+        else:
+            tool_v = SVToolCall(arg=args_txt, id=id, tool_name=name)
+            # code is already streamed, we stream the other tool calls here too
+            yield tool_v 
 
         async def run_with_heartbeat():
             """Run the tool while periodically sending heartbeats."""
@@ -204,14 +212,8 @@ async def stream_with_tools(
             log.exception("Tool %s failed", name)
             result_text = json.dumps({"error": str(e)})
 
-        # We will collect tool input and output as Stream Variants and append to thread
+        # We collect tool input and output as Stream Variants and append to thread
         tc_variants: List[StreamVariant] = []
-
-        if name == "code_interpreter":
-            # We append accumulated code text to thread
-            tool_v = SVCode(code=args_txt, id=id)
-        else:
-            tool_v = SVToolCall(arg=args_txt, id=id, tool_name=name)
         tc_variants.append(tool_v)
 
         tool_out_v: List[StreamVariant] = []

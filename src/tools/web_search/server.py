@@ -46,6 +46,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ─── Tool ───────────────────────────────────────────────────────────────────
 
+
 def should_attach_mkexp_pdf(query: str) -> bool:
     q = (query or "").lower()
     keywords = [
@@ -70,7 +71,6 @@ def should_attach_mkexp_pdf(query: str) -> bool:
     return any(k in q for k in keywords)
 
 
-
 @mcp.tool()
 def web_search(query: str) -> str:
     """
@@ -80,24 +80,25 @@ def web_search(query: str) -> str:
     Returns:
         str: Relevant context extracted from web-page.
     """
-    logger.info("Searching for DKRZ/HPC- or ICON-related context in documentation "\
-                f"for query: {query}")
+    logger.info(
+        "Searching for DKRZ/HPC- or ICON-related context in documentation "
+        f"for query: {query}"
+    )
+
     system_prompt = (
         "You are a web-search agent that can search documentations for DKRZ/HPC, "
-        "ICON model and mkexp toolbox. Use the documentation websites for searching "\
-        "and creating answers. Make sure the information provided is accurate and up-to-date. "\
-        "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
-        "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
-        "mkexp toolbox 'https://gitlab.dkrz.de/esmenv/mkexp/-/raw/master/doc/mkexp.pdf'. "\
-        "For DKRZ/HPC and ICON doxs, use SEARCHTEAM 1 and 2 to find relevant information. "\
-        "When asked about mkexp or seting up an experiment, consult ICON docs AND mkexp toolbox docs."
-        "Only answer questions if claims can be supported by web citations. Include inline citations for "\
+        "ICON model and mkexp toolbox. Use the documentation websites for searching "
+        "and creating answers. Make sure the information provided is accurate and up-to-date. "
+        "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "
+        "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "
+        "For DKRZ/HPC and ICON doxs, use SEARCHTEAM 1 and 2 to find relevant information. "
+        "When asked about mkexp or seting up an experiment, consult BOTH ICON docs AND 'mkexp.pdf'."
+        "Cite the PDF using: 'https://gitlab.dkrz.de/esmenv/mkexp/-/raw/master/doc/mkexp.pdf'."
+        "Only answer questions if claims can be supported by web citations. Include inline citations for "
         "URLs found in the web search results."
     )
 
-    user_content = [
-        {"type": "input_text", "text": query or ""}
-    ]
+    user_content = [{"type": "input_text", "text": query or ""}]
 
     if should_attach_mkexp_pdf(query):
         user_content.append(
@@ -106,7 +107,6 @@ def web_search(query: str) -> str:
                 "file_url": MKEXP_PDF_URL,
             }
         )
-
 
     kwargs = {
         "model": WEB_SEARCH_MODEL,

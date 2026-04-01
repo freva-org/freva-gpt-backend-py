@@ -91,9 +91,10 @@ def web_search(query: str) -> str:
         "and creating answers. Make sure the information provided is accurate and up-to-date. "\
         "DKRZ/HPC doc 'https://docs.dkrz.de/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
         "ICON doc 'https://docs.icon-model.org/search.html?q=SEARCHTERM1+SEARCHTERM2'. "\
-        "mkexp toolbox 'https://gitlab.dkrz.de/esmenv/mkexp/-/raw/master/doc/mkexp.pdf'. "\
         "For DKRZ/HPC and ICON doxs, use SEARCHTEAM 1 and 2 to find relevant information. "\
-        "When asked about mkexp or seting up an experiment, consult ICON docs AND mkexp toolbox docs."
+        "When asked about mkexp or seting up an experiment, consult ICON docs AND 'mkexp.pdf'."\
+        "Use the input PDF as supplemental."\
+        "Cite the PDF using: 'https://gitlab.dkrz.de/esmenv/mkexp/-/raw/master/doc/mkexp.pdf'."\
         "Only answer questions if claims can be supported by web citations. Include inline citations for "\
         "URLs found in the web search results."
     )

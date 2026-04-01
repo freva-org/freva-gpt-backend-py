@@ -122,10 +122,16 @@ Generated artifacts that persist across runs:
 - **Integration: web-search**: `FREVAGPT_WEB_SEARCH_SERVER_URL=http://localhost:8052 uv run pytest tests/full_integration_tests/test_web_search.py -m integration`.
 <!-- - **Manual REPL**: `uv run python scripts/dev_chat.py` exercises the full orchestrator; handy for verifying prompts, tool wiring, and thread persistence. -->
 
+## Scaling & HAProxy
+- **Prod scaling**: `./prod.sh up -d --build` generates `docker-compose.scaled.yml` + `haproxy.cfg` via `gen_compose.py`, then launches HAProxy in front of replicas.
+- **Dev scaling**: `./dev.sh --scale up -d` produces `docker-compose.dev.scaled.yml` and matching HAProxy config.
+- **Replica knobs**: set `FREVAGPT_BACKEND_REPLICAS`, `FREVAGPT_LITELLM_REPLICAS`, and `FREVAGPT_{RAG|CODE|WEB_SEARCH}_REPLICAS` (default 1). Only MCP servers listed in `FREVAGPT_AVAILABLE_MCP_SERVERS` are scaled.
+- **Sticky routing**: HAProxy pins backend by `url_param thread_id`; MCP tool traffic pins by `hdr(thread-id)`; LiteLLM stays round-robin.
+- **Ports**: HAProxy binds `FREVAGPT_TARGET_PORT` for the backend and `4000` for litellm; MCP frontends bind their configured ports (e.g., 8050/8051/8052) while container instances stay internal.
+
 ## Troubleshooting
 - **Auth failures**: verify headers include both `Authorization` and `x-freva-rest-url`. Inspect FastAPI logs for the exact HTTP status.
 - **Missing models**: ensure `litellm_config.yaml` is readable and contains `model_name` keys. `available_chatbots()` aborts the process if it cannot find any entries.
 - **MCP issues**: backend logs warn but continue when tool discovery fails; LiteLLM will simply not emit tool calls. Use `settings.AVAILABLE_MCP_SERVERS` to enable/disable targets explicitly.
 - **File access**: Make sure `/work` is mounted read-only where expected.
 - **Mongo connectivity**: `_get_database()` retries without URI query params. Persistent failures return HTTP 503; check vault responses and network policies.
-

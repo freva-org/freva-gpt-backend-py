@@ -4,16 +4,16 @@ import time
 from queue import Empty
 from typing import Dict, Any, Optional
 
-from fastmcp.server.dependencies import get_context
-from contextvars import ContextVar
-
 from .helpers import strip_ansi
 from .kernels import (
-    get_or_start_kernel, shutdown_kernel,
-    KERNEL_LOCKS_GUARD, KERNEL_REGISTRY, KERNEL_LOCKS,
-    drain_stale_messages
+    get_or_start_kernel,
+    shutdown_kernel,
+    KERNEL_LOCKS_GUARD,
+    KERNEL_REGISTRY,
+    KERNEL_LOCKS,
+    drain_stale_messages,
 )
-from .active_requests import ActiveRequest
+from src.tools.active_requests import ActiveRequest, ACTIVE_REQUESTS, RequestCancelled
 from src.core.logging_setup import configure_logging
 
 logger = configure_logging(__name__, named_log="code_server")
@@ -24,10 +24,13 @@ REQUEST_TIMEOUT = int(os.getenv("FREVAGPT_MCP_REQUEST_TIMEOUT_SEC", "600"))
 # We leave 5 seconds buffer so server responds before client timeout
 EXEC_TIMEOUT = max(1, REQUEST_TIMEOUT - 5)
 
-logger.info("MCP Code-Server timeouts configured", extra={
-    "request_timeout": REQUEST_TIMEOUT,
-    "exec_timeout": EXEC_TIMEOUT,
-})
+logger.info(
+    "MCP Code-Server timeouts configured",
+    extra={
+        "request_timeout": REQUEST_TIMEOUT,
+        "exec_timeout": EXEC_TIMEOUT,
+    },
+)
 
 IOPUB_DRAIN_AFTER_REPLY: float = 0.25
 IOPUB_POLL = 0.1
@@ -36,18 +39,13 @@ SHELL_POLL = 0.1
 # Recovery tuning
 MAX_RECOVERY_RETRIES = 1  # extra fresh-client attempt (no restart)
 
-# Per-request header context
-CODE_INTERPRETER_CWD_HDR = "working-dir"
-cwd_ctx: ContextVar[str | None] = ContextVar("cwd_ctx", default=None)
-request_id_ctx: ContextVar[str | None] = ContextVar("request_id_ctx", default=None)
-
-
 # ── Code execution ───────────────────────────────────────────────────────────
+
 
 def cleanup_mcp_session(sid: str) -> None:
     """
     Best-effort cleanup for one MCP session.
-    Removes the kernel and kernel lock from registry is session is closed 
+    Removes the kernel and kernel lock from registry is session is closed
     by MCP client
     """
     if not sid:
@@ -56,10 +54,47 @@ def cleanup_mcp_session(sid: str) -> None:
     km = KERNEL_REGISTRY.pop(sid, None)
     if km is not None:
         logger.info("Cleaning up kernel for closed session sid=%s", sid)
-        shutdown_kernel(km) 
+        shutdown_kernel(km)
 
     with KERNEL_LOCKS_GUARD:
         KERNEL_LOCKS.pop(sid, None)
+
+
+async def cancel_code_request(session_id: str, request_id: str) -> None:
+    await ACTIVE_REQUESTS.cancel(session_id, request_id)
+
+    req = await ACTIVE_REQUESTS.get(session_id, request_id)
+    if req is None:
+        logger.info(
+            f"Cancellation ignored after registry lookup: unknown request_id={request_id}"
+        )
+        return
+
+    km = KERNEL_REGISTRY.get(session_id)
+    logger.info(
+        f"cancel_request lookup session_id={session_id} request_id={request_id} "
+        f"km_found={km is not None} registry_ids={list(KERNEL_REGISTRY.keys())}"
+    )
+
+    # IMPORTANT: Only interrupt if code execution was actually submitted to the kernel.
+    # If cancel happens during startup / wait_for_ready, do not interrupt the kernel.
+    if km is None:
+        return
+
+    if not req.execute_sent.is_set():
+        logger.info(
+            "Cancellation happened before kc.execute(); not interrupting kernel "
+            f"for sid={session_id} request_id={request_id}"
+        )
+        return
+
+    try:
+        logger.info(f"Interrupting kernel for sid={session_id} request_id={request_id}")
+        km.interrupt_kernel()
+    except Exception:
+        logger.exception(
+            f"Failed to interrupt kernel for sid={session_id} request_id={request_id}"
+        )
 
 
 def get_sid_lock(sid: str) -> threading.Lock:
@@ -70,20 +105,6 @@ def get_sid_lock(sid: str) -> threading.Lock:
             lock = threading.Lock()
             KERNEL_LOCKS[sid] = lock
         return lock
-
-
-def current_sid() -> str:
-    ctx = get_context()
-    s_id = getattr(ctx, "session_id", "")
-    logger.info(f"Current session id:{s_id}")
-    return s_id
-
-
-def current_request_id() -> str:
-    ctx = get_context()
-    req_id = getattr(ctx, "request_id", "")
-    logger.info(f"Current request id:{req_id}")
-    return req_id
 
 
 def _run_shell(
@@ -97,48 +118,50 @@ def _run_shell(
     Completion is driven by SHELL execute_reply for msg_id.
     IOPub is used to collect stdout/stderr/rich outputs/errors.
     """
+    session_id = active_request.session_id
+    request_id = active_request.request_id
     if cancel_event.is_set():
         logger.info(
             "Request cancelled before kc.execute(); returning cancellation immediately "
-            "for sid=%s request_id=%s",
-            active_request.sid,
-            active_request.request_id,
+            f"for session_id={session_id} request_id={request_id}"
         )
-        raise InterruptedError
-    
+        raise RequestCancelled("Execution cancelled by client")
+
     active_request.execute_sent.set()
-    msg_id = kc.execute(code, store_history=True, allow_stdin=False, stop_on_error=False)
+    msg_id = kc.execute(
+        code, store_history=True, allow_stdin=False, stop_on_error=False
+    )
     stripped_code = code.replace("\n", "; ")
     logger.info(f"Started executing the code: {stripped_code}")
-   
-    stdout_parts, stderr_parts, display_data, result_repr, error = [], [], [], None, None
-    # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data". 
+
+    stdout_parts, stderr_parts, display_data, result_repr, error = (
+        [],
+        [],
+        [],
+        None,
+        None,
+    )
+    # There could be display_data that is sent with an id and these can be updated later using msg_type="update_display_data".
     # For these, we keep only the last updated version.
-    display_data_by_id = {} 
+    display_data_by_id = {}
 
     start = time.time()
     deadline = start + EXEC_TIMEOUT
 
-    got_shell_reply = False # authoritative “execution finished” signal
+    got_shell_reply = False  # authoritative “execution finished” signal
     shell_status: Optional[str] = None  # "ok" or "error"
 
     cancelled = False
     cancel_deadline: Optional[float] = None
-    saw_idle_for_msg = False
 
     # Give the interrupted execution enough time to actually unwind and emit
     # its terminal messages before we give up.
     CANCEL_FINALIZE_TIMEOUT = 10.0
-    
+
     def handle_iopub(msg: Dict[str, Any]) -> None:
-        nonlocal error, result_repr, saw_idle_for_msg
+        nonlocal error, result_repr
         msg_type = (msg.get("header") or {}).get("msg_type")
         content = msg.get("content") or {}
-
-        if msg_type == "status":
-            if content.get("execution_state") == "idle":
-                saw_idle_for_msg = True
-            return
 
         if msg_type == "stream":
             name = content.get("name", "")
@@ -178,8 +201,8 @@ def _run_shell(
         # reading from the SAME client / SAME msg_id until that interrupted
         # execution really finishes.
         if cancel_event.is_set() and not cancelled:
-                cancelled = True
-                cancel_deadline = now + CANCEL_FINALIZE_TIMEOUT
+            cancelled = True
+            cancel_deadline = now + CANCEL_FINALIZE_TIMEOUT
 
         # 1) shell reply
         if not got_shell_reply:
@@ -194,8 +217,8 @@ def _run_shell(
                 pass
 
         # 2) iopub outputs
-        try: # short-poll iopub messages
-            # Since Jupyter kernel runs asynchronously, it streams outputs, errors, 
+        try:  # short-poll iopub messages
+            # Since Jupyter kernel runs asynchronously, it streams outputs, errors,
             # and state messages while it executes the code.
             # We loop to collect them in real time until the status is "idle".
             io = kc.get_iopub_msg(timeout=IOPUB_POLL)
@@ -213,11 +236,12 @@ def _run_shell(
             break
 
         # Cancelled path: we do not abondon the cancelled client immediately, but keep waiting
-        # for shell reply and idle message
+        # for shell reply to confirm that the kernel has actually finished processing the
+        # interrupt and emitted all outputs.
         if cancelled and got_shell_reply:
             logger.info("Execution cancelled after interrupt finalized via shell reply")
             drain_stale_messages(kc)
-            raise InterruptedError
+            raise RequestCancelled("Execution cancelled by client")
 
         # Cancelled path: if interrupted execution never finalizes, fail explicitly.
         if cancelled and cancel_deadline is not None and now >= cancel_deadline:
@@ -249,7 +273,7 @@ def _run_shell(
         display_data.extend(list(display_data_by_id.values()))
 
     if cancelled:
-        raise InterruptedError
+        raise RequestCancelled("Execution cancelled by client")
 
     if shell_status == "error" and not error:
         error = "Execution failed (kernel reported error, but no traceback captured)."
@@ -258,33 +282,32 @@ def _run_shell(
         "stdout": strip_ansi("".join(stdout_parts)),
         "stderr": strip_ansi("".join(stderr_parts)),
         "result_repr": result_repr or "",
-        "display_data": display_data, 
+        "display_data": display_data,
         "error": strip_ansi(error) if error else "",
     }
 
 
 def execute_code(
-    sid: str,
+    session_id: str,
     code: str,
     working_dir,
     cancel_event: threading.Event,
     active_request: ActiveRequest,
 ) -> dict:
     """Execution wrapper with recovery"""
+    request_id = active_request.request_id
     if cancel_event.is_set():
         logger.info(
-            "Request already cancelled before kernel startup for sid=%s request_id=%s",
-            active_request.sid,
-            active_request.request_id,
+            f"Request already cancelled before kernel startup for sid={session_id} request_id={request_id}"
         )
-        return InterruptedError
-    
-    km = get_or_start_kernel(sid, cwd_str=working_dir)
+        raise RequestCancelled("Execution cancelled by client")
+
+    km = get_or_start_kernel(session_id, cwd_str=working_dir)
 
     def _attempt_once() -> Dict[str, Any]:
-        """ 
-        Single execution attempt against the current kernel, 
-        with clean channel lifecycle 
+        """
+        Single execution attempt against the current kernel,
+        with clean channel lifecycle
         """
         kc = km.client()
         kc.start_channels()
@@ -302,13 +325,17 @@ def execute_code(
             out = _attempt_once()
             return out
 
+        except RequestCancelled:
+            raise
+
         except InterruptedError:
-            logger.info("Execution cancelled (sid=%s)", sid)
+            if cancel_event.is_set():
+                raise RequestCancelled("Execution cancelled by client")
             raise
 
         except TimeoutError as e:
             # execution exceeded wall-clock timeout -> interrupt kernel
-            logger.warning("Execution timeout (sid=%s): %s", sid, e)
+            logger.warning(f"Execution timeout (sid={session_id}): {e}")
             try:
                 km.interrupt_kernel()
             except Exception:
@@ -318,8 +345,9 @@ def execute_code(
         except Exception as e:
             # A) KernelClient / channel / ZMQ state is bad (kernel may still be fine)
             # B) Kernel is alive but unresponsive (kernel is effectively broken)
-            logger.warning("Kernel/channel failure (sid=%s, attempt=%d/%d): %s",
-                            sid, attempt + 1, MAX_RECOVERY_RETRIES + 1, e)
+            logger.warning(
+                f"Kernel/channel failure (sid={session_id}, attempt={attempt + 1}/{MAX_RECOVERY_RETRIES + 1}): {e}"
+            )
             last_exc = e
             # retry with a new client
             continue
@@ -330,7 +358,7 @@ def execute_code(
         # Another option: restart kernel and re-attempt, return a warning to client
         # For now shutdown the kernel and warn the client
         shutdown_kernel(km)
-        KERNEL_REGISTRY.pop(sid, None)
+        KERNEL_REGISTRY.pop(session_id, None)
         root = f"{type(last_exc).__name__}: {last_exc}" if last_exc else "unknown"
         raise RuntimeError(
             "KERNEL_RESTARTED: execution kernel became unresponsive and was restarted.\n"

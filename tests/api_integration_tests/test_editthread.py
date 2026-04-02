@@ -84,4 +84,4 @@ async def test_editthread_rejects_out_of_range_index(
                 headers=GOOD_HEADERS,
             )
     assert r.status_code == 422
-    assert r.json()["detail"] == "fork_from_index outside user message range! Please review query parameters!"
+    assert r.json()["detail"] == "user_index outside user message range! Please review query parameters!"

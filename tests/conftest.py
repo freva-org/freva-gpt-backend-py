@@ -202,9 +202,9 @@ def patch_read_thread(monkeypatch):
     async def _fake(self, thread_id: str):
         return [
             {"variant": "ServerHint", "content": {"thread_id": thread_id}},
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "Assistant", "text": "also kept"},
+            {"variant": "Prompt", "content": "user prompt should be filtered out"},
+            {"variant": "User", "content": "kept"},
+            {"variant": "Assistant", "content": "also kept"},
         ]
 
     import src.services.storage.mongodb_storage as mongo_store

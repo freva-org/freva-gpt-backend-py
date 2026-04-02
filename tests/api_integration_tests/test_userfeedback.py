@@ -74,9 +74,10 @@ async def test_userfeedback_save_success(
 ):
     patch_registry({
         "t-2": [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "Assistant", "text": "also kept"},
+            {"variant": "ServerHint", "content": {"thread_id": "t-2"}},
+            {"variant": "Prompt", "content": "user prompt should be filtered out"},
+            {"variant": "User", "content": "kept"},
+            {"variant": "Assistant", "content": "also kept"},
         ]
     })
     with stub_resp:
@@ -103,9 +104,9 @@ async def test_userfeedback_remove_success(
 ):
     async def _fake(self, thread_id: str):
         return [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "Assistant", "text": "also kept", "feedback":"up"},
+            {"variant": "Prompt", "content": "user prompt should be filtered out"},
+            {"variant": "User", "content": "kept"},
+            {"variant": "Assistant", "content": "also kept", "feedback":"up"},
         ]
     import src.services.storage.mongodb_storage as mongo_store
     
@@ -118,9 +119,9 @@ async def test_userfeedback_remove_success(
 
     patch_registry({
         "t-3": [
-            {"variant": "Prompt", "text": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "Assistant", "text": "also kept", "feedback":"up"},
+            {"variant": "Prompt", "content": "user prompt should be filtered out"},
+            {"variant": "User", "content": "kept"},
+            {"variant": "Assistant", "content": "also kept", "feedback":"up"},
         ]
     })
     with stub_resp:
@@ -151,4 +152,4 @@ async def test_userfeedback_remove_failure_not_found(
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 404
-            assert r.json() == {"detail": "Feedback not found at thread index 2: t-3"}
+            assert r.json() == {"detail": "Feedback not found at thread index 3: t-3"}

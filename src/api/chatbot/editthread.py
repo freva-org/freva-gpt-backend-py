@@ -87,7 +87,7 @@ async def edit_thread(
     try:
         # Thread storage 
         Storage = await get_thread_storage(vault_url=Auth.vault_url)
-    except:
+    except Exception:
         raise HTTPException(status_code=503, detail="Failed to connect to MongoDB.")
 
     # Load original content
@@ -100,6 +100,10 @@ async def edit_thread(
         # we check and register it here.
         is_source_registered = await check_thread_exists(thread_id=source_thread_id)
         if not is_source_registered:
+            # The frontend sends /stop for source thread right after /editthread.
+            # If the source is not registered, this returns 404. To avoid this, we 
+            # initialize it here. /stop will set conv state to STOPPED which will avoid 
+            # streaming conflicts.
             await initialize_conversation(
                 thread_id=source_thread_id,
                 user_id=user_name,
@@ -120,7 +124,7 @@ async def edit_thread(
     if user_index < 0 or user_index >= user_message_count:
         raise HTTPException(
             status_code=422,
-            detail="fork_from_index outside user message range! Please review query parameters!",
+            detail="user_index outside user message range! Please review query parameters!",
         )
         
     # Find the position of the Nth user message
@@ -158,7 +162,7 @@ async def edit_thread(
             parent_thread_id=source_thread_id,
             fork_from_index= fork_from_index,
         )
-    except:
+    except Exception:
         logger.exception(f"Failed to save new thread. Source thread id: {source_thread_id}.")
         raise HTTPException(status_code=500, 
                             detail="Failed to save new thread with edited user input.")

@@ -59,7 +59,7 @@ async def test_userfeedback_index_out_of_range(
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 422
-            assert r.json() == {'detail': 'feedback_index outside feedback message range! Please review query parameters!'}
+            assert r.json() == {'detail': 'feedback_index outside feedback variant range! Please review query parameters!'}
 
 
 @pytest.mark.asyncio

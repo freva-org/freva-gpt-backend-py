@@ -74,6 +74,7 @@ async def test_userfeedback_save_success(
 ):
     patch_registry({
         "t-2": [
+            {"variant": "ServerHint", "content": {"thread_id": "t-2"}},
             {"variant": "Prompt", "text": "user prompt should be filtered out"},
             {"variant": "User", "text": "kept"},
             {"variant": "Assistant", "text": "also kept"},
@@ -151,4 +152,4 @@ async def test_userfeedback_remove_failure_not_found(
                 headers=GOOD_HEADERS,
             )
             assert r.status_code == 404
-            assert r.json() == {"detail": "Feedback not found at thread index 2: t-3"}
+            assert r.json() == {"detail": "Feedback not found at thread index 3: t-3"}

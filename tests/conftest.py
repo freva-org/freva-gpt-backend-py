@@ -198,8 +198,8 @@ def patch_read_thread(monkeypatch):
         return [
             {"variant": "ServerHint", "content": {'thread_id': thread_id}},
             {"variant": "Prompt", "content": "user prompt should be filtered out"},
-            {"variant": "User", "text": "kept"},
-            {"variant": "Assistant", "text": "also kept"},
+            {"variant": "User", "content": "kept"},
+            {"variant": "Assistant", "content": "also kept"},
         ]
 
     import src.services.storage.mongodb_storage as mongo_store

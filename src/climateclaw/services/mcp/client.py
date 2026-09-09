@@ -8,7 +8,11 @@ from typing import Any
 
 import httpx
 
-from climateclaw.core.logging_setup import configure_logging
+from climateclaw.core.logging_setup import (
+    REQUEST_ID_HEADER,
+    configure_logging,
+    get_request_id,
+)
 from climateclaw.core.settings import get_settings
 
 DEFAULT_LOGGER = configure_logging(__name__)
@@ -189,6 +193,7 @@ class McpClient:
             "Mcp-Protocol-Version": MCP_PROTOCOL_VERSION,
         }
         h.update(self.default_headers)
+        h[REQUEST_ID_HEADER] = get_request_id()
 
         if include_session and session_id:
             h["Mcp-Session-Id"] = session_id

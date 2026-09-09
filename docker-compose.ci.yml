@@ -1,0 +1,4 @@
+services:
+  litellm:
+    logging:
+      driver: json-file

@@ -1,14 +1,14 @@
 import logging
 import os
-from logging.handlers import RotatingFileHandler
+import socket
+from contextvars import ContextVar
+from logging.handlers import RotatingFileHandler, SysLogHandler
 from pathlib import Path
 
 from climateclaw.core.settings import get_settings
 
 _SILENCED = False
 _CONFIGURED = False
-_THREAD_HANDLERS: dict[str, RotatingFileHandler] = {}
-_NAMED_HANDLERS: dict[str, RotatingFileHandler] = {}
 
 settings = get_settings()
 ENABLE_FILE_LOGGING = os.getenv("CLIMATECLAW_FILE_LOGGING", "1") == "1"
@@ -19,45 +19,80 @@ LOG_DIR = Path(__file__).resolve().parents[3] / "logs"
 MAIN_LOG = LOG_DIR / f"{SERVICE_NAME}.log"
 MAIN_MAX_BYTES = 5_000_000
 MAIN_BACKUP_COUNT = 5
-THREAD_MAX_BYTES = 1_000_000
-THREAD_BACKUP_COUNT = 3
 
 LOG_FORMAT = (
     "%(asctime)s %(levelname)s %(name)s "
     f"[service={SERVICE_NAME}]"
-    "[thread=%(thread_id)s user=%(user_id)s] %(message)s"
+    "[request=%(request_id)s thread=%(thread_id)s user=%(user_id)s] %(message)s"
 )
 LOG_FORMATTER = logging.Formatter(LOG_FORMAT)
+
+REQUEST_ID_HEADER = "X-Request-Id"
+REQUEST_ID_CONTEXT: ContextVar[str | None] = ContextVar(
+    "request_id_context", default=None
+)
+
+
+def get_request_id() -> str:
+    return REQUEST_ID_CONTEXT.get() or "-"
+
+
+def set_request_id(request_id: str | None):
+    return REQUEST_ID_CONTEXT.set(request_id or None)
+
+
+def reset_request_id(token) -> None:
+    REQUEST_ID_CONTEXT.reset(token)
+
+
+def _parse_syslog_target(
+    target: str,
+) -> tuple[tuple[str, int], socket.SocketKind] | None:
+    """
+    Parse HAProxy-style syslog targets like tcp@host:1514.
+    Returns the address and socket type expected by SysLogHandler.
+    """
+    protocol, separator, address = target.partition("@")
+    if separator != "@" or protocol not in {"tcp", "udp"}:
+        return None
+
+    host, separator, port = address.rpartition(":")
+    if separator != ":" or not host:
+        return None
+
+    try:
+        parsed_port = int(port)
+    except ValueError:
+        return None
+
+    socket_type: socket.SocketKind = (
+        socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
+    )
+    return (host, parsed_port), socket_type
 
 
 class ContextFilter(logging.Filter):
     """Ensures thread_id/user_id keys exist on log records."""
 
     def __init__(
-        self, thread_id: str | None = None, user_id: str | None = None
+        self,
+        thread_id: str | None = None,
+        user_id: str | None = None,
+        request_id: str | None = None,
     ) -> None:
         super().__init__()
         self.thread_id = thread_id or "-"
         self.user_id = user_id or "-"
+        self.request_id = request_id or "-"
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.thread_id = getattr(record, "thread_id", self.thread_id) or "-"
         record.user_id = getattr(record, "user_id", self.user_id) or "-"
+        record_request_id = getattr(record, "request_id", None)
+        record.request_id = (
+            get_request_id() if record_request_id in (None, "-") else record_request_id
+        )
         return True
-
-
-class ThreadFilter(ContextFilter):
-    """Only allow records for the given thread_id to reach a handler."""
-
-    def __init__(self, thread_id: str) -> None:
-        super().__init__(thread_id=thread_id)
-        self.expected = thread_id or "-"
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        thread_id = getattr(record, "thread_id", self.thread_id) or "-"
-        record.thread_id = thread_id
-        record.user_id = getattr(record, "user_id", self.user_id) or "-"
-        return thread_id == self.expected
 
 
 def _ensure_base_logging() -> None:
@@ -83,81 +118,64 @@ def _ensure_base_logging() -> None:
         maxBytes=MAIN_MAX_BYTES,
         backupCount=MAIN_BACKUP_COUNT,
         encoding="utf-8",
+        delay=True,  # create file lazily on first emit
     )
     file_handler.setFormatter(LOG_FORMATTER)
     file_handler.addFilter(base_filter)
     root.addHandler(file_handler)
+
+    if (not settings.DEV) and settings.SYSLOG_TARGET:
+        parsed_target = _parse_syslog_target(settings.SYSLOG_TARGET)
+        if parsed_target:
+            address, socket_type = parsed_target
+            try:
+                syslog_handler = SysLogHandler(
+                    address=address,
+                    facility=SysLogHandler.LOG_LOCAL0,
+                    socktype=socket_type,
+                )
+                syslog_handler.setFormatter(LOG_FORMATTER)
+                syslog_handler.ident = f"{SERVICE_NAME}"
+                syslog_handler.addFilter(base_filter)
+                root.addHandler(syslog_handler)
+            except OSError as e:
+                root.warning("Failed to configure remote syslog logging: %s", e)
+        else:
+            root.warning(
+                "Invalid CLIMATECLAW_SYSLOG_TARGET=%r; expected tcp@host:port or udp@host:port",
+                settings.SYSLOG_TARGET,
+            )
 
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
 
     _CONFIGURED = True
 
 
-def _get_thread_handler(thread_id: str) -> RotatingFileHandler:
-    if thread_id in _THREAD_HANDLERS:
-        return _THREAD_HANDLERS[thread_id]
-
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    handler = RotatingFileHandler(
-        LOG_DIR / f"{thread_id}.log",
-        maxBytes=THREAD_MAX_BYTES,
-        backupCount=THREAD_BACKUP_COUNT,
-        encoding="utf-8",
-        delay=True,  # create file lazily on first emit
-    )
-    handler.setFormatter(LOG_FORMATTER)
-    handler.addFilter(ThreadFilter(thread_id=thread_id))
-    _THREAD_HANDLERS[thread_id] = handler
-    return handler
-
-
-def _get_named_handler(log_name: str) -> RotatingFileHandler:
-    if log_name in _NAMED_HANDLERS:
-        return _NAMED_HANDLERS[log_name]
-
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    handler = RotatingFileHandler(
-        LOG_DIR / f"{log_name}.log",
-        maxBytes=THREAD_MAX_BYTES,
-        backupCount=THREAD_BACKUP_COUNT,
-        encoding="utf-8",
-        delay=True,  # create file lazily on first emit
-    )
-    handler.setFormatter(LOG_FORMATTER)
-    handler.addFilter(ContextFilter())
-    _NAMED_HANDLERS[log_name] = handler
-    return handler
-
-
 def configure_logging(
     logger_name: str | None = None,
     thread_id: str | None = None,
     user_id: str | None = None,
-    named_log: str | None = None,
+    request_id: str | None = None,
 ) -> logging.LoggerAdapter:
     """
     Configure root logging once and return a logger adapter with optional context.
-    When thread_id is provided, logs are also written to logs/log_<thread_id>.txt.
-    When named_log is provided, logs are also written to logs/<named_log>.log.
+    When thread_id is provided, it is added as log context.
     """
     _ensure_base_logging()
 
     logger = logging.getLogger(logger_name)
-    if thread_id:
-        handler = _get_thread_handler(thread_id)
-        if handler not in logger.handlers:
-            logger.addHandler(handler)
-    if named_log:
-        handler = _get_named_handler(named_log)
-        if handler not in logger.handlers:
-            logger.addHandler(handler)
 
     logging.getLogger("fakeredis").setLevel(logging.WARNING)
     logging.getLogger("docket").setLevel(logging.WARNING)
     logging.getLogger("pymongo").setLevel(logging.WARNING)
 
     return logging.LoggerAdapter(
-        logger, {"thread_id": thread_id or "-", "user_id": user_id or "-"}
+        logger,
+        {
+            "thread_id": thread_id or "-",
+            "user_id": user_id or "-",
+            "request_id": request_id or get_request_id(),
+        },
     )
 
 

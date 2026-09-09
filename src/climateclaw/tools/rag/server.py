@@ -17,9 +17,7 @@ from climateclaw.tools.rag.helpers import (
 )
 from climateclaw.tools.rag.text_splitters import CustomDocumentSplitter
 
-SERVICE_NAME = os.getenv("HOSTNAME") or "rag_server"
-
-logger = configure_logging(__name__, named_log=SERVICE_NAME)
+logger = configure_logging(__name__)
 
 
 LITE_LLM_ADDRESS: str = os.getenv("CLIMATECLAW_LITE_LLM_ADDRESS", "http://litellm:4000")

@@ -23,9 +23,7 @@ from .helpers import sanitize_code, should_restart_after
 from .kernels import KERNEL_REGISTRY, get_sid_lock, shutdown_kernel
 from .safety_check import check_code_safety
 
-SERVICE_NAME = os.getenv("HOSTNAME") or "code_server"
-
-logger = configure_logging(__name__, named_log=SERVICE_NAME)
+logger = configure_logging(__name__)
 
 mcp = FastMCP("code-interpreter-server")
 

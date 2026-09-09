@@ -98,6 +98,11 @@ services:
         --run_gunicorn
         --detailed_debug
         2>&1 | tee -a /app/logs/litellm.log
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "${CLIMATECLAW_SYSLOG_ADDRESS:?Set CLIMATECLAW_SYSLOG_ADDRESS}"
+        tag: "litellm-${CLIMATECLAW_INSTANCE_NAME}"
     env_file: .env
     networks:
       - climateclaw

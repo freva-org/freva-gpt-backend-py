@@ -242,12 +242,22 @@ def generate_haproxy(
     timeout,
 ):
     conf = []
+    request_id_rules = (
+        "    http-request set-header X-Request-Id %[uuid()] unless { req.hdr(X-Request-Id) -m found }\n"
+        "    declare capture request len 64\n"
+        "    http-request capture req.hdr(X-Request-Id) id 0\n"
+    )
 
     conf.append(
         "global\n"
         "    daemon\n"
-        "    maxconn 256\n"
-        f"    log {os.environ.get('CLIMATECLAW_SYSLOG_TARGET', 'stdout')} format raw local0 info\n\n"
+        "    maxconn 1024\n"
+        "    log stdout format raw local0 info\n"
+        f"    log {os.environ.get('CLIMATECLAW_SYSLOG_TARGET', 'stdout')} local0 info\n"
+        "    stats socket /var/run/haproxy.sock mode 660 level admin\n"
+    )
+
+    conf.append(
         "defaults\n"
         "    mode http\n"
         "    timeout connect 5s\n"
@@ -255,31 +265,39 @@ def generate_haproxy(
         f"    timeout server {timeout}s\n"
         "    default-server inter 3s fall 3 rise 2\n"
         "    log     global\n"
-        '    log-format "%t %ci:%cp %ft %b/%s Tq=%Tq Tw=%Tw Tc=%Tc Tr=%Tr Tt=%Tt '
-        'status=%ST bytes=%B term=%ts conn=%ac/%fc/%bc/%sc/%rc %{+Q}r"\n'
+        "    option  httplog\n"
+        "    log-format '%t %ci:%cp %ft %b/%s Tq=%Tq Tw=%Tw Tc=%Tc Tr=%Tr Tt=%Tt "
+        "status=%ST bytes=%B term=%ts conn=%ac/%fc/%bc/%sc/%rc "
+        "request_id=%[capture.req.hdr(0)] %{+Q}r'\n"
     )
 
     conf.append(
         "frontend fe_backend\n"
         f"    bind *:{backend_port}\n"
+        f"{request_id_rules}"
         "    default_backend be_climateclaw\n"
-        "\n"
     )
 
     conf.append(
-        "frontend fe_litellm\n    bind *:4000\n    default_backend be_litellm\n\n"
+        "frontend fe_litellm\n"
+        "    bind *:4000\n"
+        f"{request_id_rules}"
+        "    default_backend be_litellm\n"
     )
 
     conf.append(
-        "frontend fe_ollama\n    bind *:11434\n    default_backend be_ollama\n\n"
+        "frontend fe_ollama\n"
+        "    bind *:11434\n"
+        f"{request_id_rules}"
+        "    default_backend be_ollama\n"
     )
 
     for s in server_list:
         conf.append(
             f"frontend fe_{s}\n"
             f"    bind *:{port_dict[s]}\n"
+            f"{request_id_rules}"
             f"    default_backend be_{s}\n"
-            "\n"
         )
 
     conf.append(

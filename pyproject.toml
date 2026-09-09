@@ -24,7 +24,8 @@ classifiers = [
 dependencies = [
     "anyio",
     "fastapi",
-    "fastmcp>=2.12.4",
+    "fastmcp==3.4.2",
+    "mcp==1.28.1",
     "httpx",
     "ipython",
     "langchain-community>=0.3.31",

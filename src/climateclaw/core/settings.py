@@ -36,6 +36,7 @@ class Settings:
         os.getenv("CLIMATECLAW_MCP_REQUEST_TIMEOUT_SEC", "600")
     )
     DEV: bool = os.getenv("CLIMATECLAW_DEV", "").lower() in {"1", "true", "yes"}
+    SYSLOG_TARGET = os.getenv("CLIMATECLAW_SYSLOG_TARGET")
 
 
 # Simple singleton-style accessor

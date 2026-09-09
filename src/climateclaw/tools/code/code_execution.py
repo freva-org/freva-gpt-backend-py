@@ -25,7 +25,7 @@ from .kernels import (
 
 SERVICE_NAME = os.getenv("HOSTNAME") or "code_server"
 
-logger = configure_logging(__name__, named_log=SERVICE_NAME)
+logger = configure_logging(__name__)
 
 
 # ── Config ───────────────────────────────────────────────────────────────────

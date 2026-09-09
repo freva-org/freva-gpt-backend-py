@@ -13,9 +13,7 @@ from climateclaw.tools.active_requests import (
 )
 from climateclaw.tools.header_gate import make_header_gate
 
-SERVICE_NAME = os.getenv("HOSTNAME") or "web_search_server"
-
-logger = configure_logging(__name__, named_log=SERVICE_NAME)
+logger = configure_logging(__name__)
 
 
 OPENAI_API_KEY = os.getenv("CLIMATECLAW_OPENAI_API_KEY", "")

@@ -32,8 +32,6 @@ services:
       retries: 20
       start_period: 10s
     depends_on:
-      mongodb:
-        condition: service_healthy
       litellm:
         condition: service_healthy
 
@@ -119,29 +117,6 @@ services:
       - climateclaw
     devices:
       - nvidia.com/gpu=all
-
-  mongodb:
-    user: 0:0
-    image: ghcr.io/freva-org/freva-mongo:latest
-    hostname: mongodb-${CLIMATECLAW_INSTANCE_NAME}
-    environment:
-      - API_MONGO_USER=${CLIMATECLAW_MONGODB_USER:?MongoDB user and password must be set in the .env file. See .env.example.}
-      - API_MONGO_PASSWORD=${CLIMATECLAW_MONGODB_PASSWORD}
-      - API_MONGO_DB=${CLIMATECLAW_MONGODB_DATABASE_NAME}
-    ports:
-      - 27017:27017
-    volumes:
-      - /container/da/climateclaw-links/${CLIMATECLAW_INSTANCE_NAME}/mongo-data:/data/db:z
-      - /container/da/climateclaw-links/${CLIMATECLAW_INSTANCE_NAME}/mongo-logs:/data/logs:z
-    networks:
-      - climateclaw
-    healthcheck:
-      test: ["CMD", "healthchecks", "-s", "mongo"]
-      interval: 35s
-      timeout: 2s
-      retries: 3
-      start_period: 15s
-
 
 networks:
   climateclaw:

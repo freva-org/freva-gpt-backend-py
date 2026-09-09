@@ -1,0 +1,21 @@
+services:
+  mongodb:
+    image: ghcr.io/freva-org/freva-mongo:latest
+    hostname: mongodb
+    environment:
+      API_MONGO_USER: ${CLIMATECLAW_MONGODB_USER}
+      API_MONGO_PASSWORD: ${CLIMATECLAW_MONGODB_PASSWORD}
+      API_MONGO_DB: ${CLIMATECLAW_MONGODB_DATABASE_NAME}
+    networks:
+      - climateclaw
+    healthcheck:
+      test: ["CMD", "healthchecks", "-s", "mongo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  climateclaw:
+    depends_on:
+      mongodb:
+        condition: service_healthy

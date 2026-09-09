@@ -109,15 +109,20 @@ jobs:
 
       - name: Start production stack
         run: |
-          docker compose up climateclaw code-server web-search-server -d --wait --build --remove-orphans || {
-            docker compose ps -a
-            docker compose logs climateclaw
-            docker compose logs code-server
-            docker compose logs web-search-server
-            docker compose logs mongodb
-            docker compose logs litellm
-            exit 1
-          }
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.ci.yml \
+            up climateclaw code-server web-search-server \
+            -d --wait --build --remove-orphans || {
+              docker ps -a
+
+              docker compose \
+                -f docker-compose.yml \
+                -f docker-compose.ci.yml \
+                logs climateclaw mongodb code-server web-search-server litellm
+
+              exit 1
+            }
 
       - name: Show running services
         run: docker compose ps

@@ -7,16 +7,55 @@ from datetime import timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from prometheus_client import make_asgi_app
 
 from .api import chatbot, static
 from .core.logging_setup import configure_logging
 from .core.runtime_checks import run_startup_checks
 from .core.settings import get_settings
+from .services.monitoring import CONVERSATIONS_TOTAL, USERS_TOTAL
 from .services.storage.mongodb_storage import ThreadStorage
 from .services.streaming.active_conversations import cleanup_idle
 
 settings = get_settings()
 logger = configure_logging(__name__)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Periodic tasks
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+async def update_usage_metrics(storage: ThreadStorage) -> None:
+    USERS_TOTAL.set(await storage.count_users())
+    CONVERSATIONS_TOTAL.set(await storage.count_conversations())
+
+
+async def periodic_metrics_task(app):
+    while True:
+        try:
+            await update_usage_metrics(app.state.thread_storage)
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Failed to update service metrics")
+            await asyncio.sleep(60)
+
+
+async def periodic_cleanup_task():
+    while True:
+        try:
+            await asyncio.sleep(60)  # check every min
+            # Storage is not needed here, conversation must have been saved when it was last used
+            evicted = await cleanup_idle(max_idle=timedelta(minutes=30))
+            if evicted:
+                logger.info(f"Evicted idle > 30 mins: {evicted}")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            # Don’t crash the task; log and continue
+            logger.warning(f"Daily cleanup failed: {e}")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FastAPI app (skeleton)
@@ -29,29 +68,18 @@ async def lifespan(app: FastAPI):
     configure_logging()
     run_startup_checks(get_settings())
     app.state.thread_storage = await ThreadStorage.create()
-
-    async def periodic_cleanup_task():
-        while True:
-            try:
-                await asyncio.sleep(60)  # check every min
-                # Storage is not needed here, conversation must have been saved when it was last used
-                evicted = await cleanup_idle(max_idle=timedelta(minutes=30))
-                if evicted:
-                    logger.info(f"Evicted idle > 30 mins: {evicted}")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                # Don’t crash the task; log and continue
-                logger.warning(f"Daily cleanup failed: {e}")
+    await update_usage_metrics(app.state.thread_storage)
 
     # Launch background task
     app.state.periodic_cleanup = asyncio.create_task(periodic_cleanup_task())
+    app.state.periodic_metrics = asyncio.create_task(periodic_metrics_task(app))
 
     try:
         yield
     finally:
         # Shutdown
         app.state.periodic_cleanup.cancel()
+        app.state.periodic_metrics.cancel()
         await app.state.thread_storage.close()
 
 
@@ -63,6 +91,10 @@ app = FastAPI(
     openapi_url="/api/chatbot/openapi.json",
     lifespan=lifespan,
 )
+
+# Prometheus metrics
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 def custom_openapi():

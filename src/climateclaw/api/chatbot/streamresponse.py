@@ -16,6 +16,7 @@ from climateclaw.core.available_chatbots import (
 )
 from climateclaw.core.logging_setup import configure_logging
 from climateclaw.core.prompting import get_entire_prompt
+from climateclaw.services.monitoring import BOT_REQUESTS
 from climateclaw.services.service_factory import (
     Authenticator,
     AuthRequired,
@@ -165,6 +166,8 @@ async def streamresponse(
 
     user_name = auth.username
     logger = configure_logging(__name__, thread_id=thread_id, user_id=user_name)
+
+    BOT_REQUESTS.labels(model=model_name).inc()
 
     create_dir_at_cache(user_name, thread_id)
 

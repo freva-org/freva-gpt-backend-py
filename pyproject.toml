@@ -44,6 +44,7 @@ dependencies = [
     "psutil",
     "pip>=26.1.2",
     "pre-commit>=4.6.0",
+    "prometheus-client",
 ]
 
 [dependency-groups]

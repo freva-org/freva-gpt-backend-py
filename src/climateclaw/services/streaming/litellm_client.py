@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from climateclaw.core.settings import get_settings
+from climateclaw.services.monitoring import LLM_REQUESTS
 
 # ---------------------------------------------------------------------------
 # Settings
@@ -73,6 +74,8 @@ async def acomplete(
     - stream=False: return JSON dict
     - stream=True: return **async iterator** yielding OpenAI-style stream chunks (dicts)
     """
+    LLM_REQUESTS.labels(model=model).inc()
+
     url = _completions_url()
     payload: dict[str, Any] = {
         "model": model,

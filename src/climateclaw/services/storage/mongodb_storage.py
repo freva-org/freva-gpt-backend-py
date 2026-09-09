@@ -349,6 +349,15 @@ class ThreadStorage:
         ]
         return total, threads
 
+    async def count_users(self) -> int:
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        users = await coll.distinct("user_id")
+        return len(users)
+
+    async def count_conversations(self) -> int:
+        coll = self.db[MONGODB_COLLECTION_NAME]
+        return await coll.count_documents({})
+
 
 def update_threadid_in_content(
     new_id: str, content: list[StreamVariant], logger

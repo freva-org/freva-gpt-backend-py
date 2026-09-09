@@ -89,7 +89,7 @@ def test_expand_service_without_preview_paths_keeps_volumes_unchanged():
         replicas=1,
     )
 
-    assert services["web-search-server"]["volumes"] == ["/logs:/app/logs"]
+    assert services["web-search-server-1"]["volumes"] == ["/logs:/app/logs"]
 
 
 def test_generated_compose_sets_project_env_and_code_server_mounts(
@@ -135,13 +135,13 @@ def test_generated_compose_sets_project_env_and_code_server_mounts(
     gen_compose.main()
 
     generated = yaml.safe_load((tmp_path / "docker-compose.scaled.yml").read_text())
-    climateclaw_env = generated["services"]["climateclaw"]["environment"]
+    climateclaw_env = generated["services"]["climateclaw-1"]["environment"]
     assert climateclaw_env == [
         "EXISTING=kept",
         "CLIMATECLAW_PROJECT_NAME=codes",
         "CLIMATECLAW_PROJECT_WEBSITE=https://codes.dkrz.de",
     ]
-    assert generated["services"]["code-server"]["volumes"] == [
+    assert generated["services"]["code-server-1"]["volumes"] == [
         "/work:/work:ro",
         "/work/kd1418/codes/work/share/preview/climateclaw:/app/cache:rw",
     ]

@@ -124,7 +124,7 @@ Generated artifacts that persist across runs:
 - **Prod scaling**: `./prod.sh up -d --build` generates `docker-compose.scaled.yml` + `haproxy.cfg` via `gen_compose.py`, then launches HAProxy in front of replicas.
 - **Dev scaling**: `./dev.sh --scale up -d` produces `docker-compose.dev.scaled.yml` and matching HAProxy config.
 - **Replica knobs**: set `CLIMATECLAW_BACKEND_REPLICAS`, `CLIMATECLAW_LITELLM_REPLICAS`, and `CLIMATECLAW_{RAG|CODE|WEB_SEARCH}_REPLICAS` (default 1). Only MCP servers listed in `CLIMATECLAW_AVAILABLE_MCP_SERVERS` are scaled.
-- **Sticky routing**: HAProxy pins backend by `url_param thread_id`; MCP tool traffic pins by `hdr(thread-id)`; LiteLLM stays round-robin.
+- **Sticky routing**: HAProxy pins backend and MCP tool traffic by `hdr(X-Freva-Thread-Id)`; LiteLLM stays round-robin.
 - **Ports**: HAProxy binds `CLIMATECLAW_TARGET_PORT` for the backend and `4000` for litellm; MCP frontends bind their configured ports (e.g., 8050/8051/8052) while container instances stay internal.
 
 ## Troubleshooting

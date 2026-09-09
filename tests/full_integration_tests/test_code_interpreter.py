@@ -36,7 +36,7 @@ def mcp_client_CI():
     thread_id = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     client = McpClient(
         base_url=base_url,
-        default_headers={"thread-id": thread_id},
+        default_headers={"X-Freva-Thread-Id": thread_id},
     )
     return client
 

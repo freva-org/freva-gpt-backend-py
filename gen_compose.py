@@ -219,6 +219,7 @@ def haproxy_dependencies(
 def haproxy_backend(name, port, service_names, sticky_mode=None):
     lines = []
     lines.append(f"backend be_{name}")
+
     if sticky_mode:
         lines.append(f"    balance {sticky_mode}")
         lines.append("    hash-type consistent")
@@ -287,7 +288,7 @@ def generate_haproxy(
             "climateclaw",
             backend_port,
             service_instance_names("climateclaw", backend_n, services),
-            "url_param thread_id",
+            "hdr(X-Freva-Thread-Id)",
         )
     )
 
@@ -314,7 +315,7 @@ def generate_haproxy(
                 s,
                 port_dict[s],
                 service_instance_names(s, replica_dict[s], services),
-                "hdr(thread-id)",
+                "hdr(X-Freva-Thread-Id)",
             )
         )
 

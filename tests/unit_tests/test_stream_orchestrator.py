@@ -401,4 +401,4 @@ async def test_stream_with_tools_preserves_raw_invalid_non_code_tool_call(
     )
     tool_outputs = [item for item in items if isinstance(item, SVToolOutput)]
     assert len(tool_outputs) == 1
-    assert "Invalid arguments for tool web_search" in tool_outputs[0].content
+    assert "Invalid arguments for tool web_search" in str(tool_outputs[0].content)

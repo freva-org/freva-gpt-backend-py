@@ -2,6 +2,7 @@ from climateclaw.tools.code.helpers import (
     detect_created_or_modified_files,
     snapshot_files,
 )
+from climateclaw.tools.models import CreatedFile
 
 
 def test_snapshot_files_ignores_runtime_artifacts(tmp_path):
@@ -23,7 +24,7 @@ def test_detect_created_or_modified_files_reports_new_files(tmp_path):
     after = snapshot_files(tmp_path)
 
     assert detect_created_or_modified_files(tmp_path, before, after) == [
-        {"path": "plot.png", "mime_type": "image/png"}
+        CreatedFile(path="plot.png", mime_type="image/png")
     ]
 
 
@@ -36,7 +37,7 @@ def test_detect_created_or_modified_files_reports_modified_files(tmp_path):
     after = snapshot_files(tmp_path)
 
     assert detect_created_or_modified_files(tmp_path, before, after) == [
-        {"path": "result.csv", "mime_type": "text/csv"}
+        CreatedFile(path="result.csv", mime_type="text/csv")
     ]
 
 
@@ -60,5 +61,5 @@ def test_detect_created_or_modified_files_returns_relative_path_for_nested_files
     after = snapshot_files(tmp_path)
 
     assert detect_created_or_modified_files(tmp_path, before, after) == [
-        {"path": "plots/figure.png", "mime_type": "image/png"}
+        CreatedFile(path="plots/figure.png", mime_type="image/png")
     ]

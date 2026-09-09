@@ -11,6 +11,7 @@ from climateclaw.tools.active_requests import (
     ActiveRequest,
     RequestCancelled,
 )
+from climateclaw.tools.models import CodeInterpreterResult
 
 from .helpers import detect_created_or_modified_files, snapshot_files, strip_ansi
 from .kernels import (
@@ -117,7 +118,7 @@ def _run_shell(
     code: str,
     cancel_event: threading.Event,
     active_request: ActiveRequest,
-) -> dict:
+) -> CodeInterpreterResult:
     """
     Execute `code` on KernelClient `kc` and collect outputs.
     Completion is driven by SHELL execute_reply for msg_id.
@@ -283,13 +284,13 @@ def _run_shell(
     if shell_status == "error" and not error:
         error = "Execution failed (kernel reported error, but no traceback captured)."
 
-    return {
-        "stdout": strip_ansi("".join(stdout_parts)),
-        "stderr": strip_ansi("".join(stderr_parts)),
-        "result_repr": result_repr or "",
-        "display_data": display_data,
-        "error": strip_ansi(error) if error else "",
-    }
+    return CodeInterpreterResult(
+        stdout=strip_ansi("".join(stdout_parts)),
+        stderr=strip_ansi("".join(stderr_parts)),
+        result_repr=result_repr or "",
+        display_data=display_data,
+        error=strip_ansi(error) if error else "",
+    )
 
 
 def execute_code(
@@ -298,7 +299,7 @@ def execute_code(
     working_dir,
     cancel_event: threading.Event,
     active_request: ActiveRequest,
-) -> dict:
+) -> CodeInterpreterResult:
     """Execution wrapper with recovery.
 
     Caller must hold get_sid_lock(session_id).
@@ -315,7 +316,7 @@ def execute_code(
 
     km = get_or_start_kernel(session_id, cwd_str=working_dir)
 
-    def _attempt_once() -> Dict[str, Any]:
+    def _attempt_once() -> CodeInterpreterResult:
         """
         Single execution attempt against the current kernel,
         with clean channel lifecycle
@@ -324,7 +325,9 @@ def execute_code(
         kc.start_channels()
         try:
             drain_stale_messages(kc)
-            out = _run_shell(kc, code, cancel_event, active_request)
+            out: CodeInterpreterResult = _run_shell(
+                kc, code, cancel_event, active_request
+            )
             return out
         finally:
             kc.stop_channels()
@@ -336,7 +339,7 @@ def execute_code(
             out = _attempt_once()
 
             after_files = snapshot_files(workdir)
-            out["created_files"] = detect_created_or_modified_files(
+            out.created_files = detect_created_or_modified_files(
                 workdir,
                 before_files,
                 after_files,

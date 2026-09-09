@@ -22,6 +22,10 @@ from climateclaw.services.streaming.stream_variants import (
     SVUser,
     normalize_code_output,
 )
+from climateclaw.tools.models import (
+    CodeInterpreterResult,
+    GenericToolResult,
+)
 
 DEFAULT_LOGGER = configure_logging(__name__)
 PROJECT_WEBSITE = os.environ.get("CLIMATECLAW_PROJECT_WEBSITE", "http://localhost:8000")
@@ -331,7 +335,11 @@ def parse_tool_result(
         if tool_name == "code_interpreter":
             toolout_v = SVCodeOutput(content=normalize_code_output(out_msg), id=call_id)
         else:
-            toolout_v = SVToolOutput(content=out_msg, tool_name=tool_name, id=call_id)
+            toolout_v = SVToolOutput(
+                content=GenericToolResult(error=out_msg),
+                tool_name=tool_name,
+                id=call_id,
+            )
         yield toolout_v
         tool_msg = help_convert_sv_ccrm([toolout_v])
         isError = True
@@ -341,34 +349,26 @@ def parse_tool_result(
 
 
 def parse_code_interpreter_result(
-    result: dict,
+    result_dict: dict,
     id: str,
     thread_id: str,
     include_images: bool = True,
 ):
-    code_block: list[StreamVariant] = []
-    code_msgs: list[OpenAIMessage] = []
+    result = CodeInterpreterResult.model_validate(result_dict)
+
+    code_block: List[StreamVariant] = []
+    code_msgs: List[OpenAIMessage] = []
 
     # Code output: structured dict of displayed data, image or error
 
     # Check if any file was created
-    created_files = result.get("created_files", [])
-    for file in created_files:
-        f_name = file.get("path")
-
-        if not f_name:
-            continue
-
-        file["preview_url"] = (
-            f"{PROJECT_WEBSITE}/static/preview/climateclaw/{thread_id}/{f_name}"
+    for file in result.created_files:
+        file.preview_url = (
+            f"{PROJECT_WEBSITE}/static/preview/climateclaw/{thread_id}/{file.path}"
         )
 
-    result["created_files"] = created_files
-
-    has_error = bool(result.get("error", "") or result.get("stderr", ""))
-    has_output = bool(result.get("stdout", "") or result.get("result_repr", ""))
-    if not has_error and not has_output:
-        result["stdout"] = "Execution completed successfully."
+    if not result.has_output and not result.has_error:
+        result.stdout = "Execution completed successfully."
 
     codeout_v = SVCodeOutput(content=normalize_code_output(result), id=id)
     code_msgs.extend(help_convert_sv_ccrm([codeout_v]))
@@ -378,19 +378,17 @@ def parse_code_interpreter_result(
     # Get number of images in "display_data" - contains rich output, image/html/json
     num_display_data_with_png = sum(
         1
-        for item in result.get("display_data", [])
+        for item in result.display_data
         if isinstance(item, dict) and "image/png" in item
     )
 
     num_saved_images = sum(
-        1
-        for file in created_files
-        if isinstance(file, dict) and file.get("mime_type") == "image/png"
+        1 for file in result.created_files if file.mime_type == "image/png"
     )
 
     # If there are more images streamed than saved, we stream them all to client and model
     if num_display_data_with_png > num_saved_images:
-        for i, r in enumerate(result.get("display_data", []) or []):
+        for i, r in enumerate(result.display_data):
             if "image/png" in r.keys():
                 base64_image = r["image/png"]
                 image_id = id + f"_{i}"
@@ -412,17 +410,14 @@ def parse_code_interpreter_result(
                     )
                 )
 
-    isError = has_error
-    yield FinalSummary(var_block=code_block, tool_messages=code_msgs, is_error=isError)
+    yield FinalSummary(
+        var_block=code_block, tool_messages=code_msgs, is_error=result.has_error
+    )
 
 
-def parse_generic_tool_result(result: dict, tool_name: str, id: str, logger=None):
-    if result.get("result"):
-        out = result.get("result")
-    elif result.get("error"):
-        out = result.get("error")
-    else:
-        out = "Unknown response."
-    web_sv = SVToolOutput(content=out, tool_name=tool_name, id=id)  # type: ignore[arg-type]
+def parse_generic_tool_result(result_dict: dict, tool_name: str, id: str):
+    result = GenericToolResult.model_validate(result_dict)
+
+    web_sv = SVToolOutput(content=result, tool_name=tool_name, id=id)
     web_msg = help_convert_sv_ccrm([web_sv])
     yield FinalSummary(var_block=[web_sv], tool_messages=web_msg, is_error=False)

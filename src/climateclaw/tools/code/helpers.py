@@ -2,6 +2,8 @@ import mimetypes
 import re
 from pathlib import Path
 
+from ..models import CreatedFile
+
 
 def strip_ansi(text: str) -> str:
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -109,7 +111,7 @@ def detect_created_or_modified_files(
     root: Path,
     before: dict[str, dict],
     after: dict[str, dict],
-) -> list[dict]:
+) -> list[CreatedFile]:
     created_files = []
 
     for rel_path, after_fp in after.items():
@@ -125,12 +127,10 @@ def detect_created_or_modified_files(
         mime_type, _ = mimetypes.guess_type(abs_path.name)
 
         created_files.append(
-            {
-                "path": rel_path,
-                "mime_type": mime_type or "application/octet-stream",
-                # "size": after_fp["size"],
-                # "status": "created" if is_new else "modified",
-            }
+            CreatedFile(
+                path=rel_path,
+                mime_type=mime_type or "application/octet-stream",
+            )
         )
 
     return created_files

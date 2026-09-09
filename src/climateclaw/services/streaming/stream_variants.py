@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from climateclaw.core.logging_setup import configure_logging
+from climateclaw.tools.models import CodeInterpreterResult, GenericToolResult
 
 """
 • Class-based StreamVariant models (discriminator: `variant`)
@@ -79,7 +80,7 @@ class SVCode(_SVBase):
 
 class SVCodeOutput(_SVBase):
     variant: Literal["CodeOutput"] = Field(default="CodeOutput")
-    content: dict[str, Any]
+    content: CodeInterpreterResult
     id: str
 
 
@@ -99,7 +100,7 @@ class SVToolCall(_SVBase):
 
 class SVToolOutput(_SVBase):
     variant: Literal["ToolOutput"] = Field(default="ToolOutput")
-    content: str
+    content: GenericToolResult
     tool_name: str
     id: str
 
@@ -169,7 +170,7 @@ def cleanup_conversation(
         if pending_code_id is not None and not isinstance(v, SVCodeOutput):
             out.append(
                 SVCodeOutput(
-                    content=empty_code_interpreter_output(
+                    content=create_code_interpreter_output(
                         error="No response was received from code-interpreter."
                     ),
                     id=pending_code_id,
@@ -195,7 +196,7 @@ def cleanup_conversation(
         # close dangling code with an empty output
         out.append(
             SVCodeOutput(
-                content=empty_code_interpreter_output(
+                content=create_code_interpreter_output(
                     error="No response was received from code-interpreter."
                 ),
                 id=pending_code_id,
@@ -327,7 +328,7 @@ def from_json_to_sv(obj: dict) -> StreamVariant:
 
     if v == TOOL_OUTPUT or v == TOOL_CALL:
         return SVToolOutput(
-            content=_as_str(c),
+            content=normalize_generic_tool_output(c),
             id=_as_str(obj.get("id")),
             tool_name=_as_str(obj.get("tool_name")),
         )
@@ -379,22 +380,22 @@ def parse_examples_jsonl(path: str | Path) -> list[StreamVariant]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def empty_code_interpreter_output(
+def create_code_interpreter_output(
     stdout: str = "",
     stderr: str = "",
     result_repr: str = "",
     display_data: list = [],
     error: str = "",
     created_files: list = [],
-) -> dict[str, Any]:
-    return {
-        "stdout": stdout,
-        "stderr": stderr,
-        "result_repr": result_repr,
-        "display_data": display_data,
-        "error": error,
-        "created_files": created_files,
-    }
+) -> CodeInterpreterResult:
+    return CodeInterpreterResult(
+        stdout=stdout,
+        stderr=stderr,
+        result_repr=result_repr,
+        display_data=display_data,
+        error=error,
+        created_files=created_files,
+    )
 
 
 def _normalize_display_data(value: Any) -> list[dict[str, Any]]:
@@ -414,7 +415,7 @@ def _normalize_display_data(value: Any) -> list[dict[str, Any]]:
     return [{"text/plain": str(value)}]
 
 
-def normalize_code_output(out: Any) -> dict[str, Any]:
+def normalize_code_output(out: Any) -> CodeInterpreterResult:
     """
     Normalize current and legacy CodeOutput payloads into the actual
     code_interpreter output shape:
@@ -426,34 +427,62 @@ def normalize_code_output(out: Any) -> dict[str, Any]:
     - None
     """
     if out is None:
-        return empty_code_interpreter_output()
+        return create_code_interpreter_output()
+
+    if isinstance(out, CodeInterpreterResult):
+        norm_model = out.model_copy(deep=True)
+        norm_model.display_data = _normalize_display_data(norm_model.display_data)
+        return norm_model
 
     if isinstance(out, dict):
-        norm_out = out | {
-            "display_data": _normalize_display_data(out.get("display_data"))
+        norm_dict: dict[str, Any] = {
+            **out,
+            "display_data": _normalize_display_data(out.get("display_data")),
         }
-        return norm_out
+        return CodeInterpreterResult.model_validate(norm_dict)
 
     if isinstance(out, list):
         text = out[0]
     else:
         try:
             out_json = json.loads(out)
-            norm_out = out_json | {
-                "display_data": _normalize_display_data(out_json.get("display_data"))
+            norm_json: dict[str, Any] = {
+                **out_json,
+                "display_data": _normalize_display_data(out_json.get("display_data")),
             }
-            return norm_out
+            return CodeInterpreterResult.model_validate(norm_json)
         except (TypeError, json.JSONDecodeError):
             text = str(out)
 
-    return {
-        "stdout": text,
-        "stderr": "",
-        "result_repr": "",
-        "display_data": [],
-        "error": "",
-        "created_files": [],
-    }
+    return create_code_interpreter_output(stdout=text)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Generic tool output shape
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def normalize_generic_tool_output(out: Any) -> GenericToolResult:
+    """
+    Normalize current and legacy ToolOutput payloads into the actual
+    tool output shape:
+
+    Accepted inputs:
+    - current Pydantic model or dict
+    - legacy string
+    - None
+    """
+    if out is None:
+        return GenericToolResult()
+
+    if isinstance(out, GenericToolResult):
+        return out
+
+    if isinstance(out, dict):
+        out = GenericToolResult.model_validate(out)
+        return out
+
+    return GenericToolResult(result=out)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
